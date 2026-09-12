@@ -1,9 +1,9 @@
 'use server';
 
 import { db } from '@/lib/db';
-import { workoutTemplates, templateExercises, workouts, workoutExercises, sets, exercises } from '@/lib/db/schema';
+import { workoutTemplates, templateExercises, workouts, workoutExercises, sets, exercises, exerciseCategories } from '@/lib/db/schema';
 import { auth } from '@clerk/nextjs/server';
-import { eq, or, isNull, desc, asc } from 'drizzle-orm';
+import { eq, or, isNull, desc, asc, and, sql } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 
 export async function saveWorkout(data: {
@@ -84,15 +84,39 @@ export async function getAvailableExercises(userIdParam?: string) {
   }
   if (!userId) throw new Error('No autorizado');
 
-  return await db
-    .select({
-      id: exercises.id,
-      name: exercises.name,
-      categoryId: exercises.categoryId,
-    })
-    .from(exercises)
-    .where(or(isNull(exercises.userId), eq(exercises.userId, userId)))
-    .orderBy(asc(exercises.name));
+  const [exerciseList, userExerciseStats] = await Promise.all([
+    db
+      .select({
+        id: exercises.id,
+        name: exercises.name,
+        categoryId: exercises.categoryId,
+        categoryName: exerciseCategories.name,
+      })
+      .from(exercises)
+      .leftJoin(exerciseCategories, eq(exercises.categoryId, exerciseCategories.id))
+      .where(or(isNull(exercises.userId), eq(exercises.userId, userId)))
+      .orderBy(asc(exercises.name)),
+    db
+      .select({
+        exerciseId: workoutExercises.exerciseId,
+        count: sql<number>`count(distinct ${workouts.id})`.mapWith(Number),
+      })
+      .from(workoutExercises)
+      .innerJoin(workouts, eq(workoutExercises.workoutId, workouts.id))
+      .where(eq(workouts.userId, userId))
+      .groupBy(workoutExercises.exerciseId),
+  ]);
+
+  const statsMap = new Map<number, number>();
+  for (const s of userExerciseStats) {
+    statsMap.set(s.exerciseId, s.count);
+  }
+
+  return exerciseList.map((ex) => ({
+    ...ex,
+    categoryName: ex.categoryName ?? 'General',
+    sessionCount: statsMap.get(ex.id) ?? 0,
+  }));
 }
 
 export async function createCustomExercise(data: {
@@ -288,4 +312,98 @@ export async function getProgressData(userId: string) {
     totalWorkouts: allWorkouts.length,
   };
 }
+
+export async function getExerciseProgress(userId: string, exerciseId: number) {
+  // Obtener todas las series de ese ejercicio para este usuario
+  const exerciseSets = await db
+    .select({
+      date: workouts.startTime,
+      workoutId: workouts.id,
+      workoutName: workouts.name,
+      weight: sets.weight,
+      reps: sets.repCount,
+      rpe: sets.rpe,
+    })
+    .from(sets)
+    .innerJoin(workoutExercises, eq(sets.workoutExerciseId, workoutExercises.id))
+    .innerJoin(workouts, eq(workoutExercises.workoutId, workouts.id))
+    .where(
+      and(
+        eq(workouts.userId, userId),
+        eq(workoutExercises.exerciseId, exerciseId)
+      )
+    )
+    .orderBy(asc(workouts.startTime));
+
+  interface ProgressSession {
+    workoutId: number;
+    workoutName: string;
+    date: Date;
+    maxWeight: number;
+    maxReps: number;
+    estimated1RM: number;
+    totalVolume: number;
+    sets: {
+      setNumber: number;
+      weight: number;
+      reps: number;
+      rpe: number | null;
+      estimated1RM: number;
+    }[];
+  }
+
+  const sessionsMap: Record<number, ProgressSession> = {};
+
+  for (const row of exerciseSets) {
+    if (row.weight === null || row.weight === undefined || !row.reps) continue;
+
+    const w = Number(row.weight);
+    const r = Number(row.reps);
+    // Fórmula Epley para 1RM: w * (1 + r / 30)
+    const est1RM = r === 1 ? w : Math.round(w * (1 + r / 30) * 10) / 10;
+
+    if (!sessionsMap[row.workoutId]) {
+      sessionsMap[row.workoutId] = {
+        workoutId: row.workoutId,
+        workoutName: row.workoutName,
+        date: row.date,
+        maxWeight: w,
+        maxReps: r,
+        estimated1RM: est1RM,
+        totalVolume: Math.round(w * r),
+        sets: [
+          {
+            setNumber: 1,
+            weight: w,
+            reps: r,
+            rpe: row.rpe ?? null,
+            estimated1RM: est1RM,
+          },
+        ],
+      };
+    } else {
+      const sess = sessionsMap[row.workoutId];
+      sess.totalVolume += Math.round(w * r);
+      sess.sets.push({
+        setNumber: sess.sets.length + 1,
+        weight: w,
+        reps: r,
+        rpe: row.rpe ?? null,
+        estimated1RM: est1RM,
+      });
+
+      if (w > sess.maxWeight) {
+        sess.maxWeight = w;
+        sess.maxReps = r;
+      }
+      if (est1RM > sess.estimated1RM) {
+        sess.estimated1RM = est1RM;
+      }
+    }
+  }
+
+  // Convertir a array ordenado por fecha
+  return Object.values(sessionsMap).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+}
+
 

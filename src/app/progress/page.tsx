@@ -1,17 +1,39 @@
+import Link from 'next/link';
 import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
-import { getProgressData } from '../workouts/actions';
+import { getProgressData, getExerciseProgress, getAvailableExercises } from '../workouts/actions';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Trophy, TrendingUp, Calendar, Dumbbell } from 'lucide-react';
+import { Trophy, TrendingUp, Calendar, Dumbbell, LineChart } from 'lucide-react';
+import { ExerciseProgressChart } from './exercise-progress-chart';
 
-export default async function ProgressPage() {
+export default async function ProgressPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ exerciseId?: string }>;
+}) {
   const { userId } = await auth();
   if (!userId) redirect('/sign-in');
 
-  const data = await getProgressData(userId);
+  const resolvedParams = await searchParams;
 
-  // Calcular el volumen máximo para escalar el gráfico
-  const maxVolume = Math.max(...data.weeklyVolume.map((w) => w.volume), 1);
+  // Cargar datos en paralelo
+  const [progressData, availableExercises] = await Promise.all([
+    getProgressData(userId),
+    getAvailableExercises(userId),
+  ]);
+
+  // Si no hay ejercicio especificado en la URL, seleccionar el primero disponible
+  const selectedExerciseId = resolvedParams.exerciseId
+    ? parseInt(resolvedParams.exerciseId, 10)
+    : (availableExercises[0]?.id ?? null);
+
+  // Cargar progresión del ejercicio seleccionado
+  const exerciseProgress = selectedExerciseId
+    ? await getExerciseProgress(userId, selectedExerciseId)
+    : null;
+
+  const selectedExercise = availableExercises.find((ex) => ex.id === selectedExerciseId);
+  const maxVolume = Math.max(...progressData.weeklyVolume.map((w) => w.volume), 1);
 
   return (
     <div className="max-w-4xl mx-auto space-y-8 pb-24">
@@ -19,7 +41,7 @@ export default async function ProgressPage() {
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Tu Progreso</h1>
         <p className="text-gray-600 mt-1">
-          Has completado <span className="font-semibold text-gray-900">{data.totalWorkouts}</span> entrenamientos en total.
+          Has completado <span className="font-semibold text-gray-900">{progressData.totalWorkouts}</span> entrenamientos en total.
         </p>
       </div>
 
@@ -30,7 +52,7 @@ export default async function ProgressPage() {
           <h2 className="text-lg font-semibold text-gray-900">Récords Personales (Top 5)</h2>
         </div>
 
-        {data.prs.length === 0 ? (
+        {progressData.prs.length === 0 ? (
           <Card className="bg-gray-50 border-dashed">
             <CardContent className="py-8 text-center text-gray-500">
               Aún no hay récords registrados. ¡A darle duro!
@@ -38,7 +60,7 @@ export default async function ProgressPage() {
           </Card>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {data.prs.map((pr, index) => (
+            {progressData.prs.map((pr, index) => (
               <Card key={index} className="border-l-4 border-l-yellow-400">
                 <CardContent className="p-4">
                   <p className="text-sm font-medium text-gray-500 truncate">{pr.exerciseName}</p>
@@ -56,7 +78,7 @@ export default async function ProgressPage() {
         )}
       </section>
 
-      {/* Sección 2: Volumen Semanal (Gráfico Tailwind Puro) */}
+      {/* Sección 2: Volumen Semanal */}
       <section>
         <div className="flex items-center gap-2 mb-4">
           <TrendingUp className="w-5 h-5 text-blue-600" />
@@ -66,24 +88,19 @@ export default async function ProgressPage() {
         <Card>
           <CardContent className="p-6">
             <div className="flex items-end justify-between gap-2 h-48 mt-4">
-              {data.weeklyVolume.map((week, i) => {
+              {progressData.weeklyVolume.map((week, i) => {
                 const heightPercentage = (week.volume / maxVolume) * 100;
                 return (
                   <div key={i} className="flex flex-col items-center gap-2 flex-1 group">
-                    {/* Tooltip simple */}
                     <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-gray-900 text-white text-xs rounded px-2 py-1 mb-1 whitespace-nowrap">
                       {week.volume} kg
                     </div>
-
-                    {/* Barra */}
                     <div className="w-full bg-gray-100 rounded-t-md relative h-32 flex items-end overflow-hidden">
                       <div
                         className="w-full bg-blue-600 rounded-t-md transition-all duration-700 ease-out group-hover:bg-blue-500"
-                        style={{ height: `${Math.max(heightPercentage, 4)}%` }} // Mínimo 4% para que se vea si es 0
+                        style={{ height: `${Math.max(heightPercentage, 4)}%` }}
                       />
                     </div>
-
-                    {/* Label */}
                     <span className="text-xs font-medium text-gray-500">{week.label}</span>
                   </div>
                 );
@@ -93,7 +110,21 @@ export default async function ProgressPage() {
         </Card>
       </section>
 
-      {/* Sección 3: Próximos objetivos (Placeholder motivacional) */}
+      {/* Sección 3: Progresión por Ejercicio (Analítica Avanzada) */}
+      <section className="space-y-4">
+        <div className="flex items-center gap-2">
+          <LineChart className="w-5 h-5 text-purple-600" />
+          <h2 className="text-lg font-semibold text-gray-900">Progresión por Ejercicio</h2>
+        </div>
+
+        <ExerciseProgressChart
+          availableExercises={availableExercises}
+          selectedExerciseId={selectedExerciseId}
+          data={exerciseProgress}
+        />
+      </section>
+
+      {/* Sección 4: Consistencia */}
       <section>
         <div className="flex items-center gap-2 mb-4">
           <Calendar className="w-5 h-5 text-green-600" />
