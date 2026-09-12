@@ -3,10 +3,10 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { db } from '@/lib/db';
 import { workoutTypes, workoutTemplates, workouts } from '@/lib/db/schema';
-import { eq, desc, and } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ArrowLeft, Dumbbell, Copy, Clock, Plus } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
+import { ArrowLeft, Dumbbell, Copy, Clock } from 'lucide-react';
 
 export default async function NewWorkoutPage() {
   const { userId } = await auth();

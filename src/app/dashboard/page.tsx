@@ -2,8 +2,10 @@ import { db } from '@/lib/db';
 import { workouts, workoutTypes } from '@/lib/db/schema';
 import { eq, desc } from 'drizzle-orm';
 import { auth } from '@clerk/nextjs/server';
+import Link from 'next/link';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Calendar, Dumbbell, TrendingUp } from 'lucide-react';
+import { Calendar, Dumbbell, TrendingUp, Plus } from 'lucide-react';
 
 export default async function DashboardPage() {
     const { userId } = await auth();
@@ -33,9 +35,17 @@ export default async function DashboardPage() {
 
     return (
         <div className="space-y-6">
-            <div>
-                <h2 className="text-2xl font-bold text-gray-900">Dashboard</h2>
-                <p className="text-gray-600 mt-1">Bienvenido de vuelta a tu entrenamiento</p>
+            <div className="flex items-center justify-between">
+                <div>
+                    <h2 className="text-2xl font-bold text-gray-900">Dashboard</h2>
+                    <p className="text-gray-600 mt-1">Bienvenido de vuelta a tu entrenamiento</p>
+                </div>
+                <Link href="/workouts/new">
+                    <Button className="flex items-center gap-2">
+                        <Plus className="w-4 h-4" />
+                        Nuevo Entrenamiento
+                    </Button>
+                </Link>
             </div>
 
             {/* Stats Cards */}
@@ -81,9 +91,17 @@ export default async function DashboardPage() {
                 </CardHeader>
                 <CardContent>
                     {recentWorkouts.length === 0 ? (
-                        <p className="text-gray-500 text-center py-8">
-                            Aún no has registrado ningún entrenamiento. ¡Empieza ahora!
-                        </p>
+                        <div className="text-center py-8 space-y-3">
+                            <p className="text-gray-500">
+                                Aún no has registrado ningún entrenamiento. ¡Empieza ahora!
+                            </p>
+                            <Link href="/workouts/new">
+                                <Button variant="outline" size="sm">
+                                    <Plus className="w-4 h-4 mr-2" />
+                                    Crear mi primer entrenamiento
+                                </Button>
+                            </Link>
+                        </div>
                     ) : (
                         <div className="space-y-3">
                             {recentWorkouts.map((workout) => (
