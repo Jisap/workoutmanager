@@ -1,9 +1,9 @@
 'use server';
 
 import { db } from '@/lib/db';
-import { workouts, workoutExercises, sets, workoutTypes, exercises } from '@/lib/db/schema';
+import { workoutTemplates, templateExercises, workouts, workoutExercises, sets, exercises } from '@/lib/db/schema';
 import { auth } from '@clerk/nextjs/server';
-import { eq, or, isNull, asc } from 'drizzle-orm';
+import { eq, or, isNull, desc, asc } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 
 export async function saveWorkout(data: {
@@ -114,4 +114,90 @@ export async function createCustomExercise(data: {
     console.error('Error creando ejercicio:', error);
     throw new Error('No se pudo crear el ejercicio');
   }
+}
+
+// Obtener datos de una plantilla
+export async function getTemplateData(templateId: number) {
+  const template = await db.query.workoutTemplates.findFirst({
+    where: eq(workoutTemplates.id, templateId),
+    with: {
+      exercises: {
+        with: {
+          exercise: true,
+        },
+        orderBy: (fields, { asc }) => asc(fields.orderIndex),
+      },
+    },
+  });
+  return template;
+}
+
+// Obtener datos del último entrenamiento para repetirlo
+export async function getLastWorkoutData(userId: string) {
+  const lastWorkout = await db.query.workouts.findFirst({
+    where: eq(workouts.userId, userId),
+    orderBy: [desc(workouts.startTime)],
+    with: {
+      exercises: {
+        with: {
+          exercise: true,
+          sets: true,
+        },
+        orderBy: (fields, { asc }) => asc(fields.orderIndex),
+      },
+    },
+  });
+  return lastWorkout;
+}
+
+// Guardar como plantilla
+export async function saveAsTemplate(data: {
+  workoutId: number;
+  name: string;
+  description?: string;
+}) {
+  const { userId } = await auth();
+  if (!userId) throw new Error('No autorizado');
+
+  // 1. Obtener el workout con sus ejercicios
+  const workout = await db.query.workouts.findFirst({
+    where: eq(workouts.id, data.workoutId),
+    with: {
+      exercises: {
+        with: { exercise: true },
+        orderBy: (fields, { asc }) => asc(fields.orderIndex),
+      },
+    },
+  });
+
+  if (!workout) throw new Error('Entrenamiento no encontrado');
+
+  // 2. Crear la plantilla
+  const [newTemplate] = await db
+    .insert(workoutTemplates)
+    .values({
+      userId,
+      name: data.name,
+      description: data.description,
+      typeId: workout.typeId,
+      sourceWorkoutId: workout.id,
+    })
+    .returning();
+
+  // 3. Copiar los ejercicios a la plantilla
+  if (workout.exercises.length > 0) {
+    await db.insert(templateExercises).values(
+      workout.exercises.map((ex) => ({
+        templateId: newTemplate.id,
+        exerciseId: ex.exerciseId,
+        orderIndex: ex.orderIndex,
+        targetReps: ex.targetReps,
+        targetWeight: ex.targetWeight,
+        targetDistance: ex.targetDistance,
+        timeCapSeconds: ex.targetDurationSeconds,
+      }))
+    );
+  }
+
+  return { success: true };
 }
