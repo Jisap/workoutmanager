@@ -5,6 +5,9 @@ import { getProgressData, getExerciseProgress, getAvailableExercises } from '../
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Trophy, TrendingUp, Calendar, Dumbbell, LineChart } from 'lucide-react';
 import { ExerciseProgressChart } from './exercise-progress-chart';
+import { getConsistencyData } from '../workouts/actions';
+import { ConsistencyHeatmap } from './consitency-heatmap';
+
 
 export default async function ProgressPage({
   searchParams,
@@ -17,9 +20,10 @@ export default async function ProgressPage({
   const resolvedParams = await searchParams;
 
   // Cargar datos en paralelo
-  const [progressData, availableExercises] = await Promise.all([
+  const [progressData, availableExercises, consistencyData] = await Promise.all([
     getProgressData(userId),
     getAvailableExercises(userId),
+    getConsistencyData(userId), // <-- NUEVO
   ]);
 
   // Si no hay ejercicio especificado en la URL, seleccionar el primero disponible
@@ -34,6 +38,8 @@ export default async function ProgressPage({
 
   const selectedExercise = availableExercises.find((ex) => ex.id === selectedExerciseId);
   const maxVolume = Math.max(...progressData.weeklyVolume.map((w) => w.volume), 1);
+
+
 
   return (
     <div className="max-w-4xl mx-auto space-y-8 pb-24">
@@ -122,6 +128,14 @@ export default async function ProgressPage({
           selectedExerciseId={selectedExerciseId}
           data={exerciseProgress}
         />
+      </section>
+
+      <section>
+        <div className="flex items-center gap-2 mb-4">
+          <Calendar className="w-5 h-5 text-green-600" />
+          <h2 className="text-lg font-semibold text-gray-900">Consistencia y Actividad</h2>
+        </div>
+        <ConsistencyHeatmap data={consistencyData} />
       </section>
 
       {/* Sección 4: Consistencia */}

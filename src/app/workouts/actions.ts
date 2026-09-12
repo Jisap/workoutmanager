@@ -406,4 +406,77 @@ export async function getExerciseProgress(userId: string, exerciseId: number) {
   return Object.values(sessionsMap).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 }
 
+export async function getConsistencyData(userId: string) {
+  const allWorkouts = await db
+    .select({
+      startTime: workouts.startTime,
+    })
+    .from(workouts)
+    .where(eq(workouts.userId, userId))
+    .orderBy(asc(workouts.startTime));
+
+  // 1. Mapa de calor: contar entrenamientos por día (formato "YYYY-MM-DD")
+  const dailyCounts: Record<string, number> = {};
+  let currentStreak = 0;
+  let longestStreak = 0;
+  let tempStreak = 0;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  // Ordenar fechas únicas para calcular rachas
+  const uniqueDates = [...new Set(allWorkouts.map(w => {
+    const d = new Date(w.startTime);
+    d.setHours(0, 0, 0, 0);
+    return d.getTime();
+  }))].sort((a, b) => a - b);
+
+  // Calcular rachas
+  for (let i = 0; i < uniqueDates.length; i++) {
+    const currentDate = new Date(uniqueDates[i]);
+    const prevDate = i > 0 ? new Date(uniqueDates[i - 1]) : null;
+
+    if (prevDate) {
+      const diffDays = Math.round((currentDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24));
+      if (diffDays === 1) {
+        tempStreak++;
+      } else {
+        if (tempStreak > longestStreak) longestStreak = tempStreak;
+        tempStreak = 1;
+      }
+    } else {
+      tempStreak = 1;
+    }
+  }
+  if (tempStreak > longestStreak) longestStreak = tempStreak;
+
+  // Calcular racha actual (si el último entrenamiento fue hoy o ayer)
+  if (uniqueDates.length > 0) {
+    const lastWorkoutDate = new Date(uniqueDates[uniqueDates.length - 1]);
+    const diffFromToday = Math.round((today.getTime() - lastWorkoutDate.getTime()) / (1000 * 60 * 60 * 24));
+    if (diffFromToday <= 1) {
+      currentStreak = tempStreak;
+    }
+  }
+
+  // Llenar dailyCounts para el heatmap (últimos 365 días)
+  for (const w of allWorkouts) {
+    const dateKey = new Date(w.startTime).toISOString().split('T')[0];
+    dailyCounts[dateKey] = (dailyCounts[dateKey] || 0) + 1;
+  }
+
+  // Calcular promedio semanal
+  const totalWeeks = Math.max(1, Math.ceil(uniqueDates.length / 7)); // Aproximación simple
+  const avgPerWeek = (uniqueDates.length / Math.max(1, (uniqueDates.length > 0 ?
+    Math.ceil((new Date(uniqueDates[uniqueDates.length - 1]).getTime() - new Date(uniqueDates[0]).getTime()) / (1000 * 60 * 60 * 24 * 7)) : 1))).toFixed(1);
+
+  return {
+    dailyCounts,
+    currentStreak,
+    longestStreak,
+    totalWorkouts: uniqueDates.length,
+    avgPerWeek: parseFloat(avgPerWeek),
+  };
+}
+
 
