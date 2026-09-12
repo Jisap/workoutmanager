@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { ExerciseCombobox, type ExerciseOption } from '@/components/workout/exercise-combobox';
-import { Plus, Trash2, Clock } from 'lucide-react';
+import { Plus, Trash2, Clock, Check, ChevronDown, ChevronUp } from 'lucide-react';
 import { saveWorkout, saveAsTemplate as saveAsTemplateAction } from '../actions';
 import { CreateExerciseDialog, type Category } from '@/components/workout/create-exercise-dialog';
 
@@ -144,6 +144,86 @@ export function WorkoutLoggerClient({
     }
   };
 
+  // Estado para expandir/colapsar desglose individual por ejercicio
+  const [expandedExercises, setExpandedExercises] = useState<Record<string, boolean>>({});
+
+  const toggleExpand = (exerciseId: string) => {
+    setExpandedExercises((prev) => ({ ...prev, [exerciseId]: !prev[exerciseId] }));
+  };
+
+  const toggleExpandAll = () => {
+    const allExpanded = exercises.every((ex) => expandedExercises[ex.id]);
+    const nextState: Record<string, boolean> = {};
+    exercises.forEach((ex) => {
+      nextState[ex.id] = !allExpanded;
+    });
+    setExpandedExercises(nextState);
+  };
+
+  // Ajustar número total de series desde la vista rápida
+  const setSetsCount = (exerciseId: string, count: number) => {
+    const targetCount = Math.max(1, Math.min(50, count));
+    setExercises((prev) =>
+      prev.map((ex) => {
+        if (ex.id !== exerciseId) return ex;
+        const currentLength = ex.sets.length;
+        if (targetCount === currentLength) return ex;
+        if (targetCount < currentLength) {
+          return { ...ex, sets: ex.sets.slice(0, targetCount) };
+        }
+        const lastSet = ex.sets[ex.sets.length - 1];
+        const added: LocalSet[] = Array.from({ length: targetCount - currentLength }, () => ({
+          id: crypto.randomUUID(),
+          repCount: lastSet ? lastSet.repCount : 0,
+          weight: lastSet ? lastSet.weight : null,
+          isCompleted: false,
+        }));
+        return { ...ex, sets: [...ex.sets, ...added] };
+      })
+    );
+  };
+
+  // Actualizar un campo (reps o peso) en todas las series del ejercicio
+  const updateAllSetsField = (exerciseId: string, field: 'repCount' | 'weight', value: number | null) => {
+    setExercises((prev) =>
+      prev.map((ex) => {
+        if (ex.id !== exerciseId) return ex;
+        return {
+          ...ex,
+          sets: ex.sets.map((s) => ({ ...s, [field]: value })),
+        };
+      })
+    );
+  };
+
+  // Alternar completado de todas las series de un ejercicio
+  const toggleAllSetsCompleted = (exerciseId: string) => {
+    setExercises((prev) =>
+      prev.map((ex) => {
+        if (ex.id !== exerciseId) return ex;
+        const allDone = ex.sets.every((s) => s.isCompleted);
+        return {
+          ...ex,
+          sets: ex.sets.map((s) => ({ ...s, isCompleted: !allDone })),
+        };
+      })
+    );
+  };
+
+  // Eliminar una serie específica en la vista detallada
+  const removeSet = (exerciseId: string, setId: string) => {
+    setExercises((prev) =>
+      prev.map((ex) => {
+        if (ex.id !== exerciseId) return ex;
+        if (ex.sets.length <= 1) return ex;
+        return {
+          ...ex,
+          sets: ex.sets.filter((s) => s.id !== setId),
+        };
+      })
+    );
+  };
+
   const addSet = (exerciseId: string) => {
     setExercises((prev) =>
       prev.map((ex) => {
@@ -178,25 +258,6 @@ export function WorkoutLoggerClient({
 
   const removeExercise = (exerciseId: string) => {
     setExercises((prev) => prev.filter((ex) => ex.id !== exerciseId));
-  };
-
-  // Nueva función para añadir múltiples series
-  const addSets = (exerciseId: string, count: number = 1) => {
-    setExercises((prev) =>
-      prev.map((ex) => {
-        if (ex.id === exerciseId) {
-          const lastSet = ex.sets[ex.sets.length - 1];
-          const newSets: LocalSet[] = Array.from({ length: count }, () => ({
-            id: crypto.randomUUID(),
-            repCount: lastSet ? lastSet.repCount : 0,
-            weight: lastSet ? lastSet.weight : null,
-            isCompleted: false,
-          }));
-          return { ...ex, sets: [...ex.sets, ...newSets] };
-        }
-        return ex;
-      })
-    );
   };
 
   const handleFinish = async () => {
@@ -241,143 +302,287 @@ export function WorkoutLoggerClient({
 
   return (
     <div className="max-w-2xl mx-auto space-y-6 pb-32">
-      <div className="flex items-center justify-between">
+      {/* Barra superior con título y controles */}
+      <div className="flex items-center justify-between gap-2 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">{typeName}</h1>
           <p className="text-sm text-gray-500">Registra tus series y repeticiones</p>
         </div>
-        <Button onClick={() => setIsFinishDialogOpen(true)} className="bg-green-600 hover:bg-green-700">
-          <Clock className="w-4 h-4 mr-2" />
-          Finalizar
-        </Button>
+        <div className="flex items-center gap-2">
+          {exercises.length > 0 && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={toggleExpandAll}
+              className="text-xs text-gray-600 hover:text-gray-900"
+            >
+              {exercises.every((ex) => expandedExercises[ex.id]) ? 'Compactar todo' : 'Desglosar todo'}
+            </Button>
+          )}
+          <Button onClick={() => setIsFinishDialogOpen(true)} className="bg-green-600 hover:bg-green-700">
+            <Clock className="w-4 h-4 mr-2" />
+            Finalizar
+          </Button>
+        </div>
       </div>
 
       {/* Lista de Ejercicios */}
       <div className="space-y-4">
-        {exercises.map((ex, exIndex) => (
-          <Card key={ex.id} className="overflow-hidden">
-            <CardHeader className="bg-gray-50 py-3 px-4 flex flex-row items-center justify-between">
-              <div className="flex items-center gap-2 flex-1 min-w-0">
-                <span className="text-sm font-bold text-gray-500 w-6 shrink-0">{exIndex + 1}</span>
-                <ExerciseCombobox
-                  options={exerciseOptions}
-                  value={ex.exerciseId.toString()}
-                  onChange={(val) => {
-                    const selected = exerciseOptions.find((o) => o.value === val);
-                    setExercises((prev) =>
-                      prev.map((e) =>
-                        e.id === ex.id
-                          ? { ...e, exerciseId: parseInt(val, 10), name: selected?.label || `Ejercicio ${val}` }
-                          : e
-                      )
-                    );
-                  }}
-                  onCreateNew={() => {
-                    setCurrentExerciseIdForNew(ex.id);
-                    setIsCreateDialogOpen(true);
-                  }}
-                  className="flex-1 min-w-0 truncate"
-                />
-              </div>
-              <Button variant="ghost" size="icon" onClick={() => removeExercise(ex.id)} className="shrink-0">
-                <Trash2 className="w-4 h-4 text-red-500" />
-              </Button>
-            </CardHeader>
+        {exercises.map((ex, exIndex) => {
+          const isExpanded = !!expandedExercises[ex.id];
+          const allCompleted = ex.sets.length > 0 && ex.sets.every((s) => s.isCompleted);
+          const completedCount = ex.sets.filter((s) => s.isCompleted).length;
+          const primaryReps = ex.sets[0]?.repCount ?? 0;
+          const primaryWeight = ex.sets[0]?.weight;
 
-            <CardContent className="p-0">
-              {/* Cabecera de columnas */}
-              <div className="grid grid-cols-10 gap-2 px-4 py-2 text-xs font-medium text-gray-500 uppercase border-b">
-                <div className="col-span-2 text-center">Serie</div>
-                <div className="col-span-3 text-center">Kg</div>
-                <div className="col-span-3 text-center">Reps</div>
-                <div className="col-span-2 text-center">✓</div>
-              </div>
-
-              {/* Series */}
-              {ex.sets.map((set, setIndex) => (
-                <div
-                  key={set.id}
-                  className={`grid grid-cols-10 gap-2 px-4 py-3 items-center border-b last:border-0 ${set.isCompleted ? 'bg-green-50/50' : ''
-                    }`}
-                >
-                  <div className="col-span-2 text-center font-medium text-gray-500">{setIndex + 1}</div>
-
-                  <div className="col-span-3">
-                    <Input
-                      type="number"
-                      placeholder="0"
-                      className="text-center h-9 tabular-nums"
-                      value={set.weight ?? ''}
-                      onChange={(e) =>
-                        updateSet(ex.id, set.id, 'weight', e.target.value ? parseFloat(e.target.value) : null)
-                      }
-                    />
-                  </div>
-
-                  <div className="col-span-3">
-                    <Input
-                      type="number"
-                      placeholder="0"
-                      className="text-center h-9 tabular-nums"
-                      value={set.repCount || ''}
-                      onChange={(e) =>
-                        updateSet(ex.id, set.id, 'repCount', e.target.value ? parseInt(e.target.value, 10) : 0)
-                      }
-                    />
-                  </div>
-
-                  <div className="col-span-2 flex justify-center">
-                    <button
-                      type="button"
-                      onClick={() => updateSet(ex.id, set.id, 'isCompleted', !set.isCompleted)}
-                      className={`w-8 h-8 rounded flex items-center justify-center transition-colors ${set.isCompleted ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-400 hover:bg-gray-300'
-                        }`}
-                    >
-                      ✓
-                    </button>
-                  </div>
-                </div>
-              ))}
-
-              <div className="flex items-center gap-2 px-4 py-3 bg-gray-50 border-t">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="flex-1 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                  onClick={() => addSets(ex.id, 1)}
-                >
-                  <Plus className="w-4 h-4 mr-1" />
-                  Añadir 1 serie
-                </Button>
-
-                <div className="flex items-center gap-2">
-                  <Input
-                    type="number"
-                    min="1"
-                    max="10"
-                    defaultValue="3"
-                    className="w-16 h-9 text-center tabular-nums"
-                    id={`sets-count-${ex.id}`}
+          return (
+            <Card key={ex.id} className="overflow-hidden border border-gray-200 shadow-sm transition-all">
+              <CardHeader className="bg-gray-50/80 py-2.5 px-4 flex flex-row items-center justify-between gap-2 border-b">
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  <span className="text-xs font-bold text-gray-500 w-5 shrink-0 text-center">{exIndex + 1}</span>
+                  <ExerciseCombobox
+                    options={exerciseOptions}
+                    value={ex.exerciseId.toString()}
+                    onChange={(val) => {
+                      const selected = exerciseOptions.find((o) => o.value === val);
+                      setExercises((prev) =>
+                        prev.map((e) =>
+                          e.id === ex.id
+                            ? { ...e, exerciseId: parseInt(val, 10), name: selected?.label || `Ejercicio ${val}` }
+                            : e
+                        )
+                      );
+                    }}
+                    onCreateNew={() => {
+                      setCurrentExerciseIdForNew(ex.id);
+                      setIsCreateDialogOpen(true);
+                    }}
+                    className="flex-1 min-w-0 truncate"
                   />
+                </div>
+
+                <div className="flex items-center gap-1 shrink-0">
                   <Button
                     type="button"
-                    variant="outline"
+                    variant="ghost"
                     size="sm"
-                    className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                    onClick={(e) => {
-                      const input = document.getElementById(`sets-count-${ex.id}`) as HTMLInputElement;
-                      const count = parseInt(input.value, 10) || 3;
-                      addSets(ex.id, count);
-                    }}
+                    onClick={() => toggleExpand(ex.id)}
+                    className="h-8 px-2 text-xs font-medium text-gray-600 hover:text-blue-600 hover:bg-blue-50 flex items-center gap-1"
+                    title={isExpanded ? 'Vista compacta / rápida' : 'Desglosar series individuales'}
                   >
-                    Añadir
+                    {isExpanded ? (
+                      <>
+                        <ChevronUp className="w-3.5 h-3.5 text-blue-600" />
+                        <span className="hidden sm:inline">Compactar</span>
+                      </>
+                    ) : (
+                      <>
+                        <ChevronDown className="w-3.5 h-3.5 text-gray-500" />
+                        <span className="hidden sm:inline">Desglosar</span>
+                      </>
+                    )}
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => removeExercise(ex.id)}
+                    className="h-8 w-8 text-gray-400 hover:text-red-500 hover:bg-red-50"
+                  >
+                    <Trash2 className="w-4 h-4" />
                   </Button>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+              </CardHeader>
+
+              <CardContent className="p-0">
+                {!isExpanded ? (
+                  /* VISTA COMPACTA / RÁPIDA (CrossFit, WODs, Fuerza rápida) */
+                  <div className="p-3 bg-white flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 flex-1 min-w-[260px]">
+                      {/* Series / Rondas */}
+                      <div className="flex flex-col flex-1 max-w-[100px]">
+                        <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">
+                          Series / Rondas
+                        </span>
+                        <Input
+                          type="number"
+                          min="1"
+                          max="50"
+                          value={ex.sets.length}
+                          onChange={(e) => {
+                            const count = parseInt(e.target.value, 10);
+                            if (!isNaN(count)) setSetsCount(ex.id, count);
+                          }}
+                          className="h-9 text-center font-bold text-sm tabular-nums bg-gray-50/50"
+                        />
+                      </div>
+
+                      <span className="text-gray-400 font-bold self-end pb-2">×</span>
+
+                      {/* Reps */}
+                      <div className="flex flex-col flex-1 min-w-[70px]">
+                        <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">
+                          Reps
+                        </span>
+                        <Input
+                          type="number"
+                          min="0"
+                          placeholder="0"
+                          value={primaryReps || ''}
+                          onChange={(e) => {
+                            const reps = parseInt(e.target.value, 10) || 0;
+                            updateAllSetsField(ex.id, 'repCount', reps);
+                          }}
+                          className="h-9 text-center font-bold text-sm tabular-nums bg-gray-50/50"
+                        />
+                      </div>
+
+                      <span className="text-gray-400 font-bold self-end pb-2">@</span>
+
+                      {/* Peso (Kg) */}
+                      <div className="flex flex-col flex-1 min-w-[75px]">
+                        <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">
+                          Kg (opc.)
+                        </span>
+                        <Input
+                          type="number"
+                          step="0.5"
+                          placeholder="0"
+                          value={primaryWeight ?? ''}
+                          onChange={(e) => {
+                            const val = e.target.value ? parseFloat(e.target.value) : null;
+                            updateAllSetsField(ex.id, 'weight', val);
+                          }}
+                          className="h-9 text-center font-bold text-sm tabular-nums bg-gray-50/50"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Botón rápido de completado */}
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => toggleAllSetsCompleted(ex.id)}
+                        className={`h-9 px-3.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm cursor-pointer ${
+                          allCompleted
+                            ? 'bg-green-600 text-white hover:bg-green-700'
+                            : completedCount > 0
+                            ? 'bg-amber-100 text-amber-900 hover:bg-amber-200 border border-amber-300'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200'
+                        }`}
+                      >
+                        <Check className={`w-4 h-4 ${allCompleted ? 'text-white' : 'text-gray-500'}`} />
+                        <span>
+                          {allCompleted
+                            ? 'Completado'
+                            : completedCount > 0
+                            ? `${completedCount}/${ex.sets.length} hechas`
+                            : 'Marcar hecho'}
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  /* VISTA DETALLADA (Serie a Serie) */
+                  <div>
+                    {/* Cabecera de columnas */}
+                    <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-medium text-gray-500 uppercase border-b bg-gray-50/50">
+                      <div className="col-span-2 text-center">Serie</div>
+                      <div className="col-span-4 text-center">Kg</div>
+                      <div className="col-span-4 text-center">Reps</div>
+                      <div className="col-span-2 text-center">✓</div>
+                    </div>
+
+                    {/* Series individuales */}
+                    {ex.sets.map((set, setIndex) => (
+                      <div
+                        key={set.id}
+                        className={`grid grid-cols-12 gap-2 px-4 py-2 items-center border-b last:border-0 transition-colors ${
+                          set.isCompleted ? 'bg-green-50/50' : 'hover:bg-gray-50/30'
+                        }`}
+                      >
+                        <div className="col-span-2 flex items-center justify-center gap-1">
+                          <span className="font-semibold text-xs text-gray-600">{setIndex + 1}</span>
+                          {ex.sets.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => removeSet(ex.id, set.id)}
+                              className="text-gray-300 hover:text-red-500 p-0.5 transition-colors cursor-pointer"
+                              title="Eliminar serie"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="col-span-4">
+                          <Input
+                            type="number"
+                            step="0.5"
+                            placeholder="0"
+                            className="text-center h-8 text-sm tabular-nums"
+                            value={set.weight ?? ''}
+                            onChange={(e) =>
+                              updateSet(ex.id, set.id, 'weight', e.target.value ? parseFloat(e.target.value) : null)
+                            }
+                          />
+                        </div>
+
+                        <div className="col-span-4">
+                          <Input
+                            type="number"
+                            placeholder="0"
+                            className="text-center h-8 text-sm tabular-nums"
+                            value={set.repCount || ''}
+                            onChange={(e) =>
+                              updateSet(ex.id, set.id, 'repCount', e.target.value ? parseInt(e.target.value, 10) : 0)
+                            }
+                          />
+                        </div>
+
+                        <div className="col-span-2 flex justify-center">
+                          <button
+                            type="button"
+                            onClick={() => updateSet(ex.id, set.id, 'isCompleted', !set.isCompleted)}
+                            className={`w-7 h-7 rounded-md flex items-center justify-center transition-colors cursor-pointer ${
+                              set.isCompleted ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-400 hover:bg-gray-300'
+                            }`}
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+
+                    {/* Acciones de la vista detallada */}
+                    <div className="flex items-center justify-between px-4 py-2.5 bg-gray-50/70 border-t">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 text-xs h-8"
+                        onClick={() => addSet(ex.id)}
+                      >
+                        <Plus className="w-3.5 h-3.5 mr-1" />
+                        Añadir serie
+                      </Button>
+
+                      <button
+                        type="button"
+                        onClick={() => toggleAllSetsCompleted(ex.id)}
+                        className="text-xs text-gray-500 hover:text-gray-800 underline cursor-pointer"
+                      >
+                        {allCompleted ? 'Desmarcar todas' : 'Marcar todas hechas'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          );
+        })}
 
         <Button
           type="button"
