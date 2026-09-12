@@ -205,3 +205,68 @@ export async function saveAsTemplate(data: {
 
   return { success: true };
 }
+
+export async function getProgressData(userId: string) {
+  // 1. Obtener todos los entrenamientos del usuario (ordenados por fecha)
+  const allWorkouts = await db.query.workouts.findMany({
+    where: eq(workouts.userId, userId),
+    orderBy: [desc(workouts.startTime)],
+    with: {
+      exercises: {
+        with: {
+          exercise: true,
+          sets: true,
+        },
+      },
+    },
+  });
+
+  // 2. Calcular Récords Personales (PRs)
+  const prs: Record<string, { weight: number; reps: number; date: Date; exerciseName: string }> = {};
+
+  // 3. Calcular volumen por semana (simplificado para las últimas semanas)
+  const weeklyVolume: Record<string, number> = {};
+
+  for (const workout of allWorkouts) {
+    const workoutDate = new Date(workout.startTime);
+    // Clave tipo "2026-09" para agrupar por mes/semana
+    const weekKey = workoutDate.toISOString().split('T')[0].substring(0, 7);
+
+    for (const ex of workout.exercises) {
+      const exName = ex.exercise.name;
+
+      // Iteramos sobre cada serie del ejercicio
+      for (const currentSet of ex.sets) {
+        if (currentSet.weight && currentSet.repCount) {
+
+          // A) Actualizar PR (Récord Personal de peso)
+          if (!prs[exName] || currentSet.weight > prs[exName].weight) {
+            prs[exName] = {
+              weight: currentSet.weight,
+              reps: currentSet.repCount,
+              date: workoutDate,
+              exerciseName: exName,
+            };
+          }
+
+          // B) Acumular volumen semanal (peso * reps)
+          const volume = currentSet.weight * currentSet.repCount;
+          weeklyVolume[weekKey] = (weeklyVolume[weekKey] || 0) + volume;
+        }
+      }
+    }
+  }
+
+  return {
+    // Top 5 récords personales ordenados por peso descendente
+    prs: Object.values(prs).sort((a, b) => b.weight - a.weight).slice(0, 5),
+
+    // Últimas 6 semanas de volumen
+    weeklyVolume: Object.entries(weeklyVolume)
+      .map(([week, volume]) => ({ week, volume: Math.round(volume) }))
+      .sort((a, b) => a.week.localeCompare(b.week))
+      .slice(-6),
+
+    totalWorkouts: allWorkouts.length,
+  };
+}
