@@ -207,7 +207,6 @@ export async function saveAsTemplate(data: {
 }
 
 export async function getProgressData(userId: string) {
-  // 1. Obtener todos los entrenamientos del usuario (ordenados por fecha)
   const allWorkouts = await db.query.workouts.findMany({
     where: eq(workouts.userId, userId),
     orderBy: [desc(workouts.startTime)],
@@ -227,46 +226,66 @@ export async function getProgressData(userId: string) {
   // 3. Calcular volumen por semana (simplificado para las últimas semanas)
   const weeklyVolume: Record<string, number> = {};
 
+  // Generar claves de las últimas 6 semanas (Lunes de cada semana)
+  const last6Weeks: string[] = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - (d.getDay() === 0 ? 6 : d.getDay() - 1) - (i * 7)); // Lunes de la semana
+    const key = d.toISOString().split('T')[0];
+    last6Weeks.push(key);
+    weeklyVolume[key] = 0; // Inicializar a 0
+  }
+
+
   for (const workout of allWorkouts) {
     const workoutDate = new Date(workout.startTime);
-    // Clave tipo "2026-09" para agrupar por mes/semana
-    const weekKey = workoutDate.toISOString().split('T')[0].substring(0, 7);
+    // Encontrar a qué semana de las últimas 6 pertenece
+    const workoutMonday = new Date(workoutDate);
+    workoutMonday.setDate(workoutDate.getDate() - (workoutDate.getDay() === 0 ? 6 : workoutDate.getDay() - 1));
+    const weekKey = workoutMonday.toISOString().split('T')[0];
 
-    for (const ex of workout.exercises) {
-      const exName = ex.exercise.name;
+    if (last6Weeks.includes(weekKey)) {
+      for (const ex of workout.exercises) {
+        const exName = ex.exercise.name;
 
-      // Iteramos sobre cada serie del ejercicio
-      for (const currentSet of ex.sets) {
-        if (currentSet.weight && currentSet.repCount) {
+        for (const currentSet of ex.sets) {
+          if (currentSet.weight && currentSet.repCount) {
+            // A) Actualizar PR
+            if (!prs[exName] || currentSet.weight > prs[exName].weight) {
+              prs[exName] = {
+                weight: currentSet.weight,
+                reps: currentSet.repCount,
+                date: workoutDate,
+                exerciseName: exName,
+              };
+            }
 
-          // A) Actualizar PR (Récord Personal de peso)
-          if (!prs[exName] || currentSet.weight > prs[exName].weight) {
-            prs[exName] = {
-              weight: currentSet.weight,
-              reps: currentSet.repCount,
-              date: workoutDate,
-              exerciseName: exName,
-            };
+            // B) Acumular volumen semanal
+            weeklyVolume[weekKey] = (weeklyVolume[weekKey] || 0) + (currentSet.weight * currentSet.repCount);
           }
-
-          // B) Acumular volumen semanal (peso * reps)
-          const volume = currentSet.weight * currentSet.repCount;
-          weeklyVolume[weekKey] = (weeklyVolume[weekKey] || 0) + volume;
         }
       }
     }
   }
 
+  // Formatear para la UI
+  const formattedWeeklyVolume = last6Weeks.map((key) => {
+    const date = new Date(key);
+    return {
+      label: date.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }),
+      volume: Math.round(weeklyVolume[key] || 0),
+    };
+  });
+
+  const topPRs = Object.values(prs)
+    .sort((a, b) => b.weight - a.weight)
+    .slice(0, 5);
+
+
   return {
-    // Top 5 récords personales ordenados por peso descendente
-    prs: Object.values(prs).sort((a, b) => b.weight - a.weight).slice(0, 5),
-
-    // Últimas 6 semanas de volumen
-    weeklyVolume: Object.entries(weeklyVolume)
-      .map(([week, volume]) => ({ week, volume: Math.round(volume) }))
-      .sort((a, b) => a.week.localeCompare(b.week))
-      .slice(-6),
-
+    prs: topPRs,
+    weeklyVolume: formattedWeeklyVolume,
     totalWorkouts: allWorkouts.length,
   };
 }
+
