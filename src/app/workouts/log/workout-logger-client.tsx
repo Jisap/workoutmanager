@@ -8,9 +8,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ExerciseCombobox, type ExerciseOption } from '@/components/workout/exercise-combobox';
 import { Plus, Trash2, Clock } from 'lucide-react';
 import { saveWorkout } from '../actions';
+import { CreateExerciseDialog, type Category } from '@/components/workout/create-exercise-dialog';
 
 // Tipos locales para el estado
 type LocalSet = {
@@ -35,17 +36,20 @@ export type AvailableExercise = {
 
 interface WorkoutLoggerClientProps {
   availableExercises: AvailableExercise[];
+  categories: Category[];
   mode: string;
   typeId?: string;
 }
 
 export function WorkoutLoggerClient({
   availableExercises,
+  categories,
   mode,
   typeId,
 }: WorkoutLoggerClientProps) {
   const router = useRouter();
 
+  const [availableExercisesList, setAvailableExercisesList] = useState<AvailableExercise[]>(availableExercises);
   const [typeName, setTypeName] = useState('Entrenamiento Libre');
   const [exercises, setExercises] = useState<LocalExercise[]>([]);
   const [isFinishDialogOpen, setIsFinishDialogOpen] = useState(false);
@@ -53,17 +57,34 @@ export function WorkoutLoggerClient({
   const [notes, setNotes] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
-  // Mapeamos los ejercicios para Base UI Select { value, label }
-  const exerciseItems = useMemo(
-    () =>
-      availableExercises.map((ex) => ({
-        value: ex.id.toString(),
-        label: ex.name,
-      })),
-    [availableExercises]
+  // Estado para el modal de crear ejercicio
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [currentExerciseIdForNew, setCurrentExerciseIdForNew] = useState<string | null>(null);
+
+  // Sincronizar lista si cambia la prop
+  useEffect(() => {
+    setAvailableExercisesList(availableExercises);
+  }, [availableExercises]);
+
+  // Mapa categoryId -> nombre para las agrupaciones del Combobox
+  const categoryMap = useMemo(
+    () => new Map(categories.map((c) => [c.id, c.name])),
+    [categories]
   );
 
-  const defaultExercise = availableExercises[0] || { id: 1, name: 'Ejercicio' };
+  // Opciones para ExerciseCombobox con nombre de categoría incluido
+  const exerciseOptions = useMemo<ExerciseOption[]>(
+    () =>
+      availableExercisesList.map((ex) => ({
+        value: ex.id.toString(),
+        label: ex.name,
+        categoryId: ex.categoryId,
+        categoryName: ex.categoryId ? categoryMap.get(ex.categoryId) : undefined,
+      })),
+    [availableExercisesList, categoryMap]
+  );
+
+  const defaultExercise = availableExercisesList[0] || { id: 1, name: 'Ejercicio' };
 
   // Inicializar con un ejercicio si es modo libre
   useEffect(() => {
@@ -77,7 +98,7 @@ export function WorkoutLoggerClient({
       };
       setExercises([initialEx]);
     }
-  }, [mode, defaultExercise]);
+  }, [mode, defaultExercise, exercises.length]);
 
   const addExercise = () => {
     const newEx: LocalExercise = {
@@ -87,6 +108,23 @@ export function WorkoutLoggerClient({
       sets: [{ id: crypto.randomUUID(), repCount: 0, weight: null, isCompleted: false }],
     };
     setExercises((prev) => [...prev, newEx]);
+  };
+
+  const handleExerciseCreated = (newExercise: AvailableExercise) => {
+    // Añadimos el nuevo ejercicio a la lista disponible
+    setAvailableExercisesList((prev) => [...prev, newExercise]);
+
+    // Si se creó desde un ejercicio existente en la lista, lo seleccionamos
+    if (currentExerciseIdForNew) {
+      setExercises((prev) =>
+        prev.map((e) =>
+          e.id === currentExerciseIdForNew
+            ? { ...e, exerciseId: newExercise.id, name: newExercise.name }
+            : e
+        )
+      );
+      setCurrentExerciseIdForNew(null);
+    }
   };
 
   const addSet = (exerciseId: string) => {
@@ -175,14 +213,13 @@ export function WorkoutLoggerClient({
         {exercises.map((ex, exIndex) => (
           <Card key={ex.id} className="overflow-hidden">
             <CardHeader className="bg-gray-50 py-3 px-4 flex flex-row items-center justify-between">
-              <div className="flex items-center gap-2 flex-1">
-                <span className="text-sm font-bold text-gray-500 w-6">{exIndex + 1}</span>
-                <Select
-                  items={exerciseItems}
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                <span className="text-sm font-bold text-gray-500 w-6 shrink-0">{exIndex + 1}</span>
+                <ExerciseCombobox
+                  options={exerciseOptions}
                   value={ex.exerciseId.toString()}
-                  onValueChange={(val: string | null) => {
-                    if (!val) return;
-                    const selected = exerciseItems.find((item) => item.value === val);
+                  onChange={(val) => {
+                    const selected = exerciseOptions.find((o) => o.value === val);
                     setExercises((prev) =>
                       prev.map((e) =>
                         e.id === ex.id
@@ -191,20 +228,14 @@ export function WorkoutLoggerClient({
                       )
                     );
                   }}
-                >
-                  <SelectTrigger className="w-full border-none bg-transparent p-0 h-auto font-semibold text-gray-900 focus:ring-0">
-                    <SelectValue placeholder="Seleccionar ejercicio" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {exerciseItems.map((item) => (
-                      <SelectItem key={item.value} value={item.value}>
-                        {item.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  onCreateNew={() => {
+                    setCurrentExerciseIdForNew(ex.id);
+                    setIsCreateDialogOpen(true);
+                  }}
+                  className="flex-1 min-w-0 truncate"
+                />
               </div>
-              <Button variant="ghost" size="icon" onClick={() => removeExercise(ex.id)}>
+              <Button variant="ghost" size="icon" onClick={() => removeExercise(ex.id)} className="shrink-0">
                 <Trash2 className="w-4 h-4 text-red-500" />
               </Button>
             </CardHeader>
@@ -326,6 +357,14 @@ export function WorkoutLoggerClient({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Dialog para crear nuevo ejercicio */}
+      <CreateExerciseDialog
+        open={isCreateDialogOpen}
+        onOpenChange={setIsCreateDialogOpen}
+        categories={categories}
+        onExerciseCreated={handleExerciseCreated}
+      />
     </div>
   );
 }

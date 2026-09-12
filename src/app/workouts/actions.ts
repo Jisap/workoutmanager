@@ -90,3 +90,28 @@ export async function getAvailableExercises() {
     .where(or(isNull(exercises.userId), eq(exercises.userId, userId)))
     .orderBy(asc(exercises.name));
 }
+
+export async function createCustomExercise(data: {
+  name: string;
+  categoryId: number | null;
+}) {
+  const { userId } = await auth();
+  if (!userId) throw new Error('No autorizado');
+
+  try {
+    const [newExercise] = await db
+      .insert(exercises)
+      .values({
+        name: data.name,
+        categoryId: data.categoryId,
+        isCustom: true,
+        userId,
+      })
+      .returning();
+
+    return { success: true, exercise: newExercise };
+  } catch (error) {
+    console.error('Error creando ejercicio:', error);
+    throw new Error('No se pudo crear el ejercicio');
+  }
+}

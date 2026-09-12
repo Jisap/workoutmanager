@@ -1,6 +1,5 @@
 import 'dotenv/config';
 import { config } from 'dotenv';
-
 config({ path: '.env.local' });
 config({ path: '.env' });
 
@@ -8,55 +7,164 @@ import { db } from './index';
 import { workoutTypes, exerciseCategories, exercises } from './schema';
 
 async function seed() {
-    console.log('🌱 Sembrando base de datos...');
+    console.log('🌱 Sembrando base de datos con catálogo completo...');
 
     // 1. Tipos de Entrenamiento
-    const insertedTypes = await db.insert(workoutTypes).values([
+    const types = await db.insert(workoutTypes).values([
         { name: 'Musculación', description: 'Hipertrofia y fuerza tradicional' },
         { name: 'CrossFit', description: 'WODs, gimnasia y levantamiento olímpico' },
         { name: 'Hyrox', description: 'Carreras mixtas y estaciones funcionales' },
         { name: 'Cardio / Endurance', description: 'Running, cycling, remo continuo' },
         { name: 'Funcional', description: 'Movimientos corporales y kettlebells' },
         { name: 'Powerlifting', description: 'Sentadilla, Press Banca, Peso Muerto' },
-    ]).onConflictDoNothing({ target: workoutTypes.name }).returning();
-    console.log(`✅ Tipos de entrenamiento procesados (nuevos: ${insertedTypes.length}).`);
+        { name: 'Calistenia', description: 'Ejercicios con peso corporal' },
+    ]).onConflictDoNothing().returning();
+    console.log(`✅ ${types.length} tipos de entrenamiento procesados.`);
 
     // 2. Categorías de Ejercicios
-    const insertedCategories = await db.insert(exerciseCategories).values([
+    const categories = await db.insert(exerciseCategories).values([
+        // Fuerza / Musculación
         { name: 'Pecho', type: 'Fuerza' },
         { name: 'Espalda', type: 'Fuerza' },
         { name: 'Piernas', type: 'Fuerza' },
+        { name: 'Gluteos', type: 'Fuerza' },
         { name: 'Hombros', type: 'Fuerza' },
         { name: 'Brazos', type: 'Fuerza' },
         { name: 'Core', type: 'Fuerza' },
+
+        // CrossFit / Funcional
         { name: 'Gymnastics', type: 'CrossFit' },
         { name: 'Weightlifting', type: 'CrossFit' },
         { name: 'Monostructural', type: 'Cardio' },
-    ]).onConflictDoNothing({ target: exerciseCategories.name }).returning();
-    console.log(`✅ Categorías procesadas (nuevas: ${insertedCategories.length}).`);
+        { name: 'Kettlebell', type: 'Funcional' },
+        { name: 'Strongman', type: 'Funcional' },
 
-    // 3. Obtener categorías para asociar ejercicios
-    const allCategories = await db.select().from(exerciseCategories);
-    const pechoId = allCategories.find(c => c.name === 'Pecho')?.id;
-    const piernaId = allCategories.find(c => c.name === 'Piernas')?.id;
-    const monoId = allCategories.find(c => c.name === 'Monostructural')?.id;
-    const gymId = allCategories.find(c => c.name === 'Gymnastics')?.id;
+        // Cardio
+        { name: 'Running', type: 'Cardio' },
+        { name: 'Cycling', type: 'Cardio' },
+        { name: 'Rowing', type: 'Cardio' },
+    ]).onConflictDoNothing().returning();
+    console.log(`✅ ${categories.length} categorías procesadas.`);
 
-    const existingExercises = await db.select().from(exercises);
-    if (existingExercises.length === 0) {
-        await db.insert(exercises).values([
-            { name: 'Press de Banca con Barra', categoryId: pechoId, isCustom: false },
-            { name: 'Sentadilla Trasera', categoryId: piernaId, isCustom: false },
-            { name: 'Peso Muerto', categoryId: piernaId, isCustom: false },
-            { name: 'Running (1000m)', categoryId: monoId, isCustom: false },
-            { name: 'Remo (500m)', categoryId: monoId, isCustom: false },
-            { name: 'Dominadas (Pull-ups)', categoryId: gymId, isCustom: false },
-            { name: 'Toes to Bar', categoryId: gymId, isCustom: false },
-        ]);
-        console.log('✅ Ejercicios base creados.');
-    } else {
-        console.log(`ℹ️ Ejercicios ya presentes en la base de datos (${existingExercises.length} registros).`);
-    }
+    // Helper para obtener IDs
+    const getId = (name: string) => categories.find(c => c.name === name)?.id;
+
+    // 3. Catálogo Completo de Ejercicios
+    const allExercises = [
+        // === PECHO ===
+        { name: 'Press de Banca con Barra', categoryId: getId('Pecho') },
+        { name: 'Press de Banca con Mancuernas', categoryId: getId('Pecho') },
+        { name: 'Press Inclinado con Barra', categoryId: getId('Pecho') },
+        { name: 'Press Inclinado con Mancuernas', categoryId: getId('Pecho') },
+        { name: 'Aperturas con Mancuernas', categoryId: getId('Pecho') },
+        { name: 'Fondos en Paralelas', categoryId: getId('Pecho') },
+        { name: 'Press de Pecho en Máquina', categoryId: getId('Pecho') },
+        { name: 'Crossover en Polea', categoryId: getId('Pecho') },
+
+        // === ESPALDA ===
+        { name: 'Dominadas (Pull-ups)', categoryId: getId('Espalda') },
+        { name: 'Dominadas con Lastre', categoryId: getId('Espalda') },
+        { name: 'Jalón al Pecho', categoryId: getId('Espalda') },
+        { name: 'Remo con Barra', categoryId: getId('Espalda') },
+        { name: 'Remo con Mancuerna', categoryId: getId('Espalda') },
+        { name: 'Remo en Polea Baja', categoryId: getId('Espalda') },
+        { name: 'Peso Muerto', categoryId: getId('Espalda') },
+        { name: 'Pull-overs', categoryId: getId('Espalda') },
+
+        // === PIERNAS ===
+        { name: 'Sentadilla Trasera', categoryId: getId('Piernas') },
+        { name: 'Sentadilla Frontal', categoryId: getId('Piernas') },
+        { name: 'Prensa de Piernas', categoryId: getId('Piernas') },
+        { name: 'Zancadas', categoryId: getId('Piernas') },
+        { name: 'Peso Muerto Rumano', categoryId: getId('Piernas') },
+        { name: 'Curl Femoral', categoryId: getId('Piernas') },
+        { name: 'Extensión de Cuádriceps', categoryId: getId('Piernas') },
+        { name: 'Elevación de Gemelos', categoryId: getId('Piernas') },
+        { name: 'Hip Thrust', categoryId: getId('Piernas') },
+        { name: 'Bulgarian Split Squat', categoryId: getId('Piernas') },
+
+        // === HOMBROS ===
+        { name: 'Press Militar con Barra', categoryId: getId('Hombros') },
+        { name: 'Press Militar con Mancuernas', categoryId: getId('Hombros') },
+        { name: 'Press de Hombros en Máquina', categoryId: getId('Hombros') },
+        { name: 'Elevaciones Laterales', categoryId: getId('Hombros') },
+        { name: 'Elevaciones Frontales', categoryId: getId('Hombros') },
+        { name: 'Pájaros (Rear Delt Fly)', categoryId: getId('Hombros') },
+        { name: 'Face Pull', categoryId: getId('Hombros') },
+
+        // === BRAZOS ===
+        { name: 'Curl de Bíceps con Barra', categoryId: getId('Brazos') },
+        { name: 'Curl de Bíceps con Mancuernas', categoryId: getId('Brazos') },
+        { name: 'Curl Martillo', categoryId: getId('Brazos') },
+        { name: 'Press Francés', categoryId: getId('Brazos') },
+        { name: 'Extensiones de Tríceps en Polea', categoryId: getId('Brazos') },
+        { name: 'Fondos en Banco', categoryId: getId('Brazos') },
+
+        // === CORE ===
+        { name: 'Crunch en Máquina', categoryId: getId('Core') },
+        { name: 'Plancha', categoryId: getId('Core') },
+        { name: 'Russian Twist', categoryId: getId('Core') },
+        { name: 'Elevación de Piernas Colgado', categoryId: getId('Core') },
+        { name: 'Ab Wheel Rollout', categoryId: getId('Core') },
+
+        // === GYMNASTICS (CrossFit) ===
+        { name: 'Toes to Bar', categoryId: getId('Gymnastics') },
+        { name: 'Kipping Pull-ups', categoryId: getId('Gymnastics') },
+        { name: 'Chest to Bar Pull-ups', categoryId: getId('Gymnastics') },
+        { name: 'Muscle-ups', categoryId: getId('Gymnastics') },
+        { name: 'Handstand Push-ups', categoryId: getId('Gymnastics') },
+        { name: 'Pistol Squats', categoryId: getId('Gymnastics') },
+        { name: 'Box Jumps', categoryId: getId('Gymnastics') },
+        { name: 'Burpees', categoryId: getId('Gymnastics') },
+        { name: 'Double-unders', categoryId: getId('Gymnastics') },
+
+        // === WEIGHTLIFTING (CrossFit) ===
+        { name: 'Snatch', categoryId: getId('Weightlifting') },
+        { name: 'Clean and Jerk', categoryId: getId('Weightlifting') },
+        { name: 'Power Clean', categoryId: getId('Weightlifting') },
+        { name: 'Power Snatch', categoryId: getId('Weightlifting') },
+        { name: 'Thrusters', categoryId: getId('Weightlifting') },
+        { name: 'Wall Balls', categoryId: getId('Weightlifting') },
+        { name: 'Cluster', categoryId: getId('Weightlifting') },
+
+        // === MONOSTRUCTURAL (Cardio) ===
+        { name: 'Running (1000m)', categoryId: getId('Monostructural') },
+        { name: 'Running (400m)', categoryId: getId('Monostructural') },
+        { name: 'Running (200m)', categoryId: getId('Monostructural') },
+        { name: 'Running (100m)', categoryId: getId('Monostructural') },
+        { name: 'Remo (500m)', categoryId: getId('Monostructural') },
+        { name: 'Remo (1000m)', categoryId: getId('Monostructural') },
+        { name: 'Remo (2000m)', categoryId: getId('Monostructural') },
+        { name: 'SkiErg (500m)', categoryId: getId('Monostructural') },
+        { name: 'SkiErg (1000m)', categoryId: getId('Monostructural') },
+        { name: 'Bike (Calorías)', categoryId: getId('Monostructural') },
+        { name: 'Assault Bike (Calorías)', categoryId: getId('Monostructural') },
+
+        // === KETTLEBELL ===
+        { name: 'Kettlebell Swing', categoryId: getId('Kettlebell') },
+        { name: 'Kettlebell Goblet Squat', categoryId: getId('Kettlebell') },
+        { name: 'Turkish Get-up', categoryId: getId('Kettlebell') },
+        { name: 'Kettlebell Snatch', categoryId: getId('Kettlebell') },
+        { name: 'Kettlebell Clean', categoryId: getId('Kettlebell') },
+
+        // === STRONGMAN ===
+        { name: 'Farmer Carry', categoryId: getId('Strongman') },
+        { name: 'Sandbag Carry', categoryId: getId('Strongman') },
+        { name: 'Sled Push', categoryId: getId('Strongman') },
+        { name: 'Sled Pull', categoryId: getId('Strongman') },
+        { name: 'Atlas Stones', categoryId: getId('Strongman') },
+    ];
+
+    const inserted = await db.insert(exercises).values(
+        allExercises.map(ex => ({
+            name: ex.name,
+            categoryId: ex.categoryId,
+            isCustom: false,
+            userId: null,
+        }))
+    ).onConflictDoNothing().returning();
+
+    console.log(`✅ ${inserted.length} ejercicios creados en el catálogo.`);
 
     console.log('🎉 ¡Sembrado completado con éxito!');
 }
