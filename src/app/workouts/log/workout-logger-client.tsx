@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Textarea } from '@/components/ui/textarea';
 import { ExerciseCombobox, type ExerciseOption } from '@/components/workout/exercise-combobox';
 import { Plus, Trash2, Clock } from 'lucide-react';
-import { saveWorkout } from '../actions';
+import { saveWorkout, saveAsTemplate as saveAsTemplateAction } from '../actions';
 import { CreateExerciseDialog, type Category } from '@/components/workout/create-exercise-dialog';
 
 // Tipos locales para el estado
@@ -39,6 +39,8 @@ interface WorkoutLoggerClientProps {
   categories: Category[];
   mode: string;
   typeId?: string;
+  initialExercisesState?: any[]; // <-- NUEVO
+  initialName?: string;          // <-- NUEVO
 }
 
 export function WorkoutLoggerClient({
@@ -46,11 +48,13 @@ export function WorkoutLoggerClient({
   categories,
   mode,
   typeId,
+  initialExercisesState = [],
+  initialName = 'Entrenamiento Libre',
 }: WorkoutLoggerClientProps) {
   const router = useRouter();
 
   const [availableExercisesList, setAvailableExercisesList] = useState<AvailableExercise[]>(availableExercises);
-  const [typeName, setTypeName] = useState('Entrenamiento Libre');
+  const [typeName, setTypeName] = useState(initialName);
   const [exercises, setExercises] = useState<LocalExercise[]>([]);
   const [isFinishDialogOpen, setIsFinishDialogOpen] = useState(false);
   const [totalTimeMinutes, setTotalTimeMinutes] = useState('45');
@@ -61,10 +65,37 @@ export function WorkoutLoggerClient({
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [currentExerciseIdForNew, setCurrentExerciseIdForNew] = useState<string | null>(null);
 
-  // Sincronizar lista si cambia la prop
+  // Guardar como plantilla
+  const [saveAsTemplate, setSaveAsTemplate] = useState(false);
+  const [templateName, setTemplateName] = useState(initialName);
+
+  // Sincronizar initialName si cambia
+  useEffect(() => {
+    setTypeName(initialName);
+    setTemplateName(initialName);
+  }, [initialName]);
+
+  // Sincronizar lista de ejercicios disponibles
   useEffect(() => {
     setAvailableExercisesList(availableExercises);
   }, [availableExercises]);
+
+  const defaultExercise = availableExercisesList[0] || { id: 1, name: 'Ejercicio' };
+
+  // Inicializar ejercicios según el modo
+  useEffect(() => {
+    if (initialExercisesState && initialExercisesState.length > 0) {
+      setExercises(initialExercisesState);
+    } else if (mode === 'free' && exercises.length === 0) {
+      const initialEx: LocalExercise = {
+        id: crypto.randomUUID(),
+        exerciseId: defaultExercise.id,
+        name: defaultExercise.name,
+        sets: [{ id: crypto.randomUUID(), repCount: 0, weight: null, isCompleted: false }],
+      };
+      setExercises([initialEx]);
+    }
+  }, [mode, initialExercisesState, defaultExercise, exercises.length]);
 
   // Mapa categoryId -> nombre para las agrupaciones del Combobox
   const categoryMap = useMemo(
@@ -84,21 +115,7 @@ export function WorkoutLoggerClient({
     [availableExercisesList, categoryMap]
   );
 
-  const defaultExercise = availableExercisesList[0] || { id: 1, name: 'Ejercicio' };
 
-  // Inicializar con un ejercicio si es modo libre
-  useEffect(() => {
-    if (mode === 'free' && exercises.length === 0) {
-      setTypeName('Entrenamiento Libre');
-      const initialEx: LocalExercise = {
-        id: crypto.randomUUID(),
-        exerciseId: defaultExercise.id,
-        name: defaultExercise.name,
-        sets: [{ id: crypto.randomUUID(), repCount: 0, weight: null, isCompleted: false }],
-      };
-      setExercises([initialEx]);
-    }
-  }, [mode, defaultExercise, exercises.length]);
 
   const addExercise = () => {
     const newEx: LocalExercise = {
@@ -163,6 +180,25 @@ export function WorkoutLoggerClient({
     setExercises((prev) => prev.filter((ex) => ex.id !== exerciseId));
   };
 
+  // Nueva función para añadir múltiples series
+  const addSets = (exerciseId: string, count: number = 1) => {
+    setExercises((prev) =>
+      prev.map((ex) => {
+        if (ex.id === exerciseId) {
+          const lastSet = ex.sets[ex.sets.length - 1];
+          const newSets: LocalSet[] = Array.from({ length: count }, () => ({
+            id: crypto.randomUUID(),
+            repCount: lastSet ? lastSet.repCount : 0,
+            weight: lastSet ? lastSet.weight : null,
+            isCompleted: false,
+          }));
+          return { ...ex, sets: [...ex.sets, ...newSets] };
+        }
+        return ex;
+      })
+    );
+  };
+
   const handleFinish = async () => {
     setIsSaving(true);
     try {
@@ -185,7 +221,15 @@ export function WorkoutLoggerClient({
         })),
       };
 
-      await saveWorkout(payload);
+      const result = await saveWorkout(payload);
+
+      if (saveAsTemplate && result.workoutId) {
+        await saveAsTemplateAction({
+          workoutId: result.workoutId,
+          name: templateName,
+        });
+      }
+
       router.push('/dashboard');
     } catch (error) {
       console.error(error);
@@ -253,9 +297,8 @@ export function WorkoutLoggerClient({
               {ex.sets.map((set, setIndex) => (
                 <div
                   key={set.id}
-                  className={`grid grid-cols-10 gap-2 px-4 py-3 items-center border-b last:border-0 ${
-                    set.isCompleted ? 'bg-green-50/50' : ''
-                  }`}
+                  className={`grid grid-cols-10 gap-2 px-4 py-3 items-center border-b last:border-0 ${set.isCompleted ? 'bg-green-50/50' : ''
+                    }`}
                 >
                   <div className="col-span-2 text-center font-medium text-gray-500">{setIndex + 1}</div>
 
@@ -287,9 +330,8 @@ export function WorkoutLoggerClient({
                     <button
                       type="button"
                       onClick={() => updateSet(ex.id, set.id, 'isCompleted', !set.isCompleted)}
-                      className={`w-8 h-8 rounded flex items-center justify-center transition-colors ${
-                        set.isCompleted ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-400 hover:bg-gray-300'
-                      }`}
+                      className={`w-8 h-8 rounded flex items-center justify-center transition-colors ${set.isCompleted ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-400 hover:bg-gray-300'
+                        }`}
                     >
                       ✓
                     </button>
@@ -297,15 +339,42 @@ export function WorkoutLoggerClient({
                 </div>
               ))}
 
-              <Button
-                type="button"
-                variant="ghost"
-                className="w-full rounded-none text-blue-600 hover:text-blue-700 hover:bg-blue-50 py-2 text-sm font-medium"
-                onClick={() => addSet(ex.id)}
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Añadir Serie
-              </Button>
+              <div className="flex items-center gap-2 px-4 py-3 bg-gray-50 border-t">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="flex-1 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                  onClick={() => addSets(ex.id, 1)}
+                >
+                  <Plus className="w-4 h-4 mr-1" />
+                  Añadir 1 serie
+                </Button>
+
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    min="1"
+                    max="10"
+                    defaultValue="3"
+                    className="w-16 h-9 text-center tabular-nums"
+                    id={`sets-count-${ex.id}`}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                    onClick={(e) => {
+                      const input = document.getElementById(`sets-count-${ex.id}`) as HTMLInputElement;
+                      const count = parseInt(input.value, 10) || 3;
+                      addSets(ex.id, count);
+                    }}
+                  >
+                    Añadir
+                  </Button>
+                </div>
+              </div>
             </CardContent>
           </Card>
         ))}
@@ -345,6 +414,28 @@ export function WorkoutLoggerClient({
                 onChange={(e) => setNotes(e.target.value)}
                 rows={3}
               />
+            </div>
+
+            {/* Guardar como plantilla */}
+            <div className="space-y-2 border-t pt-4">
+              <Label>Nombre para guardar (opcional)</Label>
+              <Input
+                value={templateName}
+                onChange={(e) => setTemplateName(e.target.value)}
+                placeholder="Ej: Push Day A, WOD Fran..."
+              />
+              <div className="flex items-center space-x-2 mt-2">
+                <input
+                  type="checkbox"
+                  id="saveTemplate"
+                  checked={saveAsTemplate}
+                  onChange={(e) => setSaveAsTemplate(e.target.checked)}
+                  className="rounded border-gray-300 h-4 w-4 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                />
+                <Label htmlFor="saveTemplate" className="text-sm cursor-pointer font-normal text-gray-700">
+                  Guardar como plantilla reutilizable
+                </Label>
+              </div>
             </div>
           </div>
           <DialogFooter>

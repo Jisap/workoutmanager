@@ -104,3 +104,8 @@ export const workoutTemplatesRelations = relations(workoutTemplates, ({ one, man
     type: one(workoutTypes, { fields: [workoutTemplates.typeId], references: [workoutTypes.id] }),
     exercises: many(templateExercises),
 }));
+
+export const templateExercisesRelations = relations(templateExercises, ({ one }) => ({
+    template: one(workoutTemplates, { fields: [templateExercises.templateId], references: [workoutTemplates.id] }),
+    exercise: one(exercises, { fields: [templateExercises.exerciseId], references: [exercises.id] }),
+}));

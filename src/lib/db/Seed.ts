@@ -5,6 +5,7 @@ config({ path: '.env' });
 
 import { db } from './index';
 import { workoutTypes, exerciseCategories, exercises } from './schema';
+import { eq, isNull } from 'drizzle-orm';
 
 async function seed() {
     console.log('🌱 Sembrando base de datos con catálogo completo...');
@@ -22,7 +23,7 @@ async function seed() {
     console.log(`✅ ${types.length} tipos de entrenamiento procesados.`);
 
     // 2. Categorías de Ejercicios
-    const categories = await db.insert(exerciseCategories).values([
+    await db.insert(exerciseCategories).values([
         // Fuerza / Musculación
         { name: 'Pecho', type: 'Fuerza' },
         { name: 'Espalda', type: 'Fuerza' },
@@ -43,11 +44,14 @@ async function seed() {
         { name: 'Running', type: 'Cardio' },
         { name: 'Cycling', type: 'Cardio' },
         { name: 'Rowing', type: 'Cardio' },
-    ]).onConflictDoNothing().returning();
-    console.log(`✅ ${categories.length} categorías procesadas.`);
+    ]).onConflictDoNothing();
+
+    // Obtener TODAS las categorías de la base de datos (tanto nuevas como existentes)
+    const allCategories = await db.select().from(exerciseCategories);
+    console.log(`✅ ${allCategories.length} categorías cargadas.`);
 
     // Helper para obtener IDs
-    const getId = (name: string) => categories.find(c => c.name === name)?.id;
+    const getId = (name: string) => allCategories.find(c => c.name === name)?.id;
 
     // 3. Catálogo Completo de Ejercicios
     const allExercises = [
@@ -155,18 +159,53 @@ async function seed() {
         { name: 'Atlas Stones', categoryId: getId('Strongman') },
     ];
 
-    const inserted = await db.insert(exercises).values(
-        allExercises.map(ex => ({
-            name: ex.name,
-            categoryId: ex.categoryId,
-            isCustom: false,
-            userId: null,
-        }))
-    ).onConflictDoNothing().returning();
+    // 3. Catálogo Completo de Ejercicios
+    // Obtenemos los ejercicios globales existentes
+    const existingExercises = await db.select().from(exercises).where(isNull(exercises.userId));
 
-    console.log(`✅ ${inserted.length} ejercicios creados en el catálogo.`);
+    let createdCount = 0;
+    let updatedCount = 0;
+    let removedDuplicatesCount = 0;
 
-    console.log('🎉 ¡Sembrado completado con éxito!');
+    for (const ex of allExercises) {
+        const matches = existingExercises.filter(e => e.name === ex.name);
+
+        if (matches.length === 0) {
+            // No existe -> crearlo
+            await db.insert(exercises).values({
+                name: ex.name,
+                categoryId: ex.categoryId,
+                isCustom: false,
+                userId: null,
+            });
+            createdCount++;
+        } else {
+            // Ya existe -> actualizar categoryId del primero si hace falta
+            const primary = matches[0];
+            if (primary.categoryId !== ex.categoryId) {
+                await db.update(exercises)
+                    .set({ categoryId: ex.categoryId })
+                    .where(eq(exercises.id, primary.id));
+                updatedCount++;
+            }
+
+            // Si hay duplicados (más de 1 con el mismo nombre), eliminar los sobrantes
+            if (matches.length > 1) {
+                const duplicateIds = matches.slice(1).map(m => m.id);
+                for (const dupId of duplicateIds) {
+                    try {
+                        await db.delete(exercises).where(eq(exercises.id, dupId));
+                        removedDuplicatesCount++;
+                    } catch {
+                        // Si está referenciado por alguna tabla, no se puede borrar directamente
+                    }
+                }
+            }
+        }
+    }
+
+    console.log(`✅ Ejercicios: ${createdCount} creados, ${updatedCount} actualizados, ${removedDuplicatesCount} duplicados eliminados.`);
+    console.log('🎉 ¡Sembrado y limpieza completados con éxito!');
 }
 
 seed().catch((e) => {

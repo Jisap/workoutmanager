@@ -76,8 +76,12 @@ export async function saveWorkout(data: {
   }
 }
 
-export async function getAvailableExercises() {
-  const { userId } = await auth();
+export async function getAvailableExercises(userIdParam?: string) {
+  let userId = userIdParam;
+  if (!userId) {
+    const authData = await auth();
+    userId = authData.userId ?? undefined;
+  }
   if (!userId) throw new Error('No autorizado');
 
   return await db
