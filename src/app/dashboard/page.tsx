@@ -5,7 +5,9 @@ import { auth } from '@clerk/nextjs/server';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Calendar, Dumbbell, TrendingUp, Plus } from 'lucide-react';
+import { Calendar, Dumbbell, TrendingUp, Plus, Activity } from 'lucide-react';
+import { getConsistencyData } from '../workouts/actions';
+import { ConsistencyHeatmap } from '../progress/consitency-heatmap';
 
 export default async function DashboardPage() {
     const { userId } = await auth();
@@ -14,23 +16,26 @@ export default async function DashboardPage() {
         return <div>No autenticado</div>;
     }
 
-    // Obtener últimos entrenamientos
-    const recentWorkouts = await db
-        .select({
-            id: workouts.id,
-            name: workouts.name,
-            startTime: workouts.startTime,
-            totalTimeSeconds: workouts.totalTimeSeconds,
-            typeName: workoutTypes.name,
-        })
-        .from(workouts)
-        .leftJoin(workoutTypes, eq(workouts.typeId, workoutTypes.id))
-        .where(eq(workouts.userId, userId))
-        .orderBy(desc(workouts.startTime))
-        .limit(5);
+    // Obtener últimos entrenamientos y datos de consistencia en paralelo
+    const [recentWorkouts, consistencyData] = await Promise.all([
+        db
+            .select({
+                id: workouts.id,
+                name: workouts.name,
+                startTime: workouts.startTime,
+                totalTimeSeconds: workouts.totalTimeSeconds,
+                typeName: workoutTypes.name,
+            })
+            .from(workouts)
+            .leftJoin(workoutTypes, eq(workouts.typeId, workoutTypes.id))
+            .where(eq(workouts.userId, userId))
+            .orderBy(desc(workouts.startTime))
+            .limit(5),
+        getConsistencyData(userId),
+    ]);
 
     // Stats básicas
-    const totalWorkouts = recentWorkouts.length;
+    const totalWorkouts = consistencyData.totalWorkouts;
     const totalTime = recentWorkouts.reduce((acc, w) => acc + (w.totalTimeSeconds || 0), 0);
 
     return (
@@ -52,36 +57,41 @@ export default async function DashboardPage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between pb-2">
-                        <CardTitle className="text-sm font-medium">Entrenamientos Recientes</CardTitle>
+                        <CardTitle className="text-sm font-medium">Entrenamientos Totales</CardTitle>
                         <Dumbbell className="w-4 h-4 text-gray-400" />
                     </CardHeader>
                     <CardContent>
                         <div className="text-2xl font-bold">{totalWorkouts}</div>
-                        <p className="text-xs text-gray-500 mt-1">Últimos 5 sesiones</p>
+                        <p className="text-xs text-gray-500 mt-1">Días activos registrados</p>
                     </CardContent>
                 </Card>
 
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between pb-2">
-                        <CardTitle className="text-sm font-medium">Tiempo Total</CardTitle>
-                        <Calendar className="w-4 h-4 text-gray-400" />
+                        <CardTitle className="text-sm font-medium">Racha Actual</CardTitle>
+                        <Activity className="w-4 h-4 text-gray-400" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{Math.round(totalTime / 60)} min</div>
-                        <p className="text-xs text-gray-500 mt-1">En las últimas sesiones</p>
+                        <div className="text-2xl font-bold">{consistencyData.currentStreak} días</div>
+                        <p className="text-xs text-gray-500 mt-1">Récord: {consistencyData.longestStreak} días</p>
                     </CardContent>
                 </Card>
 
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between pb-2">
-                        <CardTitle className="text-sm font-medium">Progreso</CardTitle>
+                        <CardTitle className="text-sm font-medium">Frecuencia Semanal</CardTitle>
                         <TrendingUp className="w-4 h-4 text-gray-400" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">+12%</div>
-                        <p className="text-xs text-gray-500 mt-1">vs mes anterior</p>
+                        <div className="text-2xl font-bold">{consistencyData.avgPerWeek} días</div>
+                        <p className="text-xs text-gray-500 mt-1">Promedio por semana</p>
                     </CardContent>
                 </Card>
+            </div>
+
+            {/* Mapa de Actividad Interactivo */}
+            <div className="space-y-3">
+                <ConsistencyHeatmap data={consistencyData} />
             </div>
 
             {/* Últimos Entrenamientos */}
@@ -107,7 +117,7 @@ export default async function DashboardPage() {
                             {recentWorkouts.map((workout) => (
                                 <div
                                     key={workout.id}
-                                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100/80 transition-colors"
                                 >
                                     <div>
                                         <p className="font-medium text-gray-900">{workout.name}</p>

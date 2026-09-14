@@ -130,33 +130,13 @@ export default async function ProgressPage({
         />
       </section>
 
-      <section>
-        <div className="flex items-center gap-2 mb-4">
-          <Calendar className="w-5 h-5 text-green-600" />
-          <h2 className="text-lg font-semibold text-gray-900">Consistencia y Actividad</h2>
+      {/* Sección 4: Consistencia y Mapa de Actividad */}
+      <section className="space-y-4">
+        <div className="flex items-center gap-2">
+          <Calendar className="w-5 h-5 text-emerald-600" />
+          <h2 className="text-lg font-semibold text-gray-900">Consistencia y Mapa de Actividad</h2>
         </div>
         <ConsistencyHeatmap data={consistencyData} />
-      </section>
-
-      {/* Sección 4: Consistencia */}
-      <section>
-        <div className="flex items-center gap-2 mb-4">
-          <Calendar className="w-5 h-5 text-green-600" />
-          <h2 className="text-lg font-semibold text-gray-900">Consistencia</h2>
-        </div>
-        <Card className="bg-gradient-to-br from-green-50 to-emerald-50 border-green-200">
-          <CardContent className="p-6 flex items-center gap-4">
-            <div className="p-3 bg-green-100 rounded-full text-green-600">
-              <Dumbbell className="w-6 h-6" />
-            </div>
-            <div>
-              <p className="font-semibold text-gray-900">¡Sigue así!</p>
-              <p className="text-sm text-gray-600">
-                La consistencia es la clave. Intenta mantener al menos 3 entrenamientos por semana.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
       </section>
     </div>
   );

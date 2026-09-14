@@ -424,16 +424,24 @@ export async function getExerciseProgress(userId: string, exerciseId: number) {
 }
 
 export async function getConsistencyData(userId: string) {
-  const allWorkouts = await db
-    .select({
-      startTime: workouts.startTime,
-    })
-    .from(workouts)
-    .where(eq(workouts.userId, userId))
-    .orderBy(asc(workouts.startTime));
+  const allWorkouts = await db.query.workouts.findMany({
+    where: eq(workouts.userId, userId),
+    orderBy: [desc(workouts.startTime)],
+    with: {
+      type: true,
+      exercises: {
+        with: {
+          exercise: true,
+          sets: true,
+        },
+        orderBy: (fields, { asc }) => asc(fields.orderIndex),
+      },
+    },
+  });
 
   // 1. Mapa de calor: contar entrenamientos por día (formato "YYYY-MM-DD")
   const dailyCounts: Record<string, number> = {};
+  const workoutsByDate: Record<string, any[]> = {};
   let currentStreak = 0;
   let longestStreak = 0;
   let tempStreak = 0;
@@ -476,19 +484,71 @@ export async function getConsistencyData(userId: string) {
     }
   }
 
-  // Llenar dailyCounts para el heatmap (últimos 365 días)
+  // Llenar dailyCounts y workoutsByDate para el heatmap interactivo
   for (const w of allWorkouts) {
     const dateKey = new Date(w.startTime).toISOString().split('T')[0];
     dailyCounts[dateKey] = (dailyCounts[dateKey] || 0) + 1;
+
+    let totalVolume = 0;
+    let totalSetsCount = 0;
+
+    const exercises = w.exercises.map((e) => {
+      totalSetsCount += e.sets.length;
+      let exMaxWeight = 0;
+      let exVolume = 0;
+
+      const sets = e.sets.map((s, idx) => {
+        const weight = s.weight ? Number(s.weight) : 0;
+        const reps = s.repCount ? Number(s.repCount) : 0;
+        if (weight > exMaxWeight) exMaxWeight = weight;
+        exVolume += weight * reps;
+
+        return {
+          setNumber: idx + 1,
+          weight: s.weight,
+          repCount: s.repCount,
+          rpe: s.rpe,
+          distance: s.distance,
+          durationSeconds: s.durationSeconds,
+        };
+      });
+
+      totalVolume += exVolume;
+
+      return {
+        name: e.exercise.name,
+        orderIndex: e.orderIndex,
+        sets,
+        maxWeight: exMaxWeight,
+        volume: exVolume,
+      };
+    });
+
+    if (!workoutsByDate[dateKey]) {
+      workoutsByDate[dateKey] = [];
+    }
+
+    workoutsByDate[dateKey].push({
+      id: w.id,
+      name: w.name,
+      notes: w.notes,
+      startTime: w.startTime,
+      totalTimeSeconds: w.totalTimeSeconds,
+      typeId: w.typeId,
+      typeName: w.type?.name ?? 'General',
+      totalVolume,
+      totalSetsCount,
+      exercises,
+    });
   }
 
   // Calcular promedio semanal
-  const totalWeeks = Math.max(1, Math.ceil(uniqueDates.length / 7)); // Aproximación simple
   const avgPerWeek = (uniqueDates.length / Math.max(1, (uniqueDates.length > 0 ?
     Math.ceil((new Date(uniqueDates[uniqueDates.length - 1]).getTime() - new Date(uniqueDates[0]).getTime()) / (1000 * 60 * 60 * 24 * 7)) : 1))).toFixed(1);
 
   return {
     dailyCounts,
+    workoutsByDate,
     currentStreak,
     longestStreak,
     totalWorkouts: uniqueDates.length,
