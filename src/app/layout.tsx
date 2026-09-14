@@ -25,14 +25,21 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               <Sidebar />
 
               <div className="flex-1 flex flex-col overflow-hidden">
-                <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-                  <h1 className="text-xl font-semibold text-gray-900">
-                    Workout Manager
-                  </h1>
+                {/* Header visible únicamente en móvil (en desktop el sidebar ya contiene el perfil y marca) */}
+                <header className="lg:hidden bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white shadow-xs font-bold text-sm">
+                      W
+                    </div>
+                    <span className="font-bold text-gray-900 text-base">
+                      Workout Manager
+                    </span>
+                  </div>
+
                   <UserButton />
                 </header>
 
-                <main className="flex-1 overflow-y-auto p-6 pb-24 lg:pb-6">
+                <main className="flex-1 overflow-y-auto p-4 sm:p-6 pb-24 lg:pb-6">
                   {children}
                 </main>
               </div>
@@ -42,9 +49,14 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <div className="min-h-screen">
               <header className="bg-white border-b border-gray-200 px-6 py-4">
                 <div className="max-w-7xl mx-auto flex items-center justify-between">
-                  <h1 className="text-xl font-semibold text-gray-900">
-                    Workout Manager
-                  </h1>
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white shadow-xs font-bold text-sm">
+                      W
+                    </div>
+                    <h1 className="text-xl font-bold text-gray-900">
+                      Workout Manager
+                    </h1>
+                  </div>
                   <div className="flex items-center gap-3">
                     <SignInButton mode="modal">
                       <Button variant="ghost">Iniciar Sesión</Button>

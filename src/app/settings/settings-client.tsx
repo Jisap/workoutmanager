@@ -22,9 +22,11 @@ import {
   Scale,
   Calendar,
   Star,
+  LogOut,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { SignOutButton } from '@clerk/nextjs';
 import { renameCustomExercise, deleteCustomExercise } from './actions';
 import { createCustomExercise } from '@/app/workouts/actions';
 
@@ -163,10 +165,18 @@ function ProfileSection({ profile }: { profile: UserProfile }) {
         </div>
       </div>
 
-      <p className="text-xs text-gray-400 mt-3 flex items-center gap-1">
-        <ChevronRight className="w-3 h-3" />
-        Para editar tu nombre o foto, visita el panel de usuario (botón superior derecho).
-      </p>
+      <div className="mt-4 pt-4 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-3">
+        <p className="text-xs text-gray-400 flex items-center gap-1">
+          <ChevronRight className="w-3 h-3 shrink-0" />
+          Para editar tu perfil, haz clic en tu avatar en la barra superior.
+        </p>
+        <SignOutButton>
+          <Button variant="outline" size="sm" className="text-xs text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200 shrink-0">
+            <LogOut className="w-3.5 h-3.5 mr-1.5" />
+            Cerrar Sesión
+          </Button>
+        </SignOutButton>
+      </div>
     </Section>
   );
 }
