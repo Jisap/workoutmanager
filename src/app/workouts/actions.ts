@@ -602,6 +602,7 @@ export async function getWorkoutHistory(userId: string, limit: number = 50) {
       id: w.id,
       name: w.name,
       typeName: w.type?.name || 'General',
+      typeId: w.typeId,
       startTime: w.startTime,
       totalTimeSeconds: w.totalTimeSeconds,
       notes: w.notes,
