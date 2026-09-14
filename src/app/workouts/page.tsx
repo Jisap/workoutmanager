@@ -22,7 +22,8 @@ export default async function WorkoutsHistoryPage() {
             Historial de Entrenamientos
           </h1>
           <p className="text-sm text-gray-500 mt-1">
-            {history.length} {history.length === 1 ? 'entrenamiento registrado' : 'entrenamientos registrados'}
+            {history.filter((h) => !h.isTemplate).length} entrenamientos registrados
+            {history.some((h) => h.isTemplate) && ` · ${history.filter((h) => h.isTemplate).length} plantillas`}
           </p>
         </div>
         <Link href="/workouts/new">

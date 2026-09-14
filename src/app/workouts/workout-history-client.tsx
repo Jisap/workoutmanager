@@ -27,9 +27,13 @@ import {
   LayoutGrid,
   Eye,
   RotateCcw,
+  Sparkles,
+  Trash2,
+  Loader2,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { deleteWorkout, deleteWorkoutTemplate } from './actions';
 
 // ---------- Types ----------
 export interface WorkoutHistoryItem {
@@ -37,6 +41,7 @@ export interface WorkoutHistoryItem {
   name: string;
   typeName: string;
   typeId: number;
+  isTemplate?: boolean;
   startTime: Date | string;
   totalTimeSeconds: number | null;
   notes: string | null;
@@ -61,6 +66,8 @@ function getTypeStyle(typeName: string): {
   bar: string;
 } {
   const lower = typeName.toLowerCase();
+  if (lower.includes('plantilla') || lower.includes('template'))
+    return { badge: 'bg-indigo-100 text-indigo-800 border-indigo-200', icon: Sparkles, bar: 'bg-indigo-500' };
   if (lower.includes('muscu') || lower.includes('fuerza') || lower.includes('gym'))
     return { badge: 'bg-blue-100 text-blue-800 border-blue-200', icon: Dumbbell, bar: 'bg-blue-500' };
   if (lower.includes('crossfit') || lower.includes('wod') || lower.includes('funcional'))
@@ -96,10 +103,12 @@ function WorkoutDetailModal({
   workout,
   onClose,
   onRepeat,
+  onDelete,
 }: {
   workout: WorkoutHistoryItem;
   onClose: () => void;
   onRepeat: () => void;
+  onDelete: () => void;
 }) {
   const style = getTypeStyle(workout.typeName);
   const TypeIcon = style.icon;
@@ -122,22 +131,26 @@ function WorkoutDetailModal({
             <h3 className="font-extrabold text-base text-gray-900 truncate">{workout.name}</h3>
             <p className="text-xs text-gray-500 flex items-center gap-1.5">
               <Calendar className="w-3 h-3" />
-              {new Date(workout.startTime).toLocaleDateString('es-ES', {
-                weekday: 'long',
-                day: 'numeric',
-                month: 'long',
-                year: 'numeric',
-              })}
-              {' · '}
-              {new Date(workout.startTime).toLocaleTimeString('es-ES', {
-                hour: '2-digit',
-                minute: '2-digit',
-              })}h
+              {workout.isTemplate ? 'Plantilla guardada' : (
+                <>
+                  {new Date(workout.startTime).toLocaleDateString('es-ES', {
+                    weekday: 'long',
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric',
+                  })}
+                  {' · '}
+                  {new Date(workout.startTime).toLocaleTimeString('es-ES', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}h
+                </>
+              )}
             </p>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-200/60 transition-colors shrink-0"
+            className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-200/60 transition-colors shrink-0 cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -148,9 +161,15 @@ function WorkoutDetailModal({
           {/* KPIs */}
           <div className="grid grid-cols-3 gap-2 text-center">
             <div className="bg-gray-50 rounded-xl border border-gray-200/70 p-2.5">
-              <p className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Duración</p>
+              <p className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">
+                {workout.isTemplate ? 'Tipo' : 'Duración'}
+              </p>
               <p className="text-sm font-black text-gray-900 tabular-nums mt-0.5">
-                {workout.totalTimeSeconds ? `${Math.round(workout.totalTimeSeconds / 60)} min` : '—'}
+                {workout.isTemplate
+                  ? 'Plantilla'
+                  : workout.totalTimeSeconds
+                  ? `${Math.round(workout.totalTimeSeconds / 60)} min`
+                  : '—'}
               </p>
             </div>
             <div className="bg-gray-50 rounded-xl border border-gray-200/70 p-2.5">
@@ -160,7 +179,9 @@ function WorkoutDetailModal({
               </p>
             </div>
             <div className="bg-gray-50 rounded-xl border border-gray-200/70 p-2.5">
-              <p className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Series</p>
+              <p className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">
+                {workout.isTemplate ? 'Ejercicios' : 'Series'}
+              </p>
               <p className="text-sm font-black text-gray-900 tabular-nums mt-0.5">{workout.totalSets}</p>
             </div>
           </div>
@@ -188,10 +209,12 @@ function WorkoutDetailModal({
                     {idx + 1}. {ex.name}
                   </span>
                   <span className="flex items-center gap-2 shrink-0">
-                    <span className="text-gray-500">{ex.setsCount} series</span>
+                    <span className="text-gray-500">
+                      {workout.isTemplate ? 'Objetivo base' : `${ex.setsCount} series`}
+                    </span>
                     {ex.maxWeight > 0 && (
                       <span className="px-1.5 py-0.5 text-[10px] bg-purple-50 text-purple-700 font-bold rounded border border-purple-100">
-                        Máx {ex.maxWeight}kg
+                        {workout.isTemplate ? `${ex.maxWeight}kg` : `Máx ${ex.maxWeight}kg`}
                       </span>
                     )}
                   </span>
@@ -202,18 +225,30 @@ function WorkoutDetailModal({
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-3 border-t border-gray-100 bg-gray-50/80 flex items-center gap-2 justify-end">
-          <Button variant="outline" size="sm" onClick={onClose} className="text-xs rounded-xl">
-            Cerrar
-          </Button>
+        <div className="px-5 py-3 border-t border-gray-100 bg-gray-50/80 flex items-center justify-between gap-2">
           <Button
+            variant="ghost"
             size="sm"
-            onClick={onRepeat}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs gap-1.5 rounded-xl shadow-sm"
+            onClick={onDelete}
+            className="text-xs text-red-600 hover:text-red-700 hover:bg-red-50 rounded-xl gap-1.5 px-2.5 cursor-pointer"
           >
-            <Play className="w-3.5 h-3.5 fill-current" />
-            Repetir este entrenamiento
+            <Trash2 className="w-3.5 h-3.5" />
+            <span>Eliminar</span>
           </Button>
+
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={onClose} className="text-xs rounded-xl cursor-pointer">
+              Cerrar
+            </Button>
+            <Button
+              size="sm"
+              onClick={onRepeat}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs gap-1.5 rounded-xl shadow-sm cursor-pointer"
+            >
+              <Play className="w-3.5 h-3.5 fill-current" />
+              {workout.isTemplate ? 'Iniciar con esta plantilla' : 'Repetir entrenamiento'}
+            </Button>
+          </div>
         </div>
       </div>
     </div>
@@ -223,12 +258,20 @@ function WorkoutDetailModal({
 // ---------- Main Component ----------
 export function WorkoutHistoryClient({ history }: WorkoutHistoryClientProps) {
   const router = useRouter();
+  const [items, setItems] = useState<WorkoutHistoryItem[]>(history);
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState<string>('all');
   const [selectedWorkout, setSelectedWorkout] = useState<WorkoutHistoryItem | null>(null);
+  const [workoutToDelete, setWorkoutToDelete] = useState<WorkoutHistoryItem | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
   const [pageSize, setPageSize] = useState<number>(10);
   const [currentPage, setCurrentPage] = useState<number>(1);
+
+  // Sync if history prop changes
+  useEffect(() => {
+    setItems(history);
+  }, [history]);
 
   // Restore preferred view mode from localStorage
   useEffect(() => {
@@ -246,13 +289,13 @@ export function WorkoutHistoryClient({ history }: WorkoutHistoryClientProps) {
   // Unique workout types for the filter dropdown
   const types = useMemo(() => {
     const set = new Set<string>();
-    for (const w of history) set.add(w.typeName);
+    for (const w of items) set.add(w.typeName);
     return Array.from(set).sort();
-  }, [history]);
+  }, [items]);
 
   // Filtered list
   const filtered = useMemo(() => {
-    return history.filter((w) => {
+    return items.filter((w) => {
       const matchType = filterType === 'all' || w.typeName === filterType;
       const matchSearch =
         search.trim() === '' ||
@@ -260,7 +303,7 @@ export function WorkoutHistoryClient({ history }: WorkoutHistoryClientProps) {
         w.exercisesSummary.some((e) => e.name.toLowerCase().includes(search.toLowerCase()));
       return matchType && matchSearch;
     });
-  }, [history, search, filterType]);
+  }, [items, search, filterType]);
 
   // Reset to page 1 whenever filters change
   useEffect(() => {
@@ -281,9 +324,41 @@ export function WorkoutHistoryClient({ history }: WorkoutHistoryClientProps) {
   const grouped = useMemo(() => groupByMonth(paginatedWorkouts), [paginatedWorkouts]);
   const monthKeys = useMemo(() => Array.from(grouped.keys()).sort((a, b) => b.localeCompare(a)), [grouped]);
 
-  const handleRepeat = (workoutId: number) => {
+  const handleRepeat = (workout: WorkoutHistoryItem) => {
     setSelectedWorkout(null);
-    router.push(`/workouts/log?mode=repeat&workoutId=${workoutId}`);
+    if (workout.isTemplate) {
+      router.push(`/workouts/log?mode=template&templateId=${workout.id}`);
+    } else {
+      router.push(`/workouts/log?mode=repeat&workoutId=${workout.id}`);
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!workoutToDelete) return;
+    setIsDeleting(true);
+    try {
+      if (workoutToDelete.isTemplate) {
+        await deleteWorkoutTemplate(workoutToDelete.id);
+      } else {
+        await deleteWorkout(workoutToDelete.id);
+      }
+      setItems((prev) =>
+        prev.filter((i) => !(i.id === workoutToDelete.id && i.isTemplate === workoutToDelete.isTemplate))
+      );
+      if (
+        selectedWorkout &&
+        selectedWorkout.id === workoutToDelete.id &&
+        selectedWorkout.isTemplate === workoutToDelete.isTemplate
+      ) {
+        setSelectedWorkout(null);
+      }
+      setWorkoutToDelete(null);
+    } catch (err) {
+      console.error(err);
+      alert('Error al eliminar el elemento');
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   // Pagination page numbers generator
@@ -321,7 +396,7 @@ export function WorkoutHistoryClient({ history }: WorkoutHistoryClientProps) {
             {search && (
               <button
                 onClick={() => setSearch('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-0.5 rounded-full"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-0.5 rounded-full cursor-pointer"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -352,7 +427,7 @@ export function WorkoutHistoryClient({ history }: WorkoutHistoryClientProps) {
               <button
                 type="button"
                 onClick={() => handleViewChange('table')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                   viewMode === 'table'
                     ? 'bg-white text-gray-900 shadow-xs'
                     : 'text-gray-500 hover:text-gray-900'
@@ -365,7 +440,7 @@ export function WorkoutHistoryClient({ history }: WorkoutHistoryClientProps) {
               <button
                 type="button"
                 onClick={() => handleViewChange('cards')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                   viewMode === 'cards'
                     ? 'bg-white text-gray-900 shadow-xs'
                     : 'text-gray-500 hover:text-gray-900'
@@ -411,12 +486,12 @@ export function WorkoutHistoryClient({ history }: WorkoutHistoryClientProps) {
             <div className="max-w-sm mx-auto">
               <h3 className="text-base font-bold text-gray-900">No hay entrenamientos</h3>
               <p className="text-xs text-gray-500 mt-1">
-                {history.length === 0
+                {items.length === 0
                   ? 'Aún no has registrado ningún entrenamiento. Empieza hoy registrando tu primera sesión.'
                   : 'No se encontraron sesiones con los filtros aplicados. Prueba limpiando la búsqueda.'}
               </p>
             </div>
-            {history.length === 0 ? (
+            {items.length === 0 ? (
               <Link href="/workouts/new">
                 <Button className="text-xs">
                   <Plus className="w-4 h-4 mr-1.5" />
@@ -465,7 +540,7 @@ export function WorkoutHistoryClient({ history }: WorkoutHistoryClientProps) {
 
                   return (
                     <tr
-                      key={workout.id}
+                      key={`${workout.isTemplate ? 'tpl' : 'wkt'}-${workout.id}`}
                       className="hover:bg-blue-50/40 transition-colors group cursor-pointer"
                       onClick={() => setSelectedWorkout(workout)}
                     >
@@ -511,7 +586,9 @@ export function WorkoutHistoryClient({ history }: WorkoutHistoryClientProps) {
 
                       {/* Duración */}
                       <td className="py-3 px-3 text-center whitespace-nowrap text-gray-700 font-semibold tabular-nums">
-                        {workout.totalTimeSeconds ? (
+                        {workout.isTemplate ? (
+                          <span className="text-gray-400 font-normal">Plantilla</span>
+                        ) : workout.totalTimeSeconds ? (
                           <span className="bg-gray-50 px-2 py-0.5 rounded-md border border-gray-100">
                             {Math.round(workout.totalTimeSeconds / 60)} min
                           </span>
@@ -565,7 +642,7 @@ export function WorkoutHistoryClient({ history }: WorkoutHistoryClientProps) {
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="h-7 px-2 text-xs text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg"
+                            className="h-7 px-2 text-xs text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg cursor-pointer"
                             onClick={() => setSelectedWorkout(workout)}
                             title="Ver detalles"
                           >
@@ -575,12 +652,21 @@ export function WorkoutHistoryClient({ history }: WorkoutHistoryClientProps) {
                           <Button
                             variant="outline"
                             size="sm"
-                            className="h-7 px-2 text-xs text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50 border-emerald-200 rounded-lg font-semibold"
-                            onClick={() => handleRepeat(workout.id)}
-                            title="Repetir entrenamiento"
+                            className="h-7 px-2 text-xs text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50 border-emerald-200 rounded-lg font-semibold cursor-pointer"
+                            onClick={() => handleRepeat(workout)}
+                            title={workout.isTemplate ? 'Iniciar entrenamiento con plantilla' : 'Repetir entrenamiento'}
                           >
-                            <Play className="w-3 h-3 fill-current sm:mr-1" />
-                            <span className="hidden sm:inline">Repetir</span>
+                            <Play className="w-3.5 h-3.5 fill-current sm:mr-1" />
+                            <span className="hidden sm:inline">{workout.isTemplate ? 'Iniciar' : 'Repetir'}</span>
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg cursor-pointer"
+                            onClick={() => setWorkoutToDelete(workout)}
+                            title={workout.isTemplate ? 'Eliminar plantilla' : 'Eliminar entrenamiento'}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
                           </Button>
                         </div>
                       </td>
@@ -626,7 +712,7 @@ export function WorkoutHistoryClient({ history }: WorkoutHistoryClientProps) {
 
                     return (
                       <Card
-                        key={workout.id}
+                        key={`${workout.isTemplate ? 'tpl' : 'wkt'}-${workout.id}`}
                         className="overflow-hidden border-gray-200 hover:border-blue-300 hover:shadow-md transition-all flex flex-col justify-between"
                       >
                         <div>
@@ -672,10 +758,12 @@ export function WorkoutHistoryClient({ history }: WorkoutHistoryClientProps) {
                             <div className="grid grid-cols-3 gap-2 text-center">
                               <div className="bg-gray-50 rounded-lg p-2 border border-gray-100">
                                 <p className="text-[9px] uppercase font-bold text-gray-400 tracking-wider">
-                                  Duración
+                                  {workout.isTemplate ? 'Tipo' : 'Duración'}
                                 </p>
                                 <p className="text-xs font-black text-gray-900 tabular-nums mt-0.5">
-                                  {workout.totalTimeSeconds
+                                  {workout.isTemplate
+                                    ? 'Plantilla'
+                                    : workout.totalTimeSeconds
                                     ? `${Math.round(workout.totalTimeSeconds / 60)} min`
                                     : '—'}
                                 </p>
@@ -692,7 +780,7 @@ export function WorkoutHistoryClient({ history }: WorkoutHistoryClientProps) {
                               </div>
                               <div className="bg-gray-50 rounded-lg p-2 border border-gray-100">
                                 <p className="text-[9px] uppercase font-bold text-gray-400 tracking-wider">
-                                  Series
+                                  {workout.isTemplate ? 'Ejercicios' : 'Series'}
                                 </p>
                                 <p className="text-xs font-black text-gray-900 tabular-nums mt-0.5">
                                   {workout.totalSets}
@@ -711,7 +799,7 @@ export function WorkoutHistoryClient({ history }: WorkoutHistoryClientProps) {
                                     {idx + 1}. {ex.name}
                                   </span>
                                   <span className="font-semibold text-gray-900 tabular-nums shrink-0">
-                                    {ex.setsCount} ser.
+                                    {workout.isTemplate ? 'Base' : `${ex.setsCount} ser.`}
                                     {ex.maxWeight > 0 && ` · ${ex.maxWeight}kg`}
                                   </span>
                                 </div>
@@ -731,20 +819,29 @@ export function WorkoutHistoryClient({ history }: WorkoutHistoryClientProps) {
                             <Button
                               variant="outline"
                               size="sm"
-                              className="text-xs gap-1.5 hover:bg-gray-100 text-gray-600 flex-1"
+                              className="text-xs gap-1.5 hover:bg-gray-100 text-gray-600 flex-1 cursor-pointer"
                               onClick={() => setSelectedWorkout(workout)}
                             >
                               <Layers className="w-3.5 h-3.5" />
-                              Ver detalles
+                              Detalles
                             </Button>
                             <Button
                               variant="outline"
                               size="sm"
-                              className="text-xs gap-1.5 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 text-gray-700 flex-1 font-semibold"
-                              onClick={() => handleRepeat(workout.id)}
+                              className="text-xs gap-1.5 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 text-gray-700 flex-1 font-semibold cursor-pointer"
+                              onClick={() => handleRepeat(workout)}
                             >
                               <Play className="w-3.5 h-3.5 fill-current" />
-                              Repetir
+                              {workout.isTemplate ? 'Iniciar' : 'Repetir'}
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="text-xs p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 hover:border-red-200 rounded-xl shrink-0 cursor-pointer"
+                              onClick={() => setWorkoutToDelete(workout)}
+                              title={workout.isTemplate ? 'Eliminar plantilla' : 'Eliminar entrenamiento'}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
                             </Button>
                           </div>
                         </div>
@@ -774,7 +871,7 @@ export function WorkoutHistoryClient({ history }: WorkoutHistoryClientProps) {
                 <button
                   key={sz}
                   onClick={() => setPageSize(sz)}
-                  className={`px-2 py-0.5 rounded-md font-bold text-xs transition-colors ${
+                  className={`px-2 py-0.5 rounded-md font-bold text-xs transition-colors cursor-pointer ${
                     pageSize === sz
                       ? 'bg-blue-600 text-white shadow-2xs'
                       : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
@@ -793,7 +890,7 @@ export function WorkoutHistoryClient({ history }: WorkoutHistoryClientProps) {
               size="sm"
               disabled={safeCurrentPage <= 1}
               onClick={() => setCurrentPage(1)}
-              className="h-8 w-8 p-0 rounded-lg"
+              className="h-8 w-8 p-0 rounded-lg cursor-pointer"
               title="Primera página"
             >
               <ChevronsLeft className="w-4 h-4" />
@@ -803,7 +900,7 @@ export function WorkoutHistoryClient({ history }: WorkoutHistoryClientProps) {
               size="sm"
               disabled={safeCurrentPage <= 1}
               onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-              className="h-8 w-8 p-0 rounded-lg"
+              className="h-8 w-8 p-0 rounded-lg cursor-pointer"
               title="Página anterior"
             >
               <ChevronLeft className="w-4 h-4" />
@@ -825,7 +922,7 @@ export function WorkoutHistoryClient({ history }: WorkoutHistoryClientProps) {
                   <button
                     key={`page-${pageNum}`}
                     onClick={() => setCurrentPage(pageNum)}
-                    className={`h-8 min-w-[32px] px-2 rounded-lg text-xs font-bold transition-all ${
+                    className={`h-8 min-w-[32px] px-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                       isCurrent
                         ? 'bg-blue-600 text-white shadow-xs'
                         : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
@@ -842,7 +939,7 @@ export function WorkoutHistoryClient({ history }: WorkoutHistoryClientProps) {
               size="sm"
               disabled={safeCurrentPage >= totalPages}
               onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-              className="h-8 w-8 p-0 rounded-lg"
+              className="h-8 w-8 p-0 rounded-lg cursor-pointer"
               title="Página siguiente"
             >
               <ChevronRight className="w-4 h-4" />
@@ -852,7 +949,7 @@ export function WorkoutHistoryClient({ history }: WorkoutHistoryClientProps) {
               size="sm"
               disabled={safeCurrentPage >= totalPages}
               onClick={() => setCurrentPage(totalPages)}
-              className="h-8 w-8 p-0 rounded-lg"
+              className="h-8 w-8 p-0 rounded-lg cursor-pointer"
               title="Última página"
             >
               <ChevronsRight className="w-4 h-4" />
@@ -866,8 +963,67 @@ export function WorkoutHistoryClient({ history }: WorkoutHistoryClientProps) {
         <WorkoutDetailModal
           workout={selectedWorkout}
           onClose={() => setSelectedWorkout(null)}
-          onRepeat={() => handleRepeat(selectedWorkout.id)}
+          onRepeat={() => handleRepeat(selectedWorkout)}
+          onDelete={() => setWorkoutToDelete(selectedWorkout)}
         />
+      )}
+
+      {/* Modal de confirmación de eliminación */}
+      {workoutToDelete && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-150"
+          onClick={(e) => e.target === e.currentTarget && !isDeleting && setWorkoutToDelete(null)}
+        >
+          <div className="bg-white rounded-2xl max-w-sm w-full p-5 shadow-2xl border border-gray-200 space-y-4 animate-in zoom-in-95 duration-150">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center text-red-600 shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-gray-900">
+                  {workoutToDelete.isTemplate ? 'Eliminar Plantilla' : 'Eliminar Entrenamiento'}
+                </h3>
+                <p className="text-xs text-gray-500">Esta acción no se puede deshacer</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-gray-600">
+              ¿Estás seguro de que deseas eliminar{' '}
+              <strong className="text-gray-900 font-semibold">"{workoutToDelete.name}"</strong>?
+              {!workoutToDelete.isTemplate && ' Se eliminarán todos los registros y series de esta sesión.'}
+            </p>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={isDeleting}
+                onClick={() => setWorkoutToDelete(null)}
+                className="text-xs rounded-xl cursor-pointer"
+              >
+                Cancelar
+              </Button>
+              <Button
+                size="sm"
+                disabled={isDeleting}
+                onClick={handleConfirmDelete}
+                className="bg-red-600 hover:bg-red-700 text-white text-xs gap-1.5 rounded-xl shadow-xs cursor-pointer"
+              >
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    Eliminando...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Sí, eliminar
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
