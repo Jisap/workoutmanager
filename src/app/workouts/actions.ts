@@ -360,6 +360,8 @@ export async function getExerciseProgress(userId: string, exerciseId: number) {
     maxReps: number;
     estimated1RM: number;
     totalVolume: number;
+    totalReps: number;
+    isBodyweight: boolean;
     sets: {
       setNumber: number;
       weight: number;
@@ -372,12 +374,17 @@ export async function getExerciseProgress(userId: string, exerciseId: number) {
   const sessionsMap: Record<number, ProgressSession> = {};
 
   for (const row of exerciseSets) {
-    if (row.weight === null || row.weight === undefined || !row.reps) continue;
+    // Permitir sets sin peso (bodyweight): solo necesitamos reps
+    if (!row.reps) continue;
 
-    const w = Number(row.weight);
     const r = Number(row.reps);
-    // Fórmula Epley para 1RM: w * (1 + r / 30)
-    const est1RM = r === 1 ? w : Math.round(w * (1 + r / 30) * 10) / 10;
+    const w = row.weight !== null && row.weight !== undefined ? Number(row.weight) : 0;
+    const hasWeight = w > 0;
+
+    // Fórmula Epley para 1RM: w * (1 + r / 30). Para bodyweight est1RM = maxReps
+    const est1RM = hasWeight
+      ? (r === 1 ? w : Math.round(w * (1 + r / 30) * 10) / 10)
+      : 0;
 
     if (!sessionsMap[row.workoutId]) {
       sessionsMap[row.workoutId] = {
@@ -387,7 +394,9 @@ export async function getExerciseProgress(userId: string, exerciseId: number) {
         maxWeight: w,
         maxReps: r,
         estimated1RM: est1RM,
-        totalVolume: Math.round(w * r),
+        totalVolume: hasWeight ? Math.round(w * r) : 0,
+        totalReps: r,
+        isBodyweight: !hasWeight,
         sets: [
           {
             setNumber: 1,
@@ -400,7 +409,11 @@ export async function getExerciseProgress(userId: string, exerciseId: number) {
       };
     } else {
       const sess = sessionsMap[row.workoutId];
-      sess.totalVolume += Math.round(w * r);
+      sess.totalReps += r;
+      if (hasWeight) {
+        sess.totalVolume += Math.round(w * r);
+        sess.isBodyweight = false;
+      }
       sess.sets.push({
         setNumber: sess.sets.length + 1,
         weight: w,
@@ -409,13 +422,9 @@ export async function getExerciseProgress(userId: string, exerciseId: number) {
         estimated1RM: est1RM,
       });
 
-      if (w > sess.maxWeight) {
-        sess.maxWeight = w;
-        sess.maxReps = r;
-      }
-      if (est1RM > sess.estimated1RM) {
-        sess.estimated1RM = est1RM;
-      }
+      if (r > sess.maxReps) sess.maxReps = r;
+      if (w > sess.maxWeight) sess.maxWeight = w;
+      if (est1RM > sess.estimated1RM) sess.estimated1RM = est1RM;
     }
   }
 

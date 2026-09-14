@@ -39,6 +39,8 @@ export interface ProgressSessionPoint {
   maxReps: number;
   estimated1RM: number;
   totalVolume: number;
+  totalReps: number;
+  isBodyweight: boolean;
   sets: SetDetail[];
 }
 
@@ -56,7 +58,7 @@ interface ExerciseAnalyticsProps {
   data: ProgressSessionPoint[] | null;
 }
 
-type MetricType = '1rm' | 'maxWeight' | 'volume';
+type MetricType = '1rm' | 'maxWeight' | 'volume' | 'reps';
 type TimeRange = '1m' | '3m' | '6m' | '1y' | 'all';
 
 export function ExerciseProgressChart({
@@ -66,8 +68,14 @@ export function ExerciseProgressChart({
 }: ExerciseAnalyticsProps) {
   const router = useRouter();
 
+  // Detect if exercise is primarily bodyweight (no weight data)
+  const isBodyweight = useMemo(() => {
+    if (!data || data.length === 0) return false;
+    return data.every((s) => s.isBodyweight);
+  }, [data]);
+
   // Estados interactivos
-  const [metric, setMetric] = useState<MetricType>('1rm');
+  const [metric, setMetric] = useState<MetricType>(() => (data?.every((s) => s.isBodyweight) ? 'reps' : '1rm'));
   const [timeRange, setTimeRange] = useState<TimeRange>('all');
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
@@ -138,6 +146,7 @@ export function ExerciseProgressChart({
     const values = filteredData.map((d) => {
       if (metric === '1rm') return d.estimated1RM;
       if (metric === 'maxWeight') return d.maxWeight;
+      if (metric === 'reps') return d.maxReps;
       return d.totalVolume;
     });
 
@@ -151,8 +160,11 @@ export function ExerciseProgressChart({
     // Mejor 1RM histórico
     const best1RMSession = [...filteredData].sort((a, b) => b.estimated1RM - a.estimated1RM)[0];
     const bestMaxWeightSession = [...filteredData].sort((a, b) => b.maxWeight - a.maxWeight)[0];
+    const bestMaxRepsSession = [...filteredData].sort((a, b) => b.maxReps - a.maxReps)[0];
     const totalVolumeAll = filteredData.reduce((acc, s) => acc + s.totalVolume, 0);
+    const totalRepsAll = filteredData.reduce((acc, s) => acc + (s.totalReps ?? 0), 0);
     const avgVolume = Math.round(totalVolumeAll / filteredData.length);
+    const avgReps = Math.round(totalRepsAll / filteredData.length);
 
     return {
       currentVal,
@@ -164,7 +176,11 @@ export function ExerciseProgressChart({
       best1RMSession,
       bestMaxWeight: bestMaxWeightSession?.maxWeight ?? 0,
       bestMaxWeightSession,
+      bestMaxReps: bestMaxRepsSession?.maxReps ?? 0,
+      bestMaxRepsSession,
       avgVolume,
+      avgReps,
+      totalRepsAll,
       totalSessions: filteredData.length,
       values,
     };
@@ -191,7 +207,11 @@ export function ExerciseProgressChart({
       let x = padLeft + (i / (filteredData.length - 1 || 1)) * chartWidth;
       if (filteredData.length === 1) x = padLeft + chartWidth / 2;
 
-      const val = metric === '1rm' ? d.estimated1RM : metric === 'maxWeight' ? d.maxWeight : d.totalVolume;
+      const val =
+        metric === '1rm' ? d.estimated1RM
+        : metric === 'maxWeight' ? d.maxWeight
+        : metric === 'reps' ? d.maxReps
+        : d.totalVolume;
       const normalized = (val - min) / range;
       const y = padTop + chartHeight - normalized * chartHeight;
 
@@ -247,11 +267,13 @@ export function ExerciseProgressChart({
   const getMetricLabel = (m: MetricType) => {
     if (m === '1rm') return '1RM Estimado';
     if (m === 'maxWeight') return 'Carga Máxima';
+    if (m === 'reps') return 'Máx. Repeticiones';
     return 'Volumen Total';
   };
 
   const formatVal = (v: number) => {
     if (metric === 'volume') return `${v.toLocaleString('es-ES')} kg`;
+    if (metric === 'reps') return `${v} reps`;
     return `${v} kg`;
   };
 
@@ -431,29 +453,47 @@ export function ExerciseProgressChart({
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-gray-200">
             {/* Selector de Métrica */}
             <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl">
-              <button
-                onClick={() => setMetric('1rm')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                  metric === '1rm'
-                    ? 'bg-white text-purple-700 shadow-xs'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                <Target className="w-3.5 h-3.5" />
-                <span>1RM Estimado</span>
-              </button>
+              {!isBodyweight && (
+                <>
+                  <button
+                    onClick={() => setMetric('1rm')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                      metric === '1rm'
+                        ? 'bg-white text-purple-700 shadow-xs'
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    <Target className="w-3.5 h-3.5" />
+                    <span>1RM Estimado</span>
+                  </button>
 
-              <button
-                onClick={() => setMetric('maxWeight')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                  metric === 'maxWeight'
-                    ? 'bg-white text-purple-700 shadow-xs'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                <Trophy className="w-3.5 h-3.5" />
-                <span>Carga Máx.</span>
-              </button>
+                  <button
+                    onClick={() => setMetric('maxWeight')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                      metric === 'maxWeight'
+                        ? 'bg-white text-purple-700 shadow-xs'
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    <Trophy className="w-3.5 h-3.5" />
+                    <span>Carga Máx.</span>
+                  </button>
+                </>
+              )}
+
+              {isBodyweight && (
+                <button
+                  onClick={() => setMetric('reps')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                    metric === 'reps'
+                      ? 'bg-white text-purple-700 shadow-xs'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <Target className="w-3.5 h-3.5" />
+                  <span>Máx. Reps</span>
+                </button>
+              )}
 
               <button
                 onClick={() => setMetric('volume')}
@@ -464,7 +504,7 @@ export function ExerciseProgressChart({
                 }`}
               >
                 <Layers className="w-3.5 h-3.5" />
-                <span>Volumen</span>
+                <span>{isBodyweight ? 'Total Reps' : 'Volumen'}</span>
               </button>
             </div>
 
@@ -491,38 +531,50 @@ export function ExerciseProgressChart({
 
           {/* 3. TARJETAS DE IMPACTO ANALÍTICO (KPIs) */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
-            {/* Récord 1RM */}
+            {/* Récord: 1RM para con peso, Máx Reps para bodyweight */}
             <div className="bg-gradient-to-br from-purple-500 to-indigo-600 text-white rounded-2xl p-4 shadow-sm relative overflow-hidden">
               <div className="absolute right-[-10px] bottom-[-10px] opacity-10">
                 <Target className="w-24 h-24 text-white" />
               </div>
               <div className="relative z-10 space-y-1">
                 <span className="text-xs font-medium text-purple-100 flex items-center gap-1">
-                  <Trophy className="w-3.5 h-3.5 text-yellow-300" /> Récord 1RM Estimado
+                  <Trophy className="w-3.5 h-3.5 text-yellow-300" />
+                  {isBodyweight ? 'Máx. Repeticiones' : 'Récord 1RM Estimado'}
                 </span>
                 <p className="text-2xl sm:text-3xl font-black tracking-tight tabular-nums">
-                  {stats.best1RM} <span className="text-sm font-medium opacity-80">kg</span>
+                  {isBodyweight ? stats.bestMaxReps : stats.best1RM}
+                  <span className="text-sm font-medium opacity-80">
+                    {isBodyweight ? ' reps' : ' kg'}
+                  </span>
                 </p>
                 <p className="text-[11px] text-purple-100/90 truncate">
-                  {stats.best1RMSession
-                    ? `${new Date(stats.best1RMSession.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })} (${stats.best1RMSession.maxWeight}kg x ${stats.best1RMSession.maxReps})`
-                    : 'Sin registros'}
+                  {isBodyweight
+                    ? (stats.bestMaxRepsSession
+                        ? new Date(stats.bestMaxRepsSession.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })
+                        : 'Sin registros')
+                    : (stats.best1RMSession
+                        ? `${new Date(stats.best1RMSession.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })} (${stats.best1RMSession.maxWeight}kg x ${stats.best1RMSession.maxReps})`
+                        : 'Sin registros')}
                 </p>
               </div>
             </div>
 
-            {/* Carga Máxima Absoluta */}
+            {/* Carga Máxima (solo si tiene peso) / Total Reps (bodyweight) */}
             <div className="bg-white rounded-2xl p-4 border border-gray-200/90 shadow-xs space-y-1">
               <span className="text-xs font-medium text-gray-500 flex items-center gap-1">
-                <Dumbbell className="w-3.5 h-3.5 text-blue-500" /> Carga Máxima Levantada
+                <Dumbbell className="w-3.5 h-3.5 text-blue-500" />
+                {isBodyweight ? 'Total Reps Acumuladas' : 'Carga Máxima Levantada'}
               </span>
               <p className="text-2xl sm:text-3xl font-extrabold text-gray-900 tracking-tight tabular-nums">
-                {stats.bestMaxWeight} <span className="text-sm font-normal text-gray-400">kg</span>
+                {isBodyweight ? stats.totalRepsAll : stats.bestMaxWeight}
+                <span className="text-sm font-normal text-gray-400">
+                  {isBodyweight ? ' reps' : ' kg'}
+                </span>
               </p>
               <p className="text-[11px] text-gray-400">
-                {stats.bestMaxWeightSession
-                  ? `x ${stats.bestMaxWeightSession.maxReps} reps`
-                  : '—'}
+                {isBodyweight
+                  ? `en ${stats.totalSessions} sesiones`
+                  : (stats.bestMaxWeightSession ? `x ${stats.bestMaxWeightSession.maxReps} reps` : '—')}
               </p>
             </div>
 
@@ -543,20 +595,27 @@ export function ExerciseProgressChart({
                   stats.diff > 0 ? 'text-emerald-600' : stats.diff < 0 ? 'text-rose-600' : 'text-gray-700'
                 }`}
               >
-                {stats.diff > 0 ? `+${stats.diff}` : stats.diff} <span className="text-sm font-normal text-gray-400">kg</span>
+                {stats.diff > 0 ? `+${stats.diff}` : stats.diff}
+                <span className="text-sm font-normal text-gray-400">
+                  {isBodyweight ? ' reps' : ' kg'}
+                </span>
               </p>
               <p className="text-[11px] text-gray-500 font-medium">
                 {stats.diffPercent > 0 ? `+${stats.diffPercent.toFixed(1)}%` : `${stats.diffPercent.toFixed(1)}%`} desde el inicio
               </p>
             </div>
 
-            {/* Volumen Medio */}
+            {/* Reps/Volumen Medio */}
             <div className="bg-white rounded-2xl p-4 border border-gray-200/90 shadow-xs space-y-1">
               <span className="text-xs font-medium text-gray-500 flex items-center gap-1">
-                <BarChart3 className="w-3.5 h-3.5 text-amber-500" /> Volumen Medio / Sesión
+                <BarChart3 className="w-3.5 h-3.5 text-amber-500" />
+                {isBodyweight ? 'Reps Medias / Sesión' : 'Volumen Medio / Sesión'}
               </span>
               <p className="text-2xl sm:text-3xl font-extrabold text-gray-900 tracking-tight tabular-nums">
-                {stats.avgVolume.toLocaleString('es-ES')} <span className="text-sm font-normal text-gray-400">kg</span>
+                {isBodyweight ? stats.avgReps : stats.avgVolume.toLocaleString('es-ES')}
+                <span className="text-sm font-normal text-gray-400">
+                  {isBodyweight ? ' reps' : ' kg'}
+                </span>
               </p>
               <p className="text-[11px] text-gray-400">
                 En {stats.totalSessions} {stats.totalSessions === 1 ? 'sesión' : 'sesiones'}
@@ -626,7 +685,7 @@ export function ExerciseProgressChart({
                         textAnchor="end"
                         className="text-[10px] fill-gray-400 font-medium select-none"
                       >
-                        {metric === 'volume' ? `${Math.round(tickVal / 100) * 100}` : `${tickVal}kg`}
+                        {metric === 'volume' ? `${Math.round(tickVal / 100) * 100}` : metric === 'reps' ? `${tickVal}r` : `${tickVal}kg`}
                       </text>
                     </g>
                   );
@@ -745,7 +804,7 @@ export function ExerciseProgressChart({
                         key={idx}
                         className="px-2 py-0.5 text-xs bg-white rounded-md border border-gray-200 text-gray-700 font-medium tabular-nums"
                       >
-                        {s.weight}kg × {s.reps}
+                        {s.weight > 0 ? `${s.weight}kg × ` : ''}{s.reps} reps
                         {s.rpe ? <span className="text-gray-400 text-[10px]"> (RPE {s.rpe})</span> : ''}
                       </span>
                     ))}
@@ -826,9 +885,10 @@ export function ExerciseProgressChart({
                   <tr>
                     <th className="text-left px-4 py-3">Fecha / Entrenamiento</th>
                     <th className="text-left px-4 py-3 hidden md:table-cell">Series Realizadas</th>
-                    <th className="text-right px-4 py-3">Carga Máx</th>
-                    <th className="text-right px-4 py-3">1RM Est.</th>
-                    <th className="text-right px-4 py-3">Volumen</th>
+                    {!isBodyweight && <th className="text-right px-4 py-3">Carga Máx</th>}
+                    {!isBodyweight && <th className="text-right px-4 py-3">1RM Est.</th>}
+                    {isBodyweight && <th className="text-right px-4 py-3">Máx Reps</th>}
+                    <th className="text-right px-4 py-3">{isBodyweight ? 'Total Reps' : 'Volumen'}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 bg-white">
@@ -836,8 +896,9 @@ export function ExerciseProgressChart({
                     .slice()
                     .reverse()
                     .map((session, i) => {
-                      const isPR = session.maxWeight === stats.bestMaxWeight;
-                      const is1RMPeak = session.estimated1RM === stats.best1RM;
+                      const isPR = !isBodyweight && session.maxWeight === stats.bestMaxWeight;
+                      const is1RMPeak = !isBodyweight && session.estimated1RM === stats.best1RM;
+                      const isRepsPR = isBodyweight && session.maxReps === stats.bestMaxReps;
 
                       return (
                         <tr key={i} className="hover:bg-purple-50/20 transition-colors">
@@ -859,32 +920,53 @@ export function ExerciseProgressChart({
                                   key={idx}
                                   className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-700 font-medium tabular-nums"
                                 >
-                                  {s.weight}kg × {s.reps}
+                                  {s.weight > 0 ? `${s.weight}kg × ` : ''}{s.reps} reps
                                 </span>
                               ))}
                             </div>
                           </td>
 
-                          <td className="px-4 py-3 text-right">
-                            <span className="font-bold text-gray-900 tabular-nums">{session.maxWeight} kg</span>
-                            <span className="text-xs text-gray-500 block">x {session.maxReps} reps</span>
-                          </td>
+                          {!isBodyweight && (
+                            <td className="px-4 py-3 text-right">
+                              <span className="font-bold text-gray-900 tabular-nums">{session.maxWeight} kg</span>
+                              <span className="text-xs text-gray-500 block">x {session.maxReps} reps</span>
+                            </td>
+                          )}
 
-                          <td className="px-4 py-3 text-right">
-                            <div className="flex items-center justify-end gap-1.5">
-                              <span className="font-bold text-purple-700 tabular-nums">
-                                {session.estimated1RM} kg
-                              </span>
-                              {is1RMPeak && (
-                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
-                                  <Trophy className="w-2.5 h-2.5 text-amber-600" /> PR
+                          {!isBodyweight && (
+                            <td className="px-4 py-3 text-right">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <span className="font-bold text-purple-700 tabular-nums">
+                                  {session.estimated1RM} kg
                                 </span>
-                              )}
-                            </div>
-                          </td>
+                                {is1RMPeak && (
+                                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                                    <Trophy className="w-2.5 h-2.5 text-amber-600" /> PR
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                          )}
+
+                          {isBodyweight && (
+                            <td className="px-4 py-3 text-right">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <span className="font-bold text-purple-700 tabular-nums">
+                                  {session.maxReps} reps
+                                </span>
+                                {isRepsPR && (
+                                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                                    <Trophy className="w-2.5 h-2.5 text-amber-600" /> PR
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                          )}
 
                           <td className="px-4 py-3 text-right font-medium text-gray-600 tabular-nums">
-                            {session.totalVolume.toLocaleString('es-ES')} kg
+                            {isBodyweight
+                              ? `${session.totalReps ?? 0} reps`
+                              : `${session.totalVolume.toLocaleString('es-ES')} kg`}
                           </td>
                         </tr>
                       );
