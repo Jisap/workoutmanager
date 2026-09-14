@@ -1,9 +1,24 @@
 import { ClerkProvider, UserButton, SignInButton, SignUpButton } from '@clerk/nextjs';
-import { Inter } from 'next/font/google';
 import { Sidebar } from '@/components/layout/sidebar';
 import { auth } from '@clerk/nextjs/server';
 import { Button } from '@/components/ui/button';
 import './globals.css';
+import { Oswald, Inter, JetBrains_Mono } from 'next/font/google';
+
+const headline = Oswald({
+  subsets: ['latin'],
+  weight: ['500', '700'],
+  variable: '--font-headline',
+});
+const body = Inter({
+  subsets: ['latin'],
+  variable: '--font-body'
+});
+
+const mono = JetBrains_Mono({
+  subsets: ['latin'],
+  variable: '--font-mono'
+});
 
 const inter = Inter({
   subsets: ['latin'],
@@ -17,7 +32,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   return (
     <ClerkProvider>
-      <html lang="es" className={inter.variable}>
+      <html lang="es" className={`${inter.variable} ${headline.variable} ${mono.variable}`}>
         <body className="antialiased bg-gray-50 font-sans">
           {isAuthenticated ? (
             // Layout con Sidebar para usuarios autenticados
