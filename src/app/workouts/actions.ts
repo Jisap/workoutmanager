@@ -556,4 +556,60 @@ export async function getConsistencyData(userId: string) {
   };
 }
 
+export async function getWorkoutHistory(userId: string, limit: number = 50) {
+  const history = await db.query.workouts.findMany({
+    where: eq(workouts.userId, userId),
+    orderBy: [desc(workouts.startTime)],
+    limit,
+    with: {
+      type: true,
+      exercises: {
+        with: {
+          exercise: true,
+          sets: true,
+        },
+      },
+    },
+  });
+
+  // Enriquecemos los datos con métricas calculadas (volumen total, series totales)
+  return history.map((w) => {
+    let totalVolume = 0;
+    let totalSets = 0;
+
+    const exercisesSummary = w.exercises.map((ex) => {
+      let exMaxWeight = 0;
+      let exVolume = 0;
+      totalSets += ex.sets.length;
+
+      ex.sets.forEach((s) => {
+        const weight = s.weight ? Number(s.weight) : 0;
+        const reps = s.repCount ? Number(s.repCount) : 0;
+        if (weight > exMaxWeight) exMaxWeight = weight;
+        exVolume += weight * reps;
+      });
+
+      totalVolume += exVolume;
+
+      return {
+        name: ex.exercise.name,
+        setsCount: ex.sets.length,
+        maxWeight: exMaxWeight,
+      };
+    });
+
+    return {
+      id: w.id,
+      name: w.name,
+      typeName: w.type?.name || 'General',
+      startTime: w.startTime,
+      totalTimeSeconds: w.totalTimeSeconds,
+      notes: w.notes,
+      totalVolume,
+      totalSets,
+      exercisesSummary,
+    };
+  });
+}
+
 
