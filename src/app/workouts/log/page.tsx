@@ -4,12 +4,12 @@ import { db } from '@/lib/db';
 import { exerciseCategories, workoutTypes } from '@/lib/db/schema';
 import { asc, eq } from 'drizzle-orm';
 import { WorkoutLoggerClient } from './workout-logger-client';
-import { getTemplateData, getLastWorkoutData, getAvailableExercises } from '../actions';
+import { getTemplateData, getLastWorkoutData, getWorkoutData, getAvailableExercises } from '../actions';
 
 export default async function WorkoutLogPage({
   searchParams,
 }: {
-  searchParams: Promise<{ mode?: string; typeId?: string; templateId?: string }>;
+  searchParams: Promise<{ mode?: string; typeId?: string; templateId?: string; workoutId?: string }>;
 }) {
   const { userId } = await auth();
   if (!userId) redirect('/sign-in');
@@ -18,6 +18,7 @@ export default async function WorkoutLogPage({
   const mode = params.mode || 'free';
   const typeId = params.typeId;
   const templateId = params.templateId ? parseInt(params.templateId, 10) : null;
+  const workoutId = params.workoutId ? parseInt(params.workoutId, 10) : null;
 
   // Cargar datos en paralelo
   const [availableExercises, categories] = await Promise.all([
@@ -52,11 +53,14 @@ export default async function WorkoutLogPage({
       }));
     }
   } else if (mode === 'repeat') {
-    const lastWorkout = await getLastWorkoutData(userId);
-    if (lastWorkout) {
-      workoutName = `${lastWorkout.name} (Copia)`;
-      currentTypeId = lastWorkout.typeId;
-      initialExercisesState = lastWorkout.exercises.map((ex: any) => ({
+    const targetWorkout = workoutId
+      ? await getWorkoutData(workoutId)
+      : await getLastWorkoutData(userId);
+
+    if (targetWorkout) {
+      workoutName = `${targetWorkout.name} (Copia)`;
+      currentTypeId = targetWorkout.typeId;
+      initialExercisesState = targetWorkout.exercises.map((ex: any) => ({
         id: crypto.randomUUID(),
         exerciseId: ex.exerciseId,
         name: ex.exercise.name,

@@ -160,6 +160,23 @@ export async function getTemplateData(templateId: number) {
   return template;
 }
 
+// Obtener datos de un entrenamiento específico para repetirlo
+export async function getWorkoutData(workoutId: number) {
+  const workout = await db.query.workouts.findFirst({
+    where: eq(workouts.id, workoutId),
+    with: {
+      exercises: {
+        with: {
+          exercise: true,
+          sets: true,
+        },
+        orderBy: (fields, { asc }) => asc(fields.orderIndex),
+      },
+    },
+  });
+  return workout;
+}
+
 // Obtener datos del último entrenamiento para repetirlo
 export async function getLastWorkoutData(userId: string) {
   const lastWorkout = await db.query.workouts.findFirst({
