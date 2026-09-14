@@ -566,37 +566,22 @@ export async function getConsistencyData(userId: string) {
 }
 
 export async function getWorkoutHistory(userId: string, limit: number = 200) {
-  const [history, templates] = await Promise.all([
-    db.query.workouts.findMany({
-      where: eq(workouts.userId, userId),
-      orderBy: [desc(workouts.startTime)],
-      limit,
-      with: {
-        type: true,
-        exercises: {
-          with: {
-            exercise: true,
-            sets: true,
-          },
+  const history = await db.query.workouts.findMany({
+    where: eq(workouts.userId, userId),
+    orderBy: [desc(workouts.startTime)],
+    limit,
+    with: {
+      type: true,
+      exercises: {
+        with: {
+          exercise: true,
+          sets: true,
         },
       },
-    }),
-    db.query.workoutTemplates.findMany({
-      where: eq(workoutTemplates.userId, userId),
-      orderBy: [desc(workoutTemplates.createdAt)],
-      with: {
-        type: true,
-        exercises: {
-          with: {
-            exercise: true,
-          },
-          orderBy: (fields, { asc }) => asc(fields.orderIndex),
-        },
-      },
-    }),
-  ]);
+    },
+  });
 
-  const mappedWorkouts = history.map((w) => {
+  return history.map((w) => {
     let totalVolume = 0;
     let totalSets = 0;
 
@@ -626,7 +611,6 @@ export async function getWorkoutHistory(userId: string, limit: number = 200) {
       name: w.name,
       typeName: w.type?.name || 'General',
       typeId: w.typeId,
-      isTemplate: false,
       startTime: w.startTime,
       totalTimeSeconds: w.totalTimeSeconds,
       notes: w.notes,
@@ -635,29 +619,38 @@ export async function getWorkoutHistory(userId: string, limit: number = 200) {
       exercisesSummary,
     };
   });
+}
 
-  const mappedTemplates = templates.map((t) => {
-    return {
-      id: t.id,
-      name: t.name,
-      typeName: 'Plantilla',
-      typeId: t.typeId || 1,
-      isTemplate: true,
-      startTime: t.createdAt,
-      totalTimeSeconds: null,
-      notes: t.description || 'Plantilla guardada',
-      totalVolume: 0,
-      totalSets: t.exercises.length,
-      exercisesSummary: t.exercises.map((ex) => ({
-        name: ex.exercise.name,
-        setsCount: ex.targetReps ? 1 : 1,
-        maxWeight: ex.targetWeight ? Number(ex.targetWeight) : 0,
-      })),
-    };
+export async function getUserTemplates(userId: string) {
+  const templates = await db.query.workoutTemplates.findMany({
+    where: eq(workoutTemplates.userId, userId),
+    orderBy: [desc(workoutTemplates.createdAt)],
+    with: {
+      type: true,
+      exercises: {
+        with: {
+          exercise: true,
+        },
+        orderBy: (fields, { asc }) => asc(fields.orderIndex),
+      },
+    },
   });
 
-  // Retornar plantillas primero + historial de entrenamientos
-  return [...mappedTemplates, ...mappedWorkouts];
+  return templates.map((t) => ({
+    id: t.id,
+    name: t.name,
+    typeName: t.type?.name || 'General',
+    typeId: t.typeId || 1,
+    createdAt: t.createdAt,
+    description: t.description || null,
+    exercisesCount: t.exercises.length,
+    exercises: t.exercises.map((e) => ({
+      name: e.exercise.name,
+      targetReps: e.targetReps,
+      targetWeight: e.targetWeight ? Number(e.targetWeight) : null,
+      targetDurationSeconds: e.timeCapSeconds,
+    })),
+  }));
 }
 
 export async function deleteWorkout(workoutId: number) {
