@@ -58,7 +58,19 @@ export default async function WorkoutLogPage({
       : await getLastWorkoutData(userId);
 
     if (targetWorkout) {
-      workoutName = `${targetWorkout.name} (Copia)`;
+      // Limpiar sufijos anteriores tipo (Copia), (Repetición) o fechas previas para obtener el nombre base
+      const cleanBaseName = targetWorkout.name
+        .replace(/\s*\(Copia\)+/gi, '')
+        .replace(/\s*\(Repetici[oó]n\)+/gi, '')
+        .replace(/\s*·\s*\d{1,2}\s+[a-záéíóú]+/gi, '')
+        .trim() || 'Entrenamiento';
+
+      const todayStr = new Date().toLocaleDateString('es-ES', {
+        day: 'numeric',
+        month: 'short',
+      });
+
+      workoutName = `${cleanBaseName} · ${todayStr}`;
       currentTypeId = targetWorkout.typeId;
       initialExercisesState = targetWorkout.exercises.map((ex: any) => ({
         id: crypto.randomUUID(),

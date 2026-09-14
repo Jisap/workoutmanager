@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { ExerciseCombobox, type ExerciseOption } from '@/components/workout/exercise-combobox';
-import { Plus, Trash2, Clock, Check, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, Trash2, Clock, Check, ChevronDown, ChevronUp, Pencil, RotateCcw } from 'lucide-react';
 import { saveWorkout, saveAsTemplate as saveAsTemplateAction } from '../actions';
 import { CreateExerciseDialog, type Category } from '@/components/workout/create-exercise-dialog';
 
@@ -55,6 +55,7 @@ export function WorkoutLoggerClient({
 
   const [availableExercisesList, setAvailableExercisesList] = useState<AvailableExercise[]>(availableExercises);
   const [typeName, setTypeName] = useState(initialName);
+  const [isEditingName, setIsEditingName] = useState(false);
   const [exercises, setExercises] = useState<LocalExercise[]>([]);
   const [isFinishDialogOpen, setIsFinishDialogOpen] = useState(false);
   const [totalTimeMinutes, setTotalTimeMinutes] = useState('45');
@@ -303,11 +304,66 @@ export function WorkoutLoggerClient({
   return (
     <div className="max-w-2xl mx-auto space-y-6 pb-32">
       {/* Barra superior con título y controles */}
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">{typeName}</h1>
-          <p className="text-sm text-gray-500">Registra tus series y repeticiones</p>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="space-y-1 min-w-0 flex-1">
+          {isEditingName ? (
+            <div className="flex items-center gap-2 max-w-md">
+              <Input
+                value={typeName}
+                onChange={(e) => {
+                  setTypeName(e.target.value);
+                  setTemplateName(e.target.value);
+                }}
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') setIsEditingName(false);
+                }}
+                onBlur={() => setIsEditingName(false)}
+                className="text-lg font-bold h-9 bg-white"
+                placeholder="Nombre del entrenamiento"
+              />
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => setIsEditingName(false)}
+                className="h-9 px-2 text-emerald-600 hover:bg-emerald-50 shrink-0"
+              >
+                <Check className="w-4 h-4 mr-1" />
+                <span className="text-xs">Listo</span>
+              </Button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 flex-wrap group">
+              <h1
+                onClick={() => setIsEditingName(true)}
+                className="text-xl sm:text-2xl font-bold text-gray-900 cursor-pointer hover:text-blue-600 transition-colors"
+                title="Haz clic para editar el nombre"
+              >
+                {typeName}
+              </h1>
+              <button
+                type="button"
+                onClick={() => setIsEditingName(true)}
+                className="p-1 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
+                title="Editar nombre del entrenamiento"
+              >
+                <Pencil className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="text-xs text-gray-500">Registra tus series y repeticiones</p>
+            {mode === 'repeat' && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
+                <RotateCcw className="w-2.5 h-2.5" />
+                Repetición
+              </span>
+            )}
+          </div>
         </div>
+
         <div className="flex items-center gap-2">
           {exercises.length > 0 && (
             <Button
@@ -602,6 +658,18 @@ export function WorkoutLoggerClient({
             <DialogTitle>Finalizar Entrenamiento</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Nombre de la sesión</Label>
+              <Input
+                value={typeName}
+                onChange={(e) => {
+                  setTypeName(e.target.value);
+                  setTemplateName(e.target.value);
+                }}
+                placeholder="Nombre del entrenamiento"
+              />
+            </div>
+
             <div className="space-y-2">
               <Label>Tiempo total (minutos)</Label>
               <Input
