@@ -295,6 +295,145 @@ function WorkoutDetailModal({
   );
 }
 
+// ---------- Exercise Detail Modal ----------
+type ExerciseDetailItem = {
+  name: string;
+  setsCount: number;
+  maxWeight: number;
+  sets?: {
+    setNumber: number;
+    weight: number | null;
+    repCount: number | null;
+  }[];
+  repsSummary?: string;
+};
+
+function ExerciseDetailModal({
+  workoutName,
+  typeName,
+  startTime,
+  exercises,
+  onClose,
+}: {
+  workoutName: string;
+  typeName: string;
+  startTime: Date | string;
+  exercises: ExerciseDetailItem[];
+  onClose: () => void;
+}) {
+  const style = getTypeStyle(typeName);
+  const TypeIcon = style.icon;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-150"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[85vh] flex flex-col shadow-2xl border border-gray-200 overflow-hidden animate-in zoom-in-95 duration-150">
+        <div className="px-5 py-4 border-b border-gray-100 flex items-start justify-between gap-3 bg-gray-50/80">
+          <div className="space-y-1 min-w-0">
+            <h3 className="font-extrabold text-base text-gray-900 truncate">
+              {workoutName}
+            </h3>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wide border ${style.badge}`}>
+                <TypeIcon className="w-3 h-3" />
+                {typeName}
+              </span>
+              <span className="text-xs text-gray-500 flex items-center gap-1.5">
+                <Calendar className="w-3 h-3" />
+                {new Date(startTime).toLocaleDateString('es-ES', {
+                  weekday: 'short',
+                  day: 'numeric',
+                  month: 'short',
+                  year: 'numeric',
+                })}
+              </span>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-200/60 transition-colors shrink-0 cursor-pointer"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="p-5 flex-1">
+          {exercises.length === 0 ? (
+            <p className="text-xs text-gray-400 text-center py-8">Sin ejercicios registrados</p>
+          ) : (
+            <div className="overflow-x-auto max-h-[400px] overflow-y-auto pr-1">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="bg-gray-50/80 border-b border-gray-200 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                    <th className="py-2 px-3">#</th>
+                    <th className="py-2 px-3">Ejercicio</th>
+                    <th className="py-2 px-3 text-center">Series</th>
+                    <th className="py-2 px-3 text-center">Max Carga</th>
+                    <th className="py-2 px-3">Detalle de Series</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {exercises.map((ex, idx) => (
+                    <tr key={idx} className="hover:bg-gray-50/50 transition-colors">
+                      <td className="py-2.5 px-3 text-gray-400 font-medium">{idx + 1}</td>
+                      <td className="py-2.5 px-3 font-bold text-gray-900">{ex.name}</td>
+                      <td className="py-2.5 px-3 text-center font-semibold text-gray-700 tabular-nums">
+                        {ex.setsCount}
+                      </td>
+                      <td className="py-2.5 px-3 text-center">
+                        {ex.maxWeight > 0 ? (
+                          <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded-md border border-blue-100 font-bold tabular-nums">
+                            {ex.maxWeight}kg
+                          </span>
+                        ) : (
+                          <span className="text-gray-300">—</span>
+                        )}
+                      </td>
+                      <td className="py-2.5 px-3">
+                        {ex.sets && ex.sets.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {ex.sets.map((s, sIdx) => (
+                              <span
+                                key={sIdx}
+                                className="px-2 py-0.5 text-[11px] bg-white border border-gray-200 rounded-md font-mono text-gray-800 shadow-2xs"
+                              >
+                                <strong className="text-gray-400 mr-1 text-[10px]">S{s.setNumber}:</strong>
+                                <span className="font-bold text-blue-700">{s.repCount ?? 0} reps</span>
+                                {s.weight ? <span className="text-gray-600"> @ {s.weight}kg</span> : ''}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-[11px] text-blue-700 font-mono font-medium">
+                            {ex.repsSummary || `${ex.setsCount} series`}
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        <div className="px-5 py-3 border-t border-gray-100 bg-gray-50/80 flex items-center justify-end">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onClose}
+            className="text-xs rounded-xl cursor-pointer"
+          >
+            Cerrar
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ---------- Main Component ----------
 export function WorkoutHistoryClient({ history, templates: initialTemplates = [] }: WorkoutHistoryClientProps) {
   const router = useRouter();
@@ -326,6 +465,14 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
 
   // Template conversion modal state
   const [convertingWorkout, setConvertingWorkout] = useState<WorkoutHistoryItem | null>(null);
+
+  // Exercise detail modal state
+  const [exerciseDetail, setExerciseDetail] = useState<{
+    workoutName: string;
+    typeName: string;
+    startTime: Date | string;
+    exercises: ExerciseDetailItem[];
+  } | null>(null);
   const [templateNameInput, setTemplateNameInput] = useState('');
   const [templateDescInput, setTemplateDescInput] = useState('');
   const [isConverting, setIsConverting] = useState(false);
@@ -786,7 +933,19 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
 
                           {/* Ejercicios resumidos */}
                           <td className="py-3 px-4 hidden md:table-cell max-w-[320px]">
-                            <div className="flex flex-wrap gap-1">
+                            <div
+                              className="flex flex-wrap gap-1 cursor-pointer hover:bg-blue-50/50 rounded-lg p-1 -m-1 transition-colors"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setExerciseDetail({
+                                  workoutName: workout.name,
+                                  typeName: workout.typeName,
+                                  startTime: workout.startTime,
+                                  exercises: workout.exercisesSummary,
+                                });
+                              }}
+                              title="Ver detalle de ejercicios y cargas"
+                            >
                               {workout.exercisesSummary.slice(0, 3).map((ex, idx) => (
                                 <span
                                   key={idx}
@@ -804,6 +963,7 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                                   +{workout.exercisesSummary.length - 3} más
                                 </span>
                               )}
+                              <ChevronRight className="w-3 h-3 text-gray-400 shrink-0 self-center ml-0.5" />
                             </div>
                           </td>
 
@@ -1330,8 +1490,25 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
 
                           {/* Detalle de ejercicios */}
                           <td className="py-3.5 px-4 hidden md:table-cell max-w-[340px]">
-                            <div className="flex flex-wrap gap-1.5">
-                              {template.exercises.map((ex, idx) => (
+                            <div
+                              className="flex flex-wrap gap-1.5 cursor-pointer hover:bg-purple-50/30 rounded-lg p-1 -m-1 transition-colors"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setExerciseDetail({
+                                  workoutName: template.name,
+                                  typeName: template.typeName,
+                                  startTime: template.createdAt,
+                                  exercises: template.exercises.map((ex) => ({
+                                    name: ex.name,
+                                    setsCount: ex.setsCount ?? 1,
+                                    maxWeight: ex.targetWeight ?? 0,
+                                    repsSummary: ex.formattedSummary,
+                                  })),
+                                });
+                              }}
+                              title="Ver detalle de ejercicios y cargas"
+                            >
+                              {template.exercises.slice(0, 5).map((ex, idx) => (
                                 <span
                                   key={idx}
                                   className="inline-flex items-center gap-1 bg-gray-50 text-gray-800 text-[11px] px-2 py-0.5 rounded-lg border border-gray-200/70"
@@ -1343,6 +1520,12 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                                   </span>
                                 </span>
                               ))}
+                              {template.exercises.length > 5 && (
+                                <span className="text-[10px] text-purple-400 font-semibold self-center">
+                                  +{template.exercises.length - 5} más
+                                </span>
+                              )}
+                              <ChevronRight className="w-3 h-3 text-gray-400 shrink-0 self-center ml-0.5" />
                             </div>
                           </td>
 
@@ -1598,6 +1781,17 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal de detalles de ejercicios y cargas */}
+      {exerciseDetail && (
+        <ExerciseDetailModal
+          workoutName={exerciseDetail.workoutName}
+          typeName={exerciseDetail.typeName}
+          startTime={exerciseDetail.startTime}
+          exercises={exerciseDetail.exercises}
+          onClose={() => setExerciseDetail(null)}
+        />
       )}
 
       {/* Modal de confirmación de eliminación */}
