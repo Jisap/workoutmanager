@@ -1067,10 +1067,10 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
               )}
             </div>
 
-            <Link href="/workouts/new">
-              <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-xs rounded-xl shadow-xs">
+            <Link href="/workouts/log?mode=new-template">
+              <Button size="sm" className="bg-purple-600 hover:bg-purple-700 text-white text-xs rounded-xl shadow-xs">
                 <Plus className="w-3.5 h-3.5 mr-1.5" />
-                Nueva Rutina
+                Crear Plantilla
               </Button>
             </Link>
           </div>
@@ -1079,21 +1079,21 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
           {filteredTemplates.length === 0 && (
             <Card className="border-dashed bg-gray-50/70 border-gray-200">
               <CardContent className="py-14 text-center space-y-4">
-                <div className="w-14 h-14 bg-indigo-50 rounded-2xl flex items-center justify-center mx-auto text-indigo-500">
+                <div className="w-14 h-14 bg-purple-50 rounded-2xl flex items-center justify-center mx-auto text-purple-600">
                   <Bookmark className="w-7 h-7" />
                 </div>
                 <div className="max-w-sm mx-auto">
                   <h3 className="text-base font-bold text-gray-900">No tienes plantillas guardadas</h3>
                   <p className="text-xs text-gray-500 mt-1">
                     {templates.length === 0
-                      ? 'Guarda tus rutinas habituales como plantilla al finalizar un entrenamiento para iniciarlas rápidamente cuando quieras.'
+                      ? 'Crea plantillas personalizadas de tus rutinas habituales para iniciarlas rápidamente cuando quieras.'
                       : 'No se encontraron plantillas con ese nombre.'}
                   </p>
                 </div>
-                <Link href="/workouts/new">
-                  <Button className="text-xs">
+                <Link href="/workouts/log?mode=new-template">
+                  <Button className="text-xs bg-purple-600 hover:bg-purple-700 text-white">
                     <Plus className="w-4 h-4 mr-1.5" />
-                    Crear nuevo entrenamiento
+                    Crear mi primera plantilla
                   </Button>
                 </Link>
               </CardContent>

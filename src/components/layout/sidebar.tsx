@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Dumbbell, BarChart3, Settings, Plus, LogOut } from 'lucide-react';
+import { Home, Dumbbell, BarChart3, Settings, Plus, LogOut, Bookmark } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { SignOutButton, useUser } from '@clerk/nextjs';
 
@@ -58,14 +58,22 @@ export function Sidebar() {
               })}
             </nav>
 
-            {/* Botón de nuevo entrenamiento */}
-            <div>
+            {/* Botones de acción rápida */}
+            <div className="space-y-2 pt-1">
               <Link
                 href="/workouts/new"
                 className="flex items-center justify-center w-full px-4 py-2.5 text-sm font-semibold text-white bg-blue-600 rounded-xl hover:bg-blue-700 shadow-sm hover:shadow transition-all"
               >
                 <Plus className="w-4 h-4 mr-2" />
                 Nuevo Entrenamiento
+              </Link>
+
+              <Link
+                href="/workouts/log?mode=new-template"
+                className="flex items-center justify-center w-full px-4 py-2 text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200/80 rounded-xl transition-all shadow-2xs"
+              >
+                <Bookmark className="w-3.5 h-3.5 mr-1.5 text-purple-600" />
+                Nueva Plantilla
               </Link>
             </div>
           </div>

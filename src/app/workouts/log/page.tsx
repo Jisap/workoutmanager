@@ -21,22 +21,21 @@ export default async function WorkoutLogPage({
   const workoutId = params.workoutId ? parseInt(params.workoutId, 10) : null;
 
   // Cargar datos en paralelo
-  const [availableExercises, categories] = await Promise.all([
+  const [availableExercises, categories, allWorkoutTypes] = await Promise.all([
     getAvailableExercises(userId),
     db.select().from(exerciseCategories).orderBy(asc(exerciseCategories.name)),
+    db.select().from(workoutTypes).orderBy(asc(workoutTypes.name)),
   ]);
 
   let initialExercisesState: any[] = [];
-  let workoutName = 'Entrenamiento Libre';
+  let workoutName = mode === 'new-template' ? 'Nueva Plantilla' : 'Entrenamiento Libre';
   let currentTypeId = typeId ? parseInt(typeId, 10) : 1;
 
   // Obtener el nombre del tipo de entrenamiento
-  if (mode === 'free' && typeId) {
-    const workoutType = await db.query.workoutTypes.findFirst({
-      where: eq(workoutTypes.id, parseInt(typeId, 10)),
-    });
+  if ((mode === 'free' || mode === 'new-template') && typeId) {
+    const workoutType = allWorkoutTypes.find((t) => t.id === parseInt(typeId, 10));
     if (workoutType) {
-      workoutName = workoutType.name;
+      workoutName = mode === 'new-template' ? `Plantilla - ${workoutType.name}` : workoutType.name;
     }
   }
 
@@ -90,6 +89,7 @@ export default async function WorkoutLogPage({
     <WorkoutLoggerClient
       availableExercises={availableExercises}
       categories={categories}
+      workoutTypes={allWorkoutTypes}
       mode={mode}
       typeId={currentTypeId.toString()}
       initialExercisesState={initialExercisesState}

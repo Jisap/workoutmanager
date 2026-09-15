@@ -150,13 +150,13 @@ export default async function NewWorkoutPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {types.map((type) => (
             <Link key={type.id} href={`/workouts/log?mode=free&typeId=${type.id}`}>
-              <Card className="hover:border-purple-300 hover:shadow-xs hover:bg-gray-50/50 transition-all cursor-pointer h-full border-gray-200 group">
+              <Card className="hover:border-blue-300 hover:shadow-xs hover:bg-gray-50/50 transition-all cursor-pointer h-full border-gray-200 group">
                 <CardContent className="flex flex-col items-center text-center p-5 gap-2.5">
-                  <div className="p-3 bg-purple-50 group-hover:bg-purple-100 rounded-2xl text-purple-700 transition-colors">
+                  <div className="p-3 bg-blue-50 group-hover:bg-blue-100 rounded-2xl text-blue-700 transition-colors">
                     <Dumbbell className="w-6 h-6" />
                   </div>
                   <div>
-                    <p className="font-bold text-gray-900 text-sm group-hover:text-purple-900 transition-colors">
+                    <p className="font-bold text-gray-900 text-sm group-hover:text-blue-900 transition-colors">
                       {type.name}
                     </p>
                     <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">

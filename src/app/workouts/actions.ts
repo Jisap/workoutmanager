@@ -247,6 +247,52 @@ export async function saveAsTemplate(data: {
   return { success: true };
 }
 
+// Crear plantilla directamente sin necesidad de haber guardado un workout
+export async function createDirectTemplate(data: {
+  name: string;
+  description?: string;
+  typeId: number;
+  exercises: {
+    exerciseId: number;
+    orderIndex: number;
+    targetReps?: number | null;
+    targetWeight?: number | null;
+    targetDurationSeconds?: number | null;
+  }[];
+}) {
+  const { userId } = await auth();
+  if (!userId) throw new Error('No autorizado');
+
+  const [newTemplate] = await db
+    .insert(workoutTemplates)
+    .values({
+      userId,
+      name: data.name,
+      description: data.description || null,
+      typeId: data.typeId,
+    })
+    .returning();
+
+  if (data.exercises.length > 0) {
+    await db.insert(templateExercises).values(
+      data.exercises.map((ex, idx) => ({
+        templateId: newTemplate.id,
+        exerciseId: ex.exerciseId,
+        orderIndex: ex.orderIndex ?? idx,
+        targetReps: ex.targetReps ?? null,
+        targetWeight: ex.targetWeight ?? null,
+        timeCapSeconds: ex.targetDurationSeconds ?? null,
+      }))
+    );
+  }
+
+  revalidatePath('/workouts');
+  revalidatePath('/dashboard');
+  revalidatePath('/workouts/new');
+
+  return { success: true, templateId: newTemplate.id };
+}
+
 export async function getProgressData(userId: string) {
   const allWorkouts = await db.query.workouts.findMany({
     where: eq(workouts.userId, userId),

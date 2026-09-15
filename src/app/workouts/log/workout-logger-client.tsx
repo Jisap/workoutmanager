@@ -6,11 +6,11 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { ExerciseCombobox, type ExerciseOption } from '@/components/workout/exercise-combobox';
-import { Plus, Trash2, Clock, Check, ChevronDown, ChevronUp, Pencil, RotateCcw } from 'lucide-react';
-import { saveWorkout, saveAsTemplate as saveAsTemplateAction } from '../actions';
+import { Plus, Trash2, Clock, Check, ChevronDown, ChevronUp, Pencil, RotateCcw, Bookmark, Sparkles, Loader2 } from 'lucide-react';
+import { saveWorkout, saveAsTemplate as saveAsTemplateAction, createDirectTemplate } from '../actions';
 import { CreateExerciseDialog, type Category } from '@/components/workout/create-exercise-dialog';
 
 // Tipos locales para el estado
@@ -34,9 +34,15 @@ export type AvailableExercise = {
   categoryId: number | null;
 };
 
+export type WorkoutTypeOption = {
+  id: number;
+  name: string;
+};
+
 interface WorkoutLoggerClientProps {
   availableExercises: AvailableExercise[];
   categories: Category[];
+  workoutTypes?: WorkoutTypeOption[];
   mode: string;
   typeId?: string;
   initialExercisesState?: any[]; // <-- NUEVO
@@ -46,6 +52,7 @@ interface WorkoutLoggerClientProps {
 export function WorkoutLoggerClient({
   availableExercises,
   categories,
+  workoutTypes = [],
   mode,
   typeId,
   initialExercisesState = [],
@@ -62,11 +69,18 @@ export function WorkoutLoggerClient({
   const [notes, setNotes] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
+  // Estado para modal dedicado a Guardar como Plantilla Directa
+  const [isTemplateDialogOpen, setIsTemplateDialogOpen] = useState(false);
+  const [directTemplateName, setDirectTemplateName] = useState('');
+  const [directTemplateDescription, setDirectTemplateDescription] = useState('');
+  const [directTemplateTypeId, setDirectTemplateTypeId] = useState<number>(parseInt(typeId || '1', 10));
+  const [isSavingTemplate, setIsSavingTemplate] = useState(false);
+
   // Estado para el modal de crear ejercicio
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [currentExerciseIdForNew, setCurrentExerciseIdForNew] = useState<string | null>(null);
 
-  // Guardar como plantilla
+  // Guardar como plantilla (secundario al finalizar entrenamiento)
   const [saveAsTemplate, setSaveAsTemplate] = useState(false);
   const [templateName, setTemplateName] = useState(initialName);
 
@@ -74,6 +88,8 @@ export function WorkoutLoggerClient({
   useEffect(() => {
     setTypeName(initialName);
     setTemplateName(initialName);
+    const cleanName = initialName.replace(/\s*·\s*\d{1,2}\s+[a-záéíóú]+/gi, '').trim();
+    setDirectTemplateName(cleanName || 'Mi Rutina');
   }, [initialName]);
 
   // Sincronizar lista de ejercicios disponibles
@@ -301,6 +317,45 @@ export function WorkoutLoggerClient({
     }
   };
 
+  const handleSaveDirectTemplate = async () => {
+    if (!directTemplateName.trim()) {
+      alert('Por favor introduce un nombre para la plantilla');
+      return;
+    }
+    if (exercises.length === 0) {
+      alert('Añade al menos un ejercicio para guardar la plantilla');
+      return;
+    }
+
+    setIsSavingTemplate(true);
+    try {
+      const templateExercisesPayload = exercises.map((ex, idx) => {
+        const firstSet = ex.sets[0];
+        return {
+          exerciseId: ex.exerciseId,
+          orderIndex: idx,
+          targetReps: firstSet?.repCount || null,
+          targetWeight: firstSet?.weight || null,
+        };
+      });
+
+      await createDirectTemplate({
+        name: directTemplateName.trim(),
+        description: directTemplateDescription.trim() || undefined,
+        typeId: directTemplateTypeId,
+        exercises: templateExercisesPayload,
+      });
+
+      setIsTemplateDialogOpen(false);
+      router.push('/workouts');
+    } catch (error) {
+      console.error(error);
+      alert('Error al guardar la plantilla');
+    } finally {
+      setIsSavingTemplate(false);
+    }
+  };
+
   return (
     <div className="max-w-2xl mx-auto space-y-6 pb-32">
       {/* Barra superior con título y controles */}
@@ -354,17 +409,27 @@ export function WorkoutLoggerClient({
           )}
 
           <div className="flex items-center gap-2 flex-wrap">
-            <p className="text-xs text-gray-500">Registra tus series y repeticiones</p>
+            <p className="text-xs text-gray-500">
+              {mode === 'new-template'
+                ? 'Configura los ejercicios y cargas objetivo de la plantilla'
+                : 'Registra tus series y repeticiones'}
+            </p>
             {mode === 'repeat' && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
                 <RotateCcw className="w-2.5 h-2.5" />
                 Repetición
               </span>
             )}
+            {mode === 'new-template' && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
+                <Bookmark className="w-2.5 h-2.5" />
+                Nueva Plantilla
+              </span>
+            )}
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {exercises.length > 0 && (
             <Button
               type="button"
@@ -376,10 +441,31 @@ export function WorkoutLoggerClient({
               {exercises.every((ex) => expandedExercises[ex.id]) ? 'Compactar todo' : 'Desglosar todo'}
             </Button>
           )}
-          <Button onClick={() => setIsFinishDialogOpen(true)} className="bg-green-600 hover:bg-green-700">
-            <Clock className="w-4 h-4 mr-2" />
-            Finalizar
+
+          {/* Botón Guardar Plantilla */}
+          <Button
+            type="button"
+            onClick={() => {
+              const cleanName = typeName.replace(/\s*·\s*\d{1,2}\s+[a-záéíóú]+/gi, '').trim();
+              setDirectTemplateName(cleanName || 'Mi Rutina');
+              setIsTemplateDialogOpen(true);
+            }}
+            className={`${
+              mode === 'new-template'
+                ? 'bg-purple-600 hover:bg-purple-700 text-white font-bold shadow-sm'
+                : 'bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-300 font-semibold'
+            } text-xs cursor-pointer gap-1.5`}
+          >
+            <Bookmark className="w-4 h-4" />
+            <span>Guardar Plantilla</span>
           </Button>
+
+          {mode !== 'new-template' && (
+            <Button onClick={() => setIsFinishDialogOpen(true)} className="bg-green-600 hover:bg-green-700 text-xs font-semibold cursor-pointer">
+              <Clock className="w-4 h-4 mr-1.5" />
+              Finalizar Sesión
+            </Button>
+          )}
         </div>
       </div>
 
@@ -649,6 +735,39 @@ export function WorkoutLoggerClient({
           <Plus className="w-5 h-5 mr-2" />
           Añadir Ejercicio
         </Button>
+
+        {/* Barra de acciones al final de la página */}
+        <div className="bg-gray-50/90 rounded-2xl p-4 border border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="text-xs text-gray-500 text-center sm:text-left">
+            <span>{exercises.length} ejercicio{exercises.length !== 1 ? 's' : ''} configurado{exercises.length !== 1 ? 's' : ''}</span>
+          </div>
+
+          <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+            <Button
+              type="button"
+              onClick={() => {
+                const cleanName = typeName.replace(/\s*·\s*\d{1,2}\s+[a-záéíóú]+/gi, '').trim();
+                setDirectTemplateName(cleanName || 'Mi Rutina');
+                setIsTemplateDialogOpen(true);
+              }}
+              className="flex-1 sm:flex-initial bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-300 text-xs font-semibold"
+            >
+              <Bookmark className="w-4 h-4 mr-1.5 text-purple-600" />
+              Guardar Plantilla
+            </Button>
+
+            {mode !== 'new-template' && (
+              <Button
+                type="button"
+                onClick={() => setIsFinishDialogOpen(true)}
+                className="flex-1 sm:flex-initial bg-green-600 hover:bg-green-700 text-white text-xs font-semibold"
+              >
+                <Clock className="w-4 h-4 mr-1.5" />
+                Finalizar Sesión
+              </Button>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Dialog de Finalización */}
@@ -717,6 +836,127 @@ export function WorkoutLoggerClient({
             </Button>
             <Button onClick={handleFinish} disabled={isSaving}>
               {isSaving ? 'Guardando...' : 'Guardar Entrenamiento'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog para Guardar como Plantilla Directa */}
+      <Dialog open={isTemplateDialogOpen} onOpenChange={setIsTemplateDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-purple-100 flex items-center justify-center text-purple-600 shrink-0">
+                <Bookmark className="w-4 h-4" />
+              </div>
+              <div>
+                <DialogTitle className="text-base font-bold text-gray-900">Guardar como Plantilla</DialogTitle>
+                <DialogDescription className="text-xs text-gray-500 mt-0.5">
+                  Guarda esta rutina en tu catálogo de plantillas para reutilizarla cuando quieras.
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="direct-template-name" className="text-xs font-semibold text-gray-700">
+                Nombre de la plantilla <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="direct-template-name"
+                value={directTemplateName}
+                onChange={(e) => setDirectTemplateName(e.target.value)}
+                placeholder="Ej: Empuje / Push Day, Full Body A..."
+                className="font-medium text-sm"
+              />
+            </div>
+
+            {workoutTypes.length > 0 && (
+              <div className="space-y-1.5">
+                <Label htmlFor="direct-template-type" className="text-xs font-semibold text-gray-700">
+                  Tipo de entrenamiento
+                </Label>
+                <select
+                  id="direct-template-type"
+                  value={directTemplateTypeId}
+                  onChange={(e) => setDirectTemplateTypeId(parseInt(e.target.value, 10))}
+                  className="w-full h-9 px-3 py-1.5 text-xs bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 text-gray-800 font-medium"
+                >
+                  {workoutTypes.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <div className="space-y-1.5">
+              <Label htmlFor="direct-template-desc" className="text-xs font-semibold text-gray-700">
+                Descripción o notas (opcional)
+              </Label>
+              <Textarea
+                id="direct-template-desc"
+                placeholder="Ej: Enfocado en hipertrofia, descanso 90s entre series..."
+                value={directTemplateDescription}
+                onChange={(e) => setDirectTemplateDescription(e.target.value)}
+                rows={2}
+                className="text-xs"
+              />
+            </div>
+
+            <div className="bg-purple-50/70 border border-purple-100 rounded-xl p-3">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs font-bold text-purple-950">
+                  Ejercicios incluidos ({exercises.length})
+                </span>
+                <span className="text-[10px] text-purple-700 font-medium">Objetivos de series y cargas</span>
+              </div>
+              <div className="max-h-28 overflow-y-auto space-y-1 pr-1">
+                {exercises.map((ex, idx) => (
+                  <div key={ex.id} className="text-xs text-purple-900 flex items-center justify-between">
+                    <span className="truncate pr-2 font-medium">
+                      {idx + 1}. {ex.name}
+                    </span>
+                    <span className="text-purple-600 shrink-0 font-mono text-[11px]">
+                      {ex.sets.length} {ex.sets.length === 1 ? 'serie' : 'series'}
+                      {ex.sets[0]?.repCount ? ` · ${ex.sets[0].repCount} reps` : ''}
+                      {ex.sets[0]?.weight ? ` @ ${ex.sets[0].weight}kg` : ''}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsTemplateDialogOpen(false)}
+              disabled={isSavingTemplate}
+              className="text-xs"
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={handleSaveDirectTemplate}
+              disabled={isSavingTemplate || exercises.length === 0}
+              className="bg-purple-600 hover:bg-purple-700 text-white font-semibold text-xs"
+            >
+              {isSavingTemplate ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                  Guardando...
+                </>
+              ) : (
+                <>
+                  <Bookmark className="w-3.5 h-3.5 mr-1.5" />
+                  Guardar Plantilla
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
