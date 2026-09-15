@@ -51,6 +51,14 @@ export interface WorkoutHistoryItem {
     name: string;
     setsCount: number;
     maxWeight: number;
+    totalReps?: number;
+    repsSummary?: string;
+    sets?: {
+      setNumber: number;
+      weight: number | null;
+      repCount: number | null;
+      formatted?: string;
+    }[];
   }[];
 }
 
@@ -62,11 +70,14 @@ export interface UserTemplateItem {
   createdAt: Date | string;
   description: string | null;
   exercisesCount: number;
+  totalSetsCount?: number;
   exercises: {
     name: string;
+    setsCount?: number;
     targetReps: number | null;
     targetWeight: number | null;
     targetDurationSeconds: number | null;
+    formattedSummary?: string;
   }[];
 }
 
@@ -202,25 +213,42 @@ function WorkoutDetailModal({
           {/* Exercises */}
           <div className="space-y-2">
             <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block">
-              Ejercicios ({workout.exercisesSummary.length})
+              Ejercicios & Repeticiones ({workout.exercisesSummary.length})
             </span>
-            <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
+            <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
               {workout.exercisesSummary.map((ex, idx) => (
                 <div
                   key={idx}
-                  className="flex items-center justify-between p-2.5 bg-gray-50 rounded-xl border border-gray-200/70 text-xs"
+                  className="p-3 bg-gray-50 rounded-xl border border-gray-200/70 space-y-2 text-xs"
                 >
-                  <span className="font-semibold text-gray-800 truncate pr-2">
-                    {idx + 1}. {ex.name}
-                  </span>
-                  <span className="flex items-center gap-2 shrink-0">
-                    <span className="text-gray-500">{ex.setsCount} series</span>
-                    {ex.maxWeight > 0 && (
-                      <span className="px-1.5 py-0.5 text-[10px] bg-purple-50 text-purple-700 font-bold rounded border border-purple-100">
-                        Máx {ex.maxWeight}kg
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-gray-900 truncate pr-2">
+                      {idx + 1}. {ex.name}
+                    </span>
+                    <span className="text-gray-500 font-medium shrink-0">
+                      {ex.setsCount} series {ex.maxWeight > 0 ? `· máx ${ex.maxWeight}kg` : ''}
+                    </span>
+                  </div>
+
+                  {/* Series individuales con sus reps */}
+                  <div className="flex flex-wrap gap-1.5 pt-0.5">
+                    {ex.sets && ex.sets.length > 0 ? (
+                      ex.sets.map((s, sIdx) => (
+                        <span
+                          key={sIdx}
+                          className="px-2 py-0.5 text-[11px] bg-white border border-gray-200 rounded-md font-mono text-gray-800 shadow-2xs"
+                        >
+                          <strong className="text-gray-400 mr-1 text-[10px]">S{s.setNumber}:</strong>
+                          <span className="font-bold text-blue-700">{s.repCount ?? 0} reps</span>
+                          {s.weight ? <span className="text-gray-600"> @ {s.weight}kg</span> : ''}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-[11px] text-blue-700 font-mono font-medium">
+                        {ex.repsSummary || `${ex.setsCount} series`}
                       </span>
                     )}
-                  </span>
+                  </div>
                 </div>
               ))}
             </div>
@@ -286,6 +314,7 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
   // Templates state
   const [templates, setTemplates] = useState<UserTemplateItem[]>(initialTemplates);
   const [templateSearch, setTemplateSearch] = useState('');
+  const [templateViewMode, setTemplateViewMode] = useState<'table' | 'cards'>('cards');
 
   // Deletion modal state
   const [deletingItem, setDeletingItem] = useState<{
@@ -310,17 +339,26 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
     setTemplates(initialTemplates);
   }, [initialTemplates]);
 
-  // Restore preferred view mode from localStorage
+  // Restore preferred view modes from localStorage
   useEffect(() => {
     const saved = localStorage.getItem('wm_history_view_mode');
     if (saved === 'cards' || saved === 'table') {
       setViewMode(saved);
+    }
+    const savedTpl = localStorage.getItem('wm_template_view_mode');
+    if (savedTpl === 'cards' || savedTpl === 'table') {
+      setTemplateViewMode(savedTpl);
     }
   }, []);
 
   const handleViewChange = (mode: 'table' | 'cards') => {
     setViewMode(mode);
     localStorage.setItem('wm_history_view_mode', mode);
+  };
+
+  const handleTemplateViewChange = (mode: 'table' | 'cards') => {
+    setTemplateViewMode(mode);
+    localStorage.setItem('wm_template_view_mode', mode);
   };
 
   // Unique workout types for the filter dropdown (strictly workouts)
@@ -747,20 +785,23 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                           </td>
 
                           {/* Ejercicios resumidos */}
-                          <td className="py-3 px-4 hidden md:table-cell max-w-[280px]">
+                          <td className="py-3 px-4 hidden md:table-cell max-w-[320px]">
                             <div className="flex flex-wrap gap-1">
-                              {workout.exercisesSummary.slice(0, 2).map((ex, idx) => (
+                              {workout.exercisesSummary.slice(0, 3).map((ex, idx) => (
                                 <span
                                   key={idx}
-                                  className="inline-block bg-gray-100 text-gray-700 text-[10px] px-1.5 py-0.5 rounded border border-gray-200/60 truncate max-w-[120px]"
-                                  title={`${ex.name} (${ex.setsCount} series)`}
+                                  className="inline-flex items-center gap-1 bg-gray-100 text-gray-800 text-[10px] px-2 py-0.5 rounded-md border border-gray-200/70 truncate max-w-[220px]"
+                                  title={`${ex.name}: ${ex.repsSummary || `${ex.setsCount} series`}`}
                                 >
-                                  {ex.name}
+                                  <strong className="font-semibold text-gray-900 truncate">{ex.name}</strong>
+                                  <span className="text-blue-700 font-mono shrink-0">
+                                    ({ex.repsSummary || `${ex.setsCount}s`})
+                                  </span>
                                 </span>
                               ))}
-                              {workout.exercisesSummary.length > 2 && (
+                              {workout.exercisesSummary.length > 3 && (
                                 <span className="text-[10px] text-gray-400 font-semibold self-center">
-                                  +{workout.exercisesSummary.length - 2} más
+                                  +{workout.exercisesSummary.length - 3} más
                                 </span>
                               )}
                             </div>
@@ -936,18 +977,17 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                                 </div>
 
                                 {/* Exercise summary */}
-                                <div className="space-y-1">
+                                <div className="space-y-1.5">
                                   {workout.exercisesSummary.slice(0, 3).map((ex, idx) => (
                                     <div
                                       key={idx}
-                                      className="flex items-center justify-between text-xs text-gray-600"
+                                      className="flex items-center justify-between text-xs text-gray-700"
                                     >
-                                      <span className="truncate pr-2">
+                                      <span className="truncate pr-2 font-medium">
                                         {idx + 1}. {ex.name}
                                       </span>
-                                      <span className="font-semibold text-gray-900 tabular-nums shrink-0">
-                                        {ex.setsCount} ser.
-                                        {ex.maxWeight > 0 && ` · ${ex.maxWeight}kg`}
+                                      <span className="font-semibold tabular-nums shrink-0 font-mono text-[11px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded border border-blue-100/60">
+                                        {ex.repsSummary || `${ex.setsCount} ser. ${ex.maxWeight > 0 ? `· ${ex.maxWeight}kg` : ''}`}
                                       </span>
                                     </div>
                                   ))}
@@ -1126,32 +1166,82 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
       {activeTab === 'templates' && (
         <div className="space-y-4">
           {/* Toolbar de Plantillas */}
-          <div className="bg-white p-3 sm:p-4 rounded-2xl border border-gray-200/80 shadow-xs flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-center justify-between">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-              <input
-                type="text"
-                value={templateSearch}
-                onChange={(e) => setTemplateSearch(e.target.value)}
-                placeholder="Buscar en mis plantillas..."
-                className="w-full pl-9 pr-8 py-2 text-sm border border-gray-200 rounded-xl bg-gray-50/50 hover:bg-white focus:bg-white shadow-2xs focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all"
-              />
-              {templateSearch && (
-                <button
-                  onClick={() => setTemplateSearch('')}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-0.5 rounded-full cursor-pointer"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
+          <div className="bg-white p-3 sm:p-4 rounded-2xl border border-gray-200/80 shadow-xs space-y-3">
+            <div className="flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-center justify-between">
+              {/* Search */}
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                <input
+                  type="text"
+                  value={templateSearch}
+                  onChange={(e) => setTemplateSearch(e.target.value)}
+                  placeholder="Buscar en mis plantillas por nombre o ejercicio..."
+                  className="w-full pl-9 pr-8 py-2 text-sm border border-gray-200 rounded-xl bg-gray-50/50 hover:bg-white focus:bg-white shadow-2xs focus:outline-none focus:ring-2 focus:ring-purple-500/30 focus:border-purple-500 transition-all"
+                />
+                {templateSearch && (
+                  <button
+                    onClick={() => setTemplateSearch('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-0.5 rounded-full cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                {/* View Switcher (Table vs Cards) para Plantillas */}
+                <div className="flex items-center bg-gray-100 p-1 rounded-xl border border-gray-200 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => handleTemplateViewChange('table')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      templateViewMode === 'table'
+                        ? 'bg-white text-gray-900 shadow-xs'
+                        : 'text-gray-500 hover:text-gray-900'
+                    }`}
+                    title="Vista Tabla de plantillas"
+                  >
+                    <Table2 className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Tabla</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleTemplateViewChange('cards')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      templateViewMode === 'cards'
+                        ? 'bg-white text-gray-900 shadow-xs'
+                        : 'text-gray-500 hover:text-gray-900'
+                    }`}
+                    title="Vista Tarjetas de plantillas"
+                  >
+                    <LayoutGrid className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Tarjetas</span>
+                  </button>
+                </div>
+
+                <Link href="/workouts/log?mode=new-template">
+                  <Button size="sm" className="bg-purple-600 hover:bg-purple-700 text-white text-xs rounded-xl shadow-xs shrink-0">
+                    <Plus className="w-3.5 h-3.5 mr-1.5" />
+                    Crear Plantilla
+                  </Button>
+                </Link>
+              </div>
             </div>
 
-            <Link href="/workouts/log?mode=new-template">
-              <Button size="sm" className="bg-purple-600 hover:bg-purple-700 text-white text-xs rounded-xl shadow-xs">
-                <Plus className="w-3.5 h-3.5 mr-1.5" />
-                Crear Plantilla
-              </Button>
-            </Link>
+            {/* Template Count */}
+            <div className="flex items-center justify-between text-xs text-gray-500 pt-1 border-t border-gray-100">
+              <div className="flex items-center gap-1.5">
+                <span>
+                  Total: <strong className="text-gray-800 font-bold">{filteredTemplates.length}</strong> plantillas
+                </span>
+                {templateSearch && (
+                  <>
+                    <span>·</span>
+                    <span className="text-purple-600 font-medium">Búsqueda aplicada</span>
+                  </>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* Empty state de plantillas */}
@@ -1179,8 +1269,123 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
             </Card>
           )}
 
-          {/* Grid de Plantillas */}
-          {filteredTemplates.length > 0 && (
+          {/* 1. Vista Tabla de Plantillas */}
+          {filteredTemplates.length > 0 && templateViewMode === 'table' && (
+            <div className="bg-white rounded-2xl border border-gray-200/90 shadow-2xs overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-gray-50/80 border-b border-gray-200 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                      <th className="py-3 px-4">Plantilla</th>
+                      <th className="py-3 px-3">Tipo</th>
+                      <th className="py-3 px-3 text-center">Ejercicios</th>
+                      <th className="py-3 px-3 text-center">Series Totales</th>
+                      <th className="py-3 px-4 hidden md:table-cell">Detalle de Ejercicios & Cargas</th>
+                      <th className="py-3 px-4 text-right">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {filteredTemplates.map((template) => {
+                      const style = getTypeStyle(template.typeName);
+                      const TypeIcon = style.icon;
+
+                      return (
+                        <tr
+                          key={`tpl-row-${template.id}`}
+                          className="hover:bg-purple-50/30 transition-colors group"
+                        >
+                          {/* Nombre y Descripción */}
+                          <td className="py-3.5 px-4 font-bold text-gray-900 max-w-[220px]">
+                            <div className="truncate text-sm font-extrabold text-gray-900" title={template.name}>
+                              {template.name}
+                            </div>
+                            {template.description && (
+                              <p className="text-[11px] text-gray-500 font-normal italic truncate mt-0.5" title={template.description}>
+                                {template.description}
+                              </p>
+                            )}
+                          </td>
+
+                          {/* Tipo */}
+                          <td className="py-3.5 px-3 whitespace-nowrap">
+                            <span
+                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide border ${style.badge}`}
+                            >
+                              <TypeIcon className="w-2.5 h-2.5" />
+                              {template.typeName}
+                            </span>
+                          </td>
+
+                          {/* Conteo de Ejercicios */}
+                          <td className="py-3.5 px-3 text-center whitespace-nowrap font-bold text-gray-800 tabular-nums">
+                            {template.exercisesCount}
+                          </td>
+
+                          {/* Conteo de Series */}
+                          <td className="py-3.5 px-3 text-center whitespace-nowrap font-semibold text-gray-600 tabular-nums">
+                            <span className="bg-purple-50 text-purple-800 border border-purple-100 px-2 py-0.5 rounded-md">
+                              {template.totalSetsCount || template.exercisesCount} series
+                            </span>
+                          </td>
+
+                          {/* Detalle de ejercicios */}
+                          <td className="py-3.5 px-4 hidden md:table-cell max-w-[340px]">
+                            <div className="flex flex-wrap gap-1.5">
+                              {template.exercises.map((ex, idx) => (
+                                <span
+                                  key={idx}
+                                  className="inline-flex items-center gap-1 bg-gray-50 text-gray-800 text-[11px] px-2 py-0.5 rounded-lg border border-gray-200/70"
+                                  title={`${ex.name}: ${ex.formattedSummary || (ex.targetReps ? `${ex.targetReps} reps` : 'Libre')}`}
+                                >
+                                  <strong className="font-semibold text-gray-900">{ex.name}</strong>
+                                  <span className="text-purple-700 font-mono text-[10px]">
+                                    ({ex.formattedSummary || (ex.targetReps ? `${ex.targetReps} reps` : 'Libre')})
+                                  </span>
+                                </span>
+                              ))}
+                            </div>
+                          </td>
+
+                          {/* Acciones */}
+                          <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <Button
+                                size="sm"
+                                className="h-7 px-2.5 text-xs bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-semibold cursor-pointer shadow-2xs gap-1"
+                                onClick={() => handleStartTemplate(template.id)}
+                                title="Iniciar entrenamiento desde esta plantilla"
+                              >
+                                <Play className="w-3 h-3 fill-current" />
+                                <span>Iniciar</span>
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 w-7 p-0 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg cursor-pointer"
+                                onClick={() =>
+                                  setDeletingItem({
+                                    type: 'template',
+                                    id: template.id,
+                                    name: template.name,
+                                  })
+                                }
+                                title="Eliminar plantilla"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* 2. Vista Tarjetas de Plantillas */}
+          {filteredTemplates.length > 0 && templateViewMode === 'cards' && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {filteredTemplates.map((template) => {
                 const style = getTypeStyle(template.typeName);
@@ -1205,6 +1410,7 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                               </span>
                               <span className="text-[10px] text-gray-400 font-medium">
                                 {template.exercisesCount} ejercicio{template.exercisesCount !== 1 ? 's' : ''}
+                                {template.totalSetsCount ? ` · ${template.totalSetsCount} series` : ''}
                               </span>
                             </div>
                             <CardTitle className="text-base font-bold text-gray-900 truncate">
@@ -1246,9 +1452,8 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                               <span className="truncate pr-2 font-medium">
                                 {idx + 1}. {ex.name}
                               </span>
-                              <span className="shrink-0 text-gray-500 font-mono text-[11px]">
-                                {ex.targetReps ? `${ex.targetReps} reps` : 'Libre'}
-                                {ex.targetWeight ? ` · ${ex.targetWeight}kg` : ''}
+                              <span className="shrink-0 text-purple-700 font-mono text-[11px] font-semibold bg-purple-50 px-2 py-0.5 rounded-md border border-purple-100/60">
+                                {ex.formattedSummary || (ex.targetReps ? `${ex.targetReps} reps` : 'Libre')}
                               </span>
                             </div>
                           ))}
@@ -1260,7 +1465,7 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                     <div className="p-4 pt-0">
                       <Button
                         onClick={() => handleStartTemplate(template.id)}
-                        className="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl gap-2 shadow-xs cursor-pointer"
+                        className="w-full bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold rounded-xl gap-2 shadow-xs cursor-pointer"
                       >
                         <Play className="w-3.5 h-3.5 fill-current" />
                         Iniciar este entrenamiento

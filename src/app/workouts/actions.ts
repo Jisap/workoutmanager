@@ -233,27 +233,66 @@ export async function saveAsTemplate(data: {
     })
     .returning();
 
-  // 3. Copiar los ejercicios a la plantilla
+  // 3. Copiar los ejercicios a la plantilla (guardando cada serie para preservar repeticiones y pesos)
   if (workout.exercises.length > 0) {
-    await db.insert(templateExercises).values(
-      workout.exercises.map((ex) => {
-        const firstSet = ex.sets?.[0];
-        return {
+    const rowsToInsert: any[] = [];
+    let orderCounter = 0;
+
+    for (const ex of workout.exercises) {
+      if (ex.sets && ex.sets.length > 0) {
+        for (const s of ex.sets) {
+          rowsToInsert.push({
+            templateId: newTemplate.id,
+            exerciseId: ex.exerciseId,
+            orderIndex: orderCounter++,
+            targetReps: s.repCount || ex.targetReps || null,
+            targetWeight: s.weight ? Number(s.weight) : (ex.targetWeight ? Number(ex.targetWeight) : null),
+            targetDistance: s.distance || ex.targetDistance || null,
+            timeCapSeconds: s.durationSeconds || ex.targetDurationSeconds || null,
+          });
+        }
+      } else {
+        rowsToInsert.push({
           templateId: newTemplate.id,
           exerciseId: ex.exerciseId,
-          orderIndex: ex.orderIndex,
-          targetReps: ex.targetReps ?? firstSet?.repCount ?? null,
-          targetWeight: ex.targetWeight ?? (firstSet?.weight ? Number(firstSet.weight) : null),
-          targetDistance: ex.targetDistance ?? firstSet?.distance ?? null,
-          timeCapSeconds: ex.targetDurationSeconds ?? firstSet?.durationSeconds ?? null,
-        };
-      })
-    );
+          orderIndex: orderCounter++,
+          targetReps: ex.targetReps || null,
+          targetWeight: ex.targetWeight ? Number(ex.targetWeight) : null,
+          targetDistance: ex.targetDistance || null,
+          timeCapSeconds: ex.targetDurationSeconds || null,
+        });
+      }
+    }
+
+    await db.insert(templateExercises).values(rowsToInsert);
   }
 
   revalidatePath('/workouts');
   revalidatePath('/dashboard');
   revalidatePath('/workouts/new');
+
+  // Formatear resumen para el cliente
+  const formattedExercises = workout.exercises.map((e) => {
+    const setsCount = e.sets?.length || 1;
+    const firstSet = e.sets?.[0];
+    const targetReps = e.targetReps ?? firstSet?.repCount ?? null;
+    const targetWeight = e.targetWeight ?? (firstSet?.weight ? Number(firstSet.weight) : null);
+
+    const parts: string[] = [];
+    parts.push(setsCount > 1 ? `${setsCount} series` : '1 serie');
+    if (targetReps) parts.push(`× ${targetReps} reps`);
+    if (targetWeight) parts.push(`@ ${targetWeight}kg`);
+    if (!targetReps && !targetWeight) parts.push(`(Libre)`);
+
+    return {
+      name: e.exercise.name,
+      setsCount,
+      targetReps,
+      targetWeight,
+      targetDurationSeconds: e.targetDurationSeconds ?? firstSet?.durationSeconds ?? null,
+      formattedSummary: parts.join(' '),
+    };
+  });
 
   return {
     success: true,
@@ -264,15 +303,15 @@ export async function saveAsTemplate(data: {
       typeId: newTemplate.typeId || 1,
       createdAt: newTemplate.createdAt,
       description: newTemplate.description,
-      exercisesCount: workout.exercises.length,
-      exercises: workout.exercises.map((e) => ({
-        name: e.exercise.name,
-        targetReps: e.targetReps ?? e.sets?.[0]?.repCount ?? null,
-        targetWeight: e.targetWeight ?? (e.sets?.[0]?.weight ? Number(e.sets[0].weight) : null),
-        targetDurationSeconds: e.targetDurationSeconds ?? e.sets?.[0]?.durationSeconds ?? null,
-      })),
+      exercisesCount: formattedExercises.length,
+      totalSetsCount: rowsCount(workout.exercises),
+      exercises: formattedExercises,
     },
   };
+}
+
+function rowsCount(exercises: any[]) {
+  return exercises.reduce((acc, e) => acc + (e.sets?.length || 1), 0);
 }
 
 // Crear plantilla directamente sin necesidad de haber guardado un workout
@@ -651,6 +690,7 @@ export async function getWorkoutHistory(userId: string, limit: number = 200) {
           exercise: true,
           sets: true,
         },
+        orderBy: (fields, { asc }) => asc(fields.orderIndex),
       },
     },
   });
@@ -662,21 +702,57 @@ export async function getWorkoutHistory(userId: string, limit: number = 200) {
     const exercisesSummary = w.exercises.map((ex) => {
       let exMaxWeight = 0;
       let exVolume = 0;
+      let totalReps = 0;
       totalSets += ex.sets.length;
 
-      ex.sets.forEach((s) => {
+      const formattedSets = ex.sets.map((s, sIdx) => {
         const weight = s.weight ? Number(s.weight) : 0;
         const reps = s.repCount ? Number(s.repCount) : 0;
         if (weight > exMaxWeight) exMaxWeight = weight;
         exVolume += weight * reps;
+        totalReps += reps;
+
+        return {
+          setNumber: sIdx + 1,
+          weight: s.weight ? Number(s.weight) : null,
+          repCount: s.repCount,
+          rpe: s.rpe,
+          distance: s.distance,
+          durationSeconds: s.durationSeconds,
+          formatted: weight > 0
+            ? `${reps} reps @ ${weight}kg`
+            : reps > 0
+            ? `${reps} reps`
+            : s.durationSeconds
+            ? `${s.durationSeconds}s`
+            : 'Completado',
+        };
       });
 
       totalVolume += exVolume;
+
+      // Resumen amigable del ejercicio (ej: "4 × 10 reps @ 80kg" o "3 ser. (10, 8, 6 reps)")
+      const firstSetReps = formattedSets[0]?.repCount;
+      const allSameReps = formattedSets.length > 0 && formattedSets.every((s) => s.repCount === firstSetReps);
+      let repsSummary = '';
+      if (formattedSets.length > 0) {
+        if (allSameReps && firstSetReps) {
+          repsSummary = `${formattedSets.length} × ${firstSetReps} reps${exMaxWeight > 0 ? ` @ ${exMaxWeight}kg` : ''}`;
+        } else {
+          const repsList = formattedSets.map((s) => s.repCount || 0).filter((r) => r > 0).join(', ');
+          repsSummary = repsList
+            ? `${formattedSets.length} ser. (${repsList} reps)${exMaxWeight > 0 ? ` · máx ${exMaxWeight}kg` : ''}`
+            : `${formattedSets.length} series`;
+        }
+      }
 
       return {
         name: ex.exercise.name,
         setsCount: ex.sets.length,
         maxWeight: exMaxWeight,
+        totalReps,
+        repsSummary,
+        sets: formattedSets,
       };
     });
 
@@ -696,7 +772,7 @@ export async function getWorkoutHistory(userId: string, limit: number = 200) {
 }
 
 export async function getUserTemplates(userId: string) {
-  const templates = await db.query.workoutTemplates.findMany({
+  const rawTemplates = await db.query.workoutTemplates.findMany({
     where: eq(workoutTemplates.userId, userId),
     orderBy: [desc(workoutTemplates.createdAt)],
     with: {
@@ -710,21 +786,133 @@ export async function getUserTemplates(userId: string) {
     },
   });
 
-  return templates.map((t) => ({
-    id: t.id,
-    name: t.name,
-    typeName: t.type?.name || 'General',
-    typeId: t.typeId || 1,
-    createdAt: t.createdAt,
-    description: t.description || null,
-    exercisesCount: t.exercises.length,
-    exercises: t.exercises.map((e) => ({
-      name: e.exercise.name,
-      targetReps: e.targetReps,
-      targetWeight: e.targetWeight ? Number(e.targetWeight) : null,
-      targetDurationSeconds: e.timeCapSeconds,
-    })),
-  }));
+  // Si hay plantillas con sourceWorkoutId, cargar los datos del entrenamiento original
+  // como respaldo para recuperar todas las series, reps y pesos originales si la plantilla
+  // solo tenía 1 registro por ejercicio
+  const sourceWorkoutIds = rawTemplates
+    .map((t) => t.sourceWorkoutId)
+    .filter((id): id is number => id !== null && id !== undefined);
+
+  const sourceWorkoutsMap = new Map<number, any>();
+  if (sourceWorkoutIds.length > 0) {
+    const sws = await db.query.workouts.findMany({
+      where: or(...sourceWorkoutIds.map((id) => eq(workouts.id, id))),
+      with: {
+        exercises: {
+          with: {
+            exercise: true,
+            sets: true,
+          },
+          orderBy: (fields, { asc }) => asc(fields.orderIndex),
+        },
+      },
+    });
+    for (const sw of sws) {
+      sourceWorkoutsMap.set(sw.id, sw);
+    }
+  }
+
+  return rawTemplates.map((t) => {
+    // Agrupar TODOS los rows del mismo exerciseId (sean o no consecutivos)
+    // usando un Map para mantener el orden de primera aparición
+    const exerciseMap = new Map<number, {
+      exerciseId: number;
+      name: string;
+      allReps: (number | null)[];
+      allWeights: (number | null)[];
+      allDurations: (number | null)[];
+    }>();
+
+    const sw = t.sourceWorkoutId ? sourceWorkoutsMap.get(t.sourceWorkoutId) : null;
+    const hasExplicitTemplateReps = t.exercises.some((te) => te.targetReps !== null || te.targetWeight !== null);
+
+    // Si la plantilla fue creada desde un workout y no tiene reps/series explícitas en templateExercises,
+    // usar las series reales del workout fuente
+    if (sw && sw.exercises && sw.exercises.length > 0 && !hasExplicitTemplateReps) {
+      for (const we of sw.exercises) {
+        const repsList = we.sets.map((s: any) => s.repCount ?? null);
+        const weightsList = we.sets.map((s: any) => s.weight ? Number(s.weight) : null);
+        const durationsList = we.sets.map((s: any) => s.durationSeconds ?? null);
+
+        exerciseMap.set(we.exerciseId, {
+          exerciseId: we.exerciseId,
+          name: we.exercise.name,
+          allReps: repsList.length > 0 ? repsList : [null],
+          allWeights: weightsList.length > 0 ? weightsList : [null],
+          allDurations: durationsList.length > 0 ? durationsList : [null],
+        });
+      }
+    } else {
+      for (const te of t.exercises) {
+        const existing = exerciseMap.get(te.exerciseId);
+        if (existing) {
+          existing.allReps.push(te.targetReps ?? null);
+          existing.allWeights.push(te.targetWeight ? Number(te.targetWeight) : null);
+          existing.allDurations.push(te.timeCapSeconds ?? null);
+        } else {
+          exerciseMap.set(te.exerciseId, {
+            exerciseId: te.exerciseId,
+            name: te.exercise.name,
+            allReps: [te.targetReps ?? null],
+            allWeights: [te.targetWeight ? Number(te.targetWeight) : null],
+            allDurations: [te.timeCapSeconds ?? null],
+          });
+        }
+      }
+    }
+
+    // Formatear resumen amigable para cada ejercicio (igual que el historial)
+    let totalSetsCounter = 0;
+    const formattedExercises = Array.from(exerciseMap.values()).map((g) => {
+      const setsCount = g.allReps.length;
+      totalSetsCounter += setsCount;
+      const validReps = g.allReps.filter((r): r is number => r !== null && r > 0);
+      const validWeights = g.allWeights.filter((w): w is number => w !== null && w > 0);
+      const maxWeight = validWeights.length > 0 ? Math.max(...validWeights) : null;
+      const firstReps = validReps[0] ?? null;
+      const allSameReps = validReps.length > 0 && validReps.every((r) => r === firstReps);
+      const firstDuration = g.allDurations.find((d) => d !== null) ?? null;
+
+      let formattedSummary = '';
+      if (validReps.length > 0) {
+        if (allSameReps) {
+          // "4 × 10 reps @ 80kg"
+          formattedSummary = `${setsCount} × ${firstReps} reps${maxWeight ? ` @ ${maxWeight}kg` : ''}`;
+        } else {
+          // "3 ser. (10, 8, 6 reps) · máx 80kg"
+          const repsList = validReps.join(', ');
+          formattedSummary = `${setsCount} ser. (${repsList} reps)${maxWeight ? ` · máx ${maxWeight}kg` : ''}`;
+        }
+      } else if (firstDuration) {
+        formattedSummary = `${setsCount > 1 ? `${setsCount} series` : '1 serie'} · ${firstDuration}s`;
+      } else if (maxWeight) {
+        formattedSummary = `${setsCount > 1 ? `${setsCount} series` : '1 serie'} @ ${maxWeight}kg`;
+      } else {
+        formattedSummary = `${setsCount > 1 ? `${setsCount} series` : '1 serie'} (Libre)`;
+      }
+
+      return {
+        name: g.name,
+        setsCount,
+        targetReps: firstReps,
+        targetWeight: maxWeight,
+        targetDurationSeconds: firstDuration,
+        formattedSummary,
+      };
+    });
+
+    return {
+      id: t.id,
+      name: t.name,
+      typeName: t.type?.name || 'General',
+      typeId: t.typeId || 1,
+      createdAt: t.createdAt,
+      description: t.description || null,
+      exercisesCount: formattedExercises.length,
+      totalSetsCount: totalSetsCounter,
+      exercises: formattedExercises,
+    };
+  });
 }
 
 export async function deleteWorkout(workoutId: number) {

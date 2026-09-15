@@ -44,11 +44,38 @@ export default async function WorkoutLogPage({
     if (template) {
       workoutName = template.name;
       currentTypeId = template.typeId || 1;
-      initialExercisesState = template.exercises.map((ex: any, idx: number) => ({
+
+      const groupedExercises: { exerciseId: number; name: string; sets: any[] }[] = [];
+      for (const ex of template.exercises) {
+        const last = groupedExercises[groupedExercises.length - 1];
+        if (last && last.exerciseId === ex.exerciseId) {
+          last.sets.push({
+            id: crypto.randomUUID(),
+            repCount: ex.targetReps || 0,
+            weight: ex.targetWeight,
+            isCompleted: false,
+          });
+        } else {
+          groupedExercises.push({
+            exerciseId: ex.exerciseId,
+            name: ex.exercise.name,
+            sets: [
+              {
+                id: crypto.randomUUID(),
+                repCount: ex.targetReps || 0,
+                weight: ex.targetWeight,
+                isCompleted: false,
+              },
+            ],
+          });
+        }
+      }
+
+      initialExercisesState = groupedExercises.map((g) => ({
         id: crypto.randomUUID(),
-        exerciseId: ex.exerciseId,
-        name: ex.exercise.name,
-        sets: [{ id: crypto.randomUUID(), repCount: ex.targetReps || 0, weight: ex.targetWeight, isCompleted: false }],
+        exerciseId: g.exerciseId,
+        name: g.name,
+        sets: g.sets,
       }));
     }
   } else if (mode === 'repeat') {

@@ -329,15 +329,33 @@ export function WorkoutLoggerClient({
 
     setIsSavingTemplate(true);
     try {
-      const templateExercisesPayload = exercises.map((ex, idx) => {
-        const firstSet = ex.sets[0];
-        return {
-          exerciseId: ex.exerciseId,
-          orderIndex: idx,
-          targetReps: firstSet?.repCount || null,
-          targetWeight: firstSet?.weight || null,
-        };
-      });
+      const templateExercisesPayload: {
+        exerciseId: number;
+        orderIndex: number;
+        targetReps?: number | null;
+        targetWeight?: number | null;
+      }[] = [];
+
+      let orderCounter = 0;
+      for (const ex of exercises) {
+        if (ex.sets && ex.sets.length > 0) {
+          for (const s of ex.sets) {
+            templateExercisesPayload.push({
+              exerciseId: ex.exerciseId,
+              orderIndex: orderCounter++,
+              targetReps: s.repCount || null,
+              targetWeight: s.weight || null,
+            });
+          }
+        } else {
+          templateExercisesPayload.push({
+            exerciseId: ex.exerciseId,
+            orderIndex: orderCounter++,
+            targetReps: null,
+            targetWeight: null,
+          });
+        }
+      }
 
       await createDirectTemplate({
         name: directTemplateName.trim(),

@@ -9,6 +9,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { ArrowLeft, Dumbbell } from 'lucide-react';
 import { WorkoutQuickSelector } from './workout-quick-selector';
 
+import { getAvailableExercises, getUserTemplates } from '../actions';
+
 export default async function NewWorkoutPage() {
   const { userId } = await auth();
   if (!userId) redirect('/sign-in');
@@ -16,19 +18,8 @@ export default async function NewWorkoutPage() {
   // 1. Obtener tipos de entrenamiento disponibles
   const types = await db.select().from(workoutTypes);
 
-  // 2. Obtener plantillas del usuario con ejercicios
-  const templates = await db.query.workoutTemplates.findMany({
-    where: eq(workoutTemplates.userId, userId),
-    orderBy: [desc(workoutTemplates.createdAt)],
-    limit: 15,
-    with: {
-      type: true,
-      exercises: {
-        with: { exercise: true },
-        orderBy: (fields, { asc }) => asc(fields.orderIndex),
-      },
-    },
-  });
+  // 2. Obtener plantillas del usuario con ejercicios formateados y ricos
+  const templates = await getUserTemplates(userId);
 
   // 3. Obtener los últimos 15 entrenamientos realizados con ejercicios y sus series completas
   const recentWorkouts = await db.query.workouts.findMany({
@@ -103,15 +94,18 @@ export default async function NewWorkoutPage() {
     name: t.name,
     description: t.description,
     typeId: t.typeId,
-    typeName: t.type?.name,
+    typeName: t.typeName,
     createdAt: t.createdAt,
-    exercises: t.exercises.map((e) => ({
-      name: e.exercise.name,
-      orderIndex: e.orderIndex,
+    exercisesCount: t.exercisesCount,
+    totalSetsCount: t.totalSetsCount,
+    exercises: t.exercises.map((e, idx) => ({
+      name: e.name,
+      orderIndex: idx,
       targetReps: e.targetReps,
       targetWeight: e.targetWeight,
-      targetDistance: e.targetDistance,
-      timeCapSeconds: e.timeCapSeconds,
+      targetDistance: null,
+      timeCapSeconds: e.targetDurationSeconds,
+      formattedSummary: e.formattedSummary,
     })),
   }));
 

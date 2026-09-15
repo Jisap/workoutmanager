@@ -44,6 +44,7 @@ export interface TemplateExercisePreview {
   targetWeight: number | null;
   targetDistance: number | null;
   timeCapSeconds: number | null;
+  formattedSummary?: string;
 }
 
 export interface SerializedWorkout {
@@ -66,6 +67,8 @@ export interface SerializedTemplate {
   typeId: number | null;
   typeName?: string;
   createdAt: Date | string;
+  exercisesCount?: number;
+  totalSetsCount?: number;
   exercises: TemplateExercisePreview[];
 }
 
@@ -534,22 +537,27 @@ export function WorkoutQuickSelector({
                     key={idx}
                     className="p-3 bg-white rounded-xl border border-gray-200/80 flex items-center justify-between shadow-2xs"
                   >
-                    <span className="font-bold text-xs text-gray-900 flex items-center gap-1.5">
-                      <span className="text-[10px] w-4 h-4 rounded-full bg-purple-100 text-purple-700 font-bold flex items-center justify-center">
+                    <span className="font-bold text-xs text-gray-900 flex items-center gap-1.5 truncate pr-2">
+                      <span className="text-[10px] w-4 h-4 rounded-full bg-purple-100 text-purple-700 font-bold flex items-center justify-center shrink-0">
                         {idx + 1}
                       </span>
-                      {ex.name}
+                      <span className="truncate">{ex.name}</span>
                     </span>
 
-                    <div className="text-xs text-gray-600 font-medium">
-                      {ex.targetWeight ? (
+                    <div className="text-xs text-gray-600 font-medium shrink-0">
+                      {ex.formattedSummary ? (
+                        <span className="text-purple-700 font-mono text-[11px] font-semibold bg-purple-50 px-2 py-0.5 rounded-md border border-purple-100/60">
+                          {ex.formattedSummary}
+                        </span>
+                      ) : ex.targetWeight ? (
                         <span className="text-purple-700 font-semibold">{ex.targetWeight} kg</span>
-                      ) : null}
-                      {ex.targetReps ? ` • ${ex.targetReps} reps` : ''}
-                      {ex.timeCapSeconds ? ` • Cap: ${ex.timeCapSeconds}s` : ''}
-                      {!ex.targetWeight && !ex.targetReps && !ex.timeCapSeconds ? (
-                        <span className="text-gray-400">Sin objetivos específicos</span>
-                      ) : null}
+                      ) : ex.targetReps ? (
+                        <span className="text-purple-700">{ex.targetReps} reps</span>
+                      ) : ex.timeCapSeconds ? (
+                        <span className="text-gray-500">Cap: {ex.timeCapSeconds}s</span>
+                      ) : (
+                        <span className="text-gray-400">Sin objetivos</span>
+                      )}
                     </div>
                   </div>
                 ))
