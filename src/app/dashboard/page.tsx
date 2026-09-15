@@ -42,8 +42,8 @@ export default async function DashboardPage() {
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h2 className="text-2xl font-bold text-gray-900">Dashboard</h2>
-                    <p className="text-gray-600 mt-1">Bienvenido de vuelta a tu entrenamiento</p>
+                    <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Dashboard</h2>
+                    <p className="text-gray-600 dark:text-gray-400 mt-1">Bienvenido de vuelta a tu entrenamiento</p>
                 </div>
                 <Link href="/workouts/new">
                     <Button className="flex items-center gap-2">
@@ -58,33 +58,33 @@ export default async function DashboardPage() {
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between pb-2">
                         <CardTitle className="text-sm font-medium">Entrenamientos Totales</CardTitle>
-                        <Dumbbell className="w-4 h-4 text-gray-400" />
+                        <Dumbbell className="w-4 h-4 text-gray-400 dark:text-gray-500" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{totalWorkouts}</div>
-                        <p className="text-xs text-gray-500 mt-1">Días activos registrados</p>
+                        <div className="text-2xl font-bold dark:text-gray-100">{totalWorkouts}</div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Días activos registrados</p>
                     </CardContent>
                 </Card>
 
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between pb-2">
                         <CardTitle className="text-sm font-medium">Racha Actual</CardTitle>
-                        <Activity className="w-4 h-4 text-gray-400" />
+                        <Activity className="w-4 h-4 text-gray-400 dark:text-gray-500" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{consistencyData.currentStreak} días</div>
-                        <p className="text-xs text-gray-500 mt-1">Récord: {consistencyData.longestStreak} días</p>
+                        <div className="text-2xl font-bold dark:text-gray-100">{consistencyData.currentStreak} días</div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Récord: {consistencyData.longestStreak} días</p>
                     </CardContent>
                 </Card>
 
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between pb-2">
                         <CardTitle className="text-sm font-medium">Frecuencia Semanal</CardTitle>
-                        <TrendingUp className="w-4 h-4 text-gray-400" />
+                        <TrendingUp className="w-4 h-4 text-gray-400 dark:text-gray-500" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{consistencyData.avgPerWeek} días</div>
-                        <p className="text-xs text-gray-500 mt-1">Promedio por semana</p>
+                        <div className="text-2xl font-bold dark:text-gray-100">{consistencyData.avgPerWeek} días</div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Promedio por semana</p>
                     </CardContent>
                 </Card>
             </div>
@@ -102,7 +102,7 @@ export default async function DashboardPage() {
                 <CardContent>
                     {recentWorkouts.length === 0 ? (
                         <div className="text-center py-8 space-y-3">
-                            <p className="text-gray-500">
+                            <p className="text-gray-500 dark:text-gray-400">
                                 Aún no has registrado ningún entrenamiento. ¡Empieza ahora!
                             </p>
                             <Link href="/workouts/new">
@@ -117,19 +117,19 @@ export default async function DashboardPage() {
                             {recentWorkouts.map((workout) => (
                                 <div
                                     key={workout.id}
-                                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100/80 transition-colors"
+                                    className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg hover:bg-gray-100/80 dark:hover:bg-gray-800 transition-colors"
                                 >
                                     <div>
-                                        <p className="font-medium text-gray-900">{workout.name}</p>
-                                        <p className="text-sm text-gray-500">{workout.typeName}</p>
+                                        <p className="font-medium text-gray-900 dark:text-gray-100">{workout.name}</p>
+                                        <p className="text-sm text-gray-500 dark:text-gray-400">{workout.typeName}</p>
                                     </div>
                                     <div className="text-right">
-                                        <p className="text-sm font-medium text-gray-900">
+                                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
                                             {workout.totalTimeSeconds
                                                 ? `${Math.round(workout.totalTimeSeconds / 60)} min`
                                                 : 'Sin tiempo'}
                                         </p>
-                                        <p className="text-xs text-gray-500">
+                                        <p className="text-xs text-gray-500 dark:text-gray-400">
                                             {new Date(workout.startTime).toLocaleDateString('es-ES')}
                                         </p>
                                     </div>

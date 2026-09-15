@@ -4,6 +4,7 @@ import { auth } from '@clerk/nextjs/server';
 import { Button } from '@/components/ui/button';
 import './globals.css';
 import { Oswald, Inter, JetBrains_Mono } from 'next/font/google';
+import Script from 'next/script';
 import { ThemeProvider } from '@/components/ThemeProvider';
 
 const headline = Oswald({
@@ -28,14 +29,14 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   return (
     <html lang="es" suppressHydrationWarning className={`${inter.variable} ${headline.variable} ${mono.variable}`}>
-      <head>
-        <script
+      <body className="antialiased bg-gray-50 font-sans dark:bg-gray-950 dark:text-gray-100">
+        <Script
+          id="wm-theme-init"
+          strategy="beforeInteractive"
           dangerouslySetInnerHTML={{
             __html: `(function(){try{var t=localStorage.getItem('wm_theme');if(t==='dark'||(!t&&window.matchMedia('(prefers-color-scheme: dark)').matches)){document.documentElement.classList.add('dark')}}catch(e){}})()`,
           }}
         />
-      </head>
-      <body className="antialiased bg-gray-50 font-sans dark:bg-gray-950 dark:text-gray-100">
         <ClerkProvider>
           <ThemeProvider>
             {isAuthenticated ? (

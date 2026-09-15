@@ -119,8 +119,8 @@ export default async function NewWorkoutPage() {
           </Button>
         </Link>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Nuevo Entrenamiento</h1>
-          <p className="text-sm text-gray-500">¿Qué vas a entrenar hoy?</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Nuevo Entrenamiento</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400">¿Qué vas a entrenar hoy?</p>
         </div>
       </div>
 
@@ -135,25 +135,25 @@ export default async function NewWorkoutPage() {
       {/* Opción: Empezar desde cero (Entrenamiento Libre por Tipo) */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+          <h2 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
             Empezar Entrenamiento Libre
           </h2>
-          <span className="text-xs text-gray-400">Elige una modalidad</span>
+          <span className="text-xs text-gray-400 dark:text-gray-500">Elige una modalidad</span>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {types.map((type) => (
             <Link key={type.id} href={`/workouts/log?mode=free&typeId=${type.id}`}>
-              <Card className="hover:border-blue-300 hover:shadow-xs hover:bg-gray-50/50 transition-all cursor-pointer h-full border-gray-200 group">
+              <Card className="hover:border-blue-300 hover:shadow-xs hover:bg-gray-50/50 dark:hover:bg-gray-800 transition-all cursor-pointer h-full border-gray-200 dark:border-gray-700 group">
                 <CardContent className="flex flex-col items-center text-center p-5 gap-2.5">
-                  <div className="p-3 bg-blue-50 group-hover:bg-blue-100 rounded-2xl text-blue-700 transition-colors">
+                  <div className="p-3 bg-blue-50 dark:bg-blue-900/30 group-hover:bg-blue-100 rounded-2xl text-blue-700 dark:text-blue-300 transition-colors">
                     <Dumbbell className="w-6 h-6" />
                   </div>
                   <div>
-                    <p className="font-bold text-gray-900 text-sm group-hover:text-blue-900 transition-colors">
+                    <p className="font-bold text-gray-900 dark:text-gray-100 text-sm group-hover:text-blue-900 transition-colors">
                       {type.name}
                     </p>
-                    <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2">
                       {type.description}
                     </p>
                   </div>

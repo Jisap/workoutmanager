@@ -544,18 +544,18 @@ const TYPE_ICONS: Record<string, React.ElementType> = {
 };
 
 const TYPE_COLORS: Record<string, string> = {
-  muscu: 'bg-blue-100 text-blue-700 border-blue-200',
-  fuerza: 'bg-blue-100 text-blue-700 border-blue-200',
-  gym: 'bg-blue-100 text-blue-700 border-blue-200',
-  crossfit: 'bg-orange-100 text-orange-700 border-orange-200',
-  wod: 'bg-orange-100 text-orange-700 border-orange-200',
-  funcional: 'bg-orange-100 text-orange-700 border-orange-200',
-  cardio: 'bg-pink-100 text-pink-700 border-pink-200',
-  correr: 'bg-pink-100 text-pink-700 border-pink-200',
-  run: 'bg-pink-100 text-pink-700 border-pink-200',
-  hyrox: 'bg-purple-100 text-purple-700 border-purple-200',
-  hybrid: 'bg-purple-100 text-purple-700 border-purple-200',
-  yoga: 'bg-teal-100 text-teal-700 border-teal-200',
+  muscu: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800/60',
+  fuerza: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800/60',
+  gym: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800/60',
+  crossfit: 'bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-950/40 dark:text-orange-300 dark:border-orange-800/60',
+  wod: 'bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-950/40 dark:text-orange-300 dark:border-orange-800/60',
+  funcional: 'bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-950/40 dark:text-orange-300 dark:border-orange-800/60',
+  cardio: 'bg-pink-100 text-pink-700 border-pink-200 dark:bg-pink-950/40 dark:text-pink-300 dark:border-pink-800/60',
+  correr: 'bg-pink-100 text-pink-700 border-pink-200 dark:bg-pink-950/40 dark:text-pink-300 dark:border-pink-800/60',
+  run: 'bg-pink-100 text-pink-700 border-pink-200 dark:bg-pink-950/40 dark:text-pink-300 dark:border-pink-800/60',
+  hyrox: 'bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800/60',
+  hybrid: 'bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800/60',
+  yoga: 'bg-teal-100 text-teal-700 border-teal-200 dark:bg-teal-950/40 dark:text-teal-300 dark:border-teal-800/60',
 };
 
 function getTypeIcon(name: string): React.ElementType {
@@ -571,7 +571,7 @@ function getTypeColor(name: string): string {
   for (const [key, color] of Object.entries(TYPE_COLORS)) {
     if (lower.includes(key)) return color;
   }
-  return 'bg-gray-100 text-gray-700 border-gray-200';
+  return 'bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700';
 }
 
 function WorkoutTypesSection({ workoutTypes }: { workoutTypes: WorkoutType[] }) {
@@ -601,7 +601,7 @@ function WorkoutTypesSection({ workoutTypes }: { workoutTypes: WorkoutType[] }) 
           );
         })}
       </div>
-      <p className="text-xs text-gray-400 mt-3 flex items-center gap-1">
+      <p className="text-xs text-gray-400 dark:text-gray-500 mt-3 flex items-center gap-1">
         <ChevronRight className="w-3 h-3" />
         Los tipos de entrenamiento son globales del sistema. Próximamente podrás crear los tuyos.
       </p>

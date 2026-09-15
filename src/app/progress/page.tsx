@@ -45,9 +45,9 @@ export default async function ProgressPage({
     <div className="max-w-4xl mx-auto space-y-8 pb-24">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Tu Progreso</h1>
-        <p className="text-gray-600 mt-1">
-          Has completado <span className="font-semibold text-gray-900">{progressData.totalWorkouts}</span> entrenamientos en total.
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Tu Progreso</h1>
+        <p className="text-gray-600 dark:text-gray-400 mt-1">
+          Has completado <span className="font-semibold text-gray-900 dark:text-gray-100">{progressData.totalWorkouts}</span> entrenamientos en total.
         </p>
       </div>
 
@@ -55,26 +55,26 @@ export default async function ProgressPage({
       <section>
         <div className="flex items-center gap-2 mb-4">
           <Trophy className="w-5 h-5 text-yellow-500" />
-          <h2 className="text-lg font-semibold text-gray-900">Récords Personales (Top 5)</h2>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Récords Personales (Top 5)</h2>
         </div>
 
         {progressData.prs.length === 0 ? (
-          <Card className="bg-gray-50 border-dashed">
-            <CardContent className="py-8 text-center text-gray-500">
+          <Card className="bg-gray-50 border-dashed dark:bg-gray-800/50 dark:border-gray-700">
+            <CardContent className="py-8 text-center text-gray-500 dark:text-gray-400">
               Aún no hay récords registrados. ¡A darle duro!
             </CardContent>
           </Card>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {progressData.prs.map((pr, index) => (
-              <Card key={index} className="border-l-4 border-l-yellow-400">
+              <Card key={index} className="border-l-4 border-l-yellow-400 dark:bg-gray-900">
                 <CardContent className="p-4">
-                  <p className="text-sm font-medium text-gray-500 truncate">{pr.exerciseName}</p>
+                  <p className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">{pr.exerciseName}</p>
                   <div className="mt-2 flex items-baseline gap-2">
-                    <span className="text-2xl font-bold text-gray-900 tabular-nums">{pr.weight} kg</span>
-                    <span className="text-sm text-gray-600">x {pr.reps} reps</span>
+                    <span className="text-2xl font-bold text-gray-900 dark:text-gray-100 tabular-nums">{pr.weight} kg</span>
+                    <span className="text-sm text-gray-600 dark:text-gray-400">x {pr.reps} reps</span>
                   </div>
-                  <p className="text-xs text-gray-400 mt-2">
+                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
                     {new Date(pr.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })}
                   </p>
                 </CardContent>
@@ -88,26 +88,26 @@ export default async function ProgressPage({
       <section>
         <div className="flex items-center gap-2 mb-4">
           <TrendingUp className="w-5 h-5 text-blue-600" />
-          <h2 className="text-lg font-semibold text-gray-900">Volumen Semanal (kg)</h2>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Volumen Semanal (kg)</h2>
         </div>
 
-        <Card>
+        <Card className="dark:bg-gray-900 dark:border-gray-700">
           <CardContent className="p-6">
             <div className="flex items-end justify-between gap-2 h-48 mt-4">
               {progressData.weeklyVolume.map((week, i) => {
                 const heightPercentage = (week.volume / maxVolume) * 100;
                 return (
                   <div key={i} className="flex flex-col items-center gap-2 flex-1 group">
-                    <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-gray-900 text-white text-xs rounded px-2 py-1 mb-1 whitespace-nowrap">
+                    <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-gray-900 text-white dark:bg-gray-700 dark:text-gray-100 dark:border dark:border-gray-600 text-xs rounded px-2 py-1 mb-1 whitespace-nowrap">
                       {week.volume} kg
                     </div>
-                    <div className="w-full bg-gray-100 rounded-t-md relative h-32 flex items-end overflow-hidden">
+                    <div className="w-full bg-gray-100 dark:bg-gray-800 rounded-t-md relative h-32 flex items-end overflow-hidden">
                       <div
-                        className="w-full bg-blue-600 rounded-t-md transition-all duration-700 ease-out group-hover:bg-blue-500"
+                        className="w-full bg-blue-600 dark:bg-blue-500 rounded-t-md transition-all duration-700 ease-out group-hover:bg-blue-500"
                         style={{ height: `${Math.max(heightPercentage, 4)}%` }}
                       />
                     </div>
-                    <span className="text-xs font-medium text-gray-500">{week.label}</span>
+                    <span className="text-xs font-medium text-gray-500 dark:text-gray-400">{week.label}</span>
                   </div>
                 );
               })}
@@ -120,7 +120,7 @@ export default async function ProgressPage({
       <section className="space-y-4">
         <div className="flex items-center gap-2">
           <LineChart className="w-5 h-5 text-purple-600" />
-          <h2 className="text-lg font-semibold text-gray-900">Progresión por Ejercicio</h2>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Progresión por Ejercicio</h2>
         </div>
 
         <ExerciseProgressChart
@@ -134,7 +134,7 @@ export default async function ProgressPage({
       <section className="space-y-4">
         <div className="flex items-center gap-2">
           <Calendar className="w-5 h-5 text-emerald-600" />
-          <h2 className="text-lg font-semibold text-gray-900">Consistencia y Mapa de Actividad</h2>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Consistencia y Mapa de Actividad</h2>
         </div>
         <ConsistencyHeatmap data={consistencyData} />
       </section>

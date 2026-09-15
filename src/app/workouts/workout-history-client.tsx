@@ -95,16 +95,16 @@ function getTypeStyle(typeName: string): {
 } {
   const lower = typeName.toLowerCase();
   if (lower.includes('muscu') || lower.includes('fuerza') || lower.includes('gym'))
-    return { badge: 'bg-blue-100 text-blue-800 border-blue-200', icon: Dumbbell, bar: 'bg-blue-500' };
+    return { badge: 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 border-blue-200 dark:border-blue-800', icon: Dumbbell, bar: 'bg-blue-500' };
   if (lower.includes('crossfit') || lower.includes('wod') || lower.includes('funcional'))
-    return { badge: 'bg-orange-100 text-orange-800 border-orange-200', icon: Zap, bar: 'bg-orange-500' };
+    return { badge: 'bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300 border-orange-200 dark:border-orange-800', icon: Zap, bar: 'bg-orange-500' };
   if (lower.includes('cardio') || lower.includes('correr') || lower.includes('run'))
-    return { badge: 'bg-pink-100 text-pink-800 border-pink-200', icon: Heart, bar: 'bg-pink-500' };
+    return { badge: 'bg-pink-100 dark:bg-pink-900/30 text-pink-800 dark:text-pink-300 border-pink-200 dark:border-pink-800', icon: Heart, bar: 'bg-pink-500' };
   if (lower.includes('hyrox') || lower.includes('hybrid'))
-    return { badge: 'bg-purple-100 text-purple-800 border-purple-200', icon: Flame, bar: 'bg-purple-500' };
+    return { badge: 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 border-purple-200 dark:border-purple-800', icon: Flame, bar: 'bg-purple-500' };
   if (lower.includes('yoga') || lower.includes('stretch') || lower.includes('movilidad'))
-    return { badge: 'bg-teal-100 text-teal-800 border-teal-200', icon: Activity, bar: 'bg-teal-500' };
-  return { badge: 'bg-gray-100 text-gray-700 border-gray-200', icon: BarChart2, bar: 'bg-gray-400' };
+    return { badge: 'bg-teal-100 dark:bg-teal-900/30 text-teal-800 dark:text-teal-300 border-teal-200 dark:border-teal-800', icon: Activity, bar: 'bg-teal-500' };
+  return { badge: 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700', icon: BarChart2, bar: 'bg-gray-400' };
 }
 
 function formatMonthKey(dateStr: string): string {
@@ -146,9 +146,9 @@ function WorkoutDetailModal({
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-150"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="bg-white rounded-2xl max-w-xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-gray-200 overflow-hidden animate-in zoom-in-95 duration-150">
+      <div className="bg-white dark:bg-gray-900 rounded-2xl max-w-xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden animate-in zoom-in-95 duration-150">
         {/* Header */}
-        <div className="px-5 py-4 border-b border-gray-100 flex items-start justify-between gap-3 bg-gray-50/80">
+        <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-700 flex items-start justify-between gap-3 bg-gray-50/80 dark:bg-gray-800/60">
           <div className="space-y-0.5 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wide border ${style.badge}`}>
@@ -156,8 +156,8 @@ function WorkoutDetailModal({
                 {workout.typeName}
               </span>
             </div>
-            <h3 className="font-extrabold text-base text-gray-900 truncate">{workout.name}</h3>
-            <p className="text-xs text-gray-500 flex items-center gap-1.5">
+            <h3 className="font-extrabold text-base text-gray-900 dark:text-gray-100 truncate">{workout.name}</h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1.5">
               <Calendar className="w-3 h-3" />
               {new Date(workout.startTime).toLocaleDateString('es-ES', {
                 weekday: 'long',
@@ -174,7 +174,7 @@ function WorkoutDetailModal({
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-200/60 transition-colors shrink-0 cursor-pointer"
+            className="p-1.5 rounded-lg text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-700 transition-colors shrink-0 cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -184,27 +184,27 @@ function WorkoutDetailModal({
         <div className="p-5 overflow-y-auto space-y-4 flex-1">
           {/* KPIs */}
           <div className="grid grid-cols-3 gap-2 text-center">
-            <div className="bg-gray-50 rounded-xl border border-gray-200/70 p-2.5">
-              <p className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Duración</p>
-              <p className="text-sm font-black text-gray-900 tabular-nums mt-0.5">
+            <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200/70 dark:border-gray-700 p-2.5">
+              <p className="text-[10px] uppercase font-bold text-gray-400 dark:text-gray-500 tracking-wider">Duración</p>
+              <p className="text-sm font-black text-gray-900 dark:text-gray-100 tabular-nums mt-0.5">
                 {workout.totalTimeSeconds ? `${Math.round(workout.totalTimeSeconds / 60)} min` : '—'}
               </p>
             </div>
-            <div className="bg-gray-50 rounded-xl border border-gray-200/70 p-2.5">
-              <p className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Volumen</p>
-              <p className="text-sm font-black text-gray-900 tabular-nums mt-0.5">
+            <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200/70 dark:border-gray-700 p-2.5">
+              <p className="text-[10px] uppercase font-bold text-gray-400 dark:text-gray-500 tracking-wider">Volumen</p>
+              <p className="text-sm font-black text-gray-900 dark:text-gray-100 tabular-nums mt-0.5">
                 {workout.totalVolume > 0 ? `${(workout.totalVolume / 1000).toFixed(1)}k kg` : '0 kg'}
               </p>
             </div>
-            <div className="bg-gray-50 rounded-xl border border-gray-200/70 p-2.5">
-              <p className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Series</p>
-              <p className="text-sm font-black text-gray-900 tabular-nums mt-0.5">{workout.totalSets}</p>
+            <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200/70 dark:border-gray-700 p-2.5">
+              <p className="text-[10px] uppercase font-bold text-gray-400 dark:text-gray-500 tracking-wider">Series</p>
+              <p className="text-sm font-black text-gray-900 dark:text-gray-100 tabular-nums mt-0.5">{workout.totalSets}</p>
             </div>
           </div>
 
           {/* Notes */}
           {workout.notes && (
-            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 flex gap-2">
+            <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl text-xs text-amber-900 dark:text-amber-200 flex gap-2">
               <FileText className="w-3.5 h-3.5 shrink-0 mt-0.5 text-amber-600" />
               <p className="italic">{workout.notes}</p>
             </div>
@@ -212,20 +212,20 @@ function WorkoutDetailModal({
 
           {/* Exercises */}
           <div className="space-y-2">
-            <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block">
+            <span className="text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider block">
               Ejercicios & Repeticiones ({workout.exercisesSummary.length})
             </span>
             <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
               {workout.exercisesSummary.map((ex, idx) => (
-                <div
-                  key={idx}
-                  className="p-3 bg-gray-50 rounded-xl border border-gray-200/70 space-y-2 text-xs"
+<div
+                    key={idx}
+                    className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200/70 dark:border-gray-700 space-y-2 text-xs"
                 >
                   <div className="flex items-center justify-between">
-                    <span className="font-bold text-gray-900 truncate pr-2">
+                    <span className="font-bold text-gray-900 dark:text-gray-100 truncate pr-2">
                       {idx + 1}. {ex.name}
                     </span>
-                    <span className="text-gray-500 font-medium shrink-0">
+                    <span className="text-gray-500 dark:text-gray-400 font-medium shrink-0">
                       {ex.setsCount} series {ex.maxWeight > 0 ? `· máx ${ex.maxWeight}kg` : ''}
                     </span>
                   </div>
@@ -236,15 +236,15 @@ function WorkoutDetailModal({
                       ex.sets.map((s, sIdx) => (
                         <span
                           key={sIdx}
-                          className="px-2 py-0.5 text-[11px] bg-white border border-gray-200 rounded-md font-mono text-gray-800 shadow-2xs"
+                          className="px-2 py-0.5 text-[11px] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md font-mono text-gray-800 dark:text-gray-200 shadow-2xs"
                         >
-                          <strong className="text-gray-400 mr-1 text-[10px]">S{s.setNumber}:</strong>
-                          <span className="font-bold text-blue-700">{s.repCount ?? 0} reps</span>
-                          {s.weight ? <span className="text-gray-600"> @ {s.weight}kg</span> : ''}
+                          <strong className="text-gray-400 dark:text-gray-500 mr-1 text-[10px]">S{s.setNumber}:</strong>
+                          <span className="font-bold text-blue-700 dark:text-blue-400">{s.repCount ?? 0} reps</span>
+                          {s.weight ? <span className="text-gray-600 dark:text-gray-400"> @ {s.weight}kg</span> : ''}
                         </span>
                       ))
                     ) : (
-                      <span className="text-[11px] text-blue-700 font-mono font-medium">
+                      <span className="text-[11px] text-blue-700 dark:text-blue-400 font-mono font-medium">
                         {ex.repsSummary || `${ex.setsCount} series`}
                       </span>
                     )}
@@ -256,7 +256,7 @@ function WorkoutDetailModal({
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-3 border-t border-gray-100 bg-gray-50/80 flex items-center justify-between gap-2 flex-wrap">
+        <div className="px-5 py-3 border-t border-gray-100 dark:border-gray-700 bg-gray-50/80 dark:bg-gray-800/60 flex items-center justify-between gap-2 flex-wrap">
           <Button
             variant="ghost"
             size="sm"
@@ -329,10 +329,10 @@ function ExerciseDetailModal({
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-150"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[85vh] flex flex-col shadow-2xl border border-gray-200 overflow-hidden animate-in zoom-in-95 duration-150">
-        <div className="px-5 py-4 border-b border-gray-100 flex items-start justify-between gap-3 bg-gray-50/80">
+      <div className="bg-white dark:bg-gray-900 rounded-2xl max-w-3xl w-full max-h-[85vh] flex flex-col shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden animate-in zoom-in-95 duration-150">
+        <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-700 flex items-start justify-between gap-3 bg-gray-50/80 dark:bg-gray-800/60">
           <div className="space-y-1 min-w-0">
-            <h3 className="font-extrabold text-base text-gray-900 truncate">
+            <h3 className="font-extrabold text-base text-gray-900 dark:text-gray-100 truncate">
               {workoutName}
             </h3>
             <div className="flex items-center gap-2 flex-wrap">
@@ -353,7 +353,7 @@ function ExerciseDetailModal({
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-200/60 transition-colors shrink-0 cursor-pointer"
+            className="p-1.5 rounded-lg text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-700 transition-colors shrink-0 cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -361,12 +361,12 @@ function ExerciseDetailModal({
 
         <div className="p-5 flex-1">
           {exercises.length === 0 ? (
-            <p className="text-xs text-gray-400 text-center py-8">Sin ejercicios registrados</p>
+            <p className="text-xs text-gray-400 dark:text-gray-500 text-center py-8">Sin ejercicios registrados</p>
           ) : (
             <div className="overflow-x-auto max-h-[400px] overflow-y-auto pr-1">
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
-                  <tr className="bg-gray-50/80 border-b border-gray-200 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                  <tr className="bg-gray-50/80 dark:bg-gray-800/60 border-b border-gray-200 dark:border-gray-700 text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     <th className="py-2 px-3">#</th>
                     <th className="py-2 px-3">Ejercicio</th>
                     <th className="py-2 px-3 text-center">Series</th>
@@ -374,17 +374,17 @@ function ExerciseDetailModal({
                     <th className="py-2 px-3">Detalle de Series</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
                   {exercises.map((ex, idx) => (
-                    <tr key={idx} className="hover:bg-gray-50/50 transition-colors">
-                      <td className="py-2.5 px-3 text-gray-400 font-medium">{idx + 1}</td>
-                      <td className="py-2.5 px-3 font-bold text-gray-900">{ex.name}</td>
-                      <td className="py-2.5 px-3 text-center font-semibold text-gray-700 tabular-nums">
+                    <tr key={idx} className="hover:bg-gray-50/50 dark:hover:bg-gray-800 transition-colors">
+                      <td className="py-2.5 px-3 text-gray-400 dark:text-gray-500 font-medium">{idx + 1}</td>
+                      <td className="py-2.5 px-3 font-bold text-gray-900 dark:text-gray-100">{ex.name}</td>
+                      <td className="py-2.5 px-3 text-center font-semibold text-gray-700 dark:text-gray-300 tabular-nums">
                         {ex.setsCount}
                       </td>
                       <td className="py-2.5 px-3 text-center">
                         {ex.maxWeight > 0 ? (
-                          <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded-md border border-blue-100 font-bold tabular-nums">
+                          <span className="bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-md border border-blue-100 dark:border-blue-800 font-bold tabular-nums">
                             {ex.maxWeight}kg
                           </span>
                         ) : (
@@ -397,16 +397,16 @@ function ExerciseDetailModal({
                             {ex.sets.map((s, sIdx) => (
                               <span
                                 key={sIdx}
-                                className="px-2 py-0.5 text-[11px] bg-white border border-gray-200 rounded-md font-mono text-gray-800 shadow-2xs"
+                                className="px-2 py-0.5 text-[11px] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md font-mono text-gray-800 dark:text-gray-200 shadow-2xs"
                               >
-                                <strong className="text-gray-400 mr-1 text-[10px]">S{s.setNumber}:</strong>
-                                <span className="font-bold text-blue-700">{s.repCount ?? 0} reps</span>
-                                {s.weight ? <span className="text-gray-600"> @ {s.weight}kg</span> : ''}
+                                <strong className="text-gray-400 dark:text-gray-500 mr-1 text-[10px]">S{s.setNumber}:</strong>
+                                <span className="font-bold text-blue-700 dark:text-blue-400">{s.repCount ?? 0} reps</span>
+                                {s.weight ? <span className="text-gray-600 dark:text-gray-400"> @ {s.weight}kg</span> : ''}
                               </span>
                             ))}
                           </div>
                         ) : (
-                          <span className="text-[11px] text-blue-700 font-mono font-medium">
+                          <span className="text-[11px] text-blue-700 dark:text-blue-400 font-mono font-medium">
                             {ex.repsSummary || `${ex.setsCount} series`}
                           </span>
                         )}
@@ -419,7 +419,7 @@ function ExerciseDetailModal({
           )}
         </div>
 
-        <div className="px-5 py-3 border-t border-gray-100 bg-gray-50/80 flex items-center justify-end">
+        <div className="px-5 py-3 border-t border-gray-100 dark:border-gray-700 bg-gray-50/80 dark:bg-gray-800/60 flex items-center justify-end">
           <Button
             variant="outline"
             size="sm"
@@ -653,21 +653,21 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
   return (
     <div className="space-y-5 pb-20">
       {/* ─── NAVEGACIÓN POR PESTAÑAS (TABS) ─── */}
-      <div className="flex items-center gap-2 border-b border-gray-200 pb-2">
+      <div className="flex items-center gap-2 border-b border-gray-200 dark:border-gray-700 pb-2">
         <button
           type="button"
           onClick={() => setActiveTab('history')}
           className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all cursor-pointer ${
             activeTab === 'history'
               ? 'bg-blue-600 text-white shadow-xs'
-              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800'
           }`}
         >
           <History className="w-4 h-4" />
           <span>Historial de Sesiones</span>
           <span
             className={`text-xs px-2 py-0.5 rounded-full font-bold ${
-              activeTab === 'history' ? 'bg-blue-700/70 text-white' : 'bg-gray-200 text-gray-700'
+              activeTab === 'history' ? 'bg-blue-700/70 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
             }`}
           >
             {workouts.length}
@@ -680,14 +680,14 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
           className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all cursor-pointer ${
             activeTab === 'templates'
               ? 'bg-blue-600 text-white shadow-xs'
-              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800'
           }`}
         >
           <Bookmark className="w-4 h-4" />
           <span>Mis Plantillas</span>
           <span
             className={`text-xs px-2 py-0.5 rounded-full font-bold ${
-              activeTab === 'templates' ? 'bg-blue-700/70 text-white' : 'bg-gray-200 text-gray-700'
+              activeTab === 'templates' ? 'bg-blue-700/70 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
             }`}
           >
             {templates.length}
@@ -701,22 +701,22 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
       {activeTab === 'history' && (
         <div className="space-y-4">
           {/* Top Toolbar */}
-          <div className="bg-white p-3 sm:p-4 rounded-2xl border border-gray-200/80 shadow-xs space-y-3">
+          <div className="bg-white dark:bg-gray-900 p-3 sm:p-4 rounded-2xl border border-gray-200/80 dark:border-gray-700 shadow-xs space-y-3">
             <div className="flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-center justify-between">
               {/* Search */}
               <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500 pointer-events-none" />
                 <input
                   type="text"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Buscar en historial por nombre o ejercicio…"
-                  className="w-full pl-9 pr-8 py-2 text-sm border border-gray-200 rounded-xl bg-gray-50/50 hover:bg-white focus:bg-white shadow-2xs focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all"
+                  className="w-full pl-9 pr-8 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50/50 dark:bg-gray-800 hover:bg-white dark:hover:bg-gray-800 focus:bg-white dark:focus:bg-gray-800 dark:text-gray-100 shadow-2xs focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all"
                 />
                 {search && (
                   <button
                     onClick={() => setSearch('')}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-0.5 rounded-full cursor-pointer"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 p-0.5 rounded-full cursor-pointer"
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
@@ -726,11 +726,11 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
               <div className="flex items-center gap-2">
                 {/* Filter by Type */}
                 <div className="relative shrink-0 flex-1 sm:flex-initial">
-                  <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                  <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 dark:text-gray-500 pointer-events-none" />
                   <select
                     value={filterType}
                     onChange={(e) => setFilterType(e.target.value)}
-                    className="w-full sm:w-auto appearance-none pl-8 pr-8 py-2 text-sm border border-gray-200 rounded-xl bg-gray-50/50 hover:bg-white focus:bg-white shadow-2xs focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all cursor-pointer font-medium text-gray-700"
+                    className="w-full sm:w-auto appearance-none pl-8 pr-8 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50/50 dark:bg-gray-800 hover:bg-white dark:hover:bg-gray-800 focus:bg-white dark:focus:bg-gray-800 shadow-2xs focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all cursor-pointer font-medium text-gray-700 dark:text-gray-300"
                   >
                     <option value="all">Todos los tipos</option>
                     {workoutTypes.map((t) => (
@@ -739,18 +739,18 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                       </option>
                     ))}
                   </select>
-                  <ChevronRight className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 rotate-90 pointer-events-none" />
+                  <ChevronRight className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 dark:text-gray-500 rotate-90 pointer-events-none" />
                 </div>
 
                 {/* View Switcher (Table vs Cards) */}
-                <div className="flex items-center bg-gray-100 p-1 rounded-xl border border-gray-200 shrink-0">
+                <div className="flex items-center bg-gray-100 dark:bg-gray-800 p-1 rounded-xl border border-gray-200 dark:border-gray-700 shrink-0">
                   <button
                     type="button"
                     onClick={() => handleViewChange('table')}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                       viewMode === 'table'
-                        ? 'bg-white text-gray-900 shadow-xs'
-                        : 'text-gray-500 hover:text-gray-900'
+                        ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-xs'
+                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
                     }`}
                     title="Vista Tabla compacta"
                   >
@@ -762,8 +762,8 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                     onClick={() => handleViewChange('cards')}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                       viewMode === 'cards'
-                        ? 'bg-white text-gray-900 shadow-xs'
-                        : 'text-gray-500 hover:text-gray-900'
+                        ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-xs'
+                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
                     }`}
                     title="Vista Tarjetas"
                   >
@@ -775,10 +775,10 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
             </div>
 
             {/* Filter Summary & Count */}
-            <div className="flex items-center justify-between text-xs text-gray-500 pt-1 border-t border-gray-100">
+            <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 pt-1 border-t border-gray-100 dark:border-gray-800">
               <div className="flex items-center gap-1.5">
                 <span>
-                  Total: <strong className="text-gray-800 font-bold">{filteredWorkouts.length}</strong> sesiones
+                  Total: <strong className="text-gray-800 dark:text-gray-200 font-bold">{filteredWorkouts.length}</strong> sesiones
                 </span>
                 {(search || filterType !== 'all') && (
                   <>
@@ -789,8 +789,8 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
               </div>
               {filteredWorkouts.length > 0 && (
                 <div className="text-gray-500">
-                  Página <strong className="text-gray-800">{safeCurrentPage}</strong> de{' '}
-                  <strong className="text-gray-800">{totalPages}</strong>
+                  Página <strong className="text-gray-800 dark:text-gray-200">{safeCurrentPage}</strong> de{' '}
+                  <strong className="text-gray-800 dark:text-gray-200">{totalPages}</strong>
                 </div>
               )}
             </div>
@@ -798,14 +798,14 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
 
           {/* Empty State */}
           {filteredWorkouts.length === 0 && (
-            <Card className="border-dashed bg-gray-50/70 border-gray-200">
+            <Card className="border-dashed bg-gray-50/70 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700">
               <CardContent className="py-14 text-center space-y-4">
-                <div className="w-14 h-14 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto text-gray-400">
+                <div className="w-14 h-14 bg-gray-100 dark:bg-gray-800 rounded-2xl flex items-center justify-center mx-auto text-gray-400 dark:text-gray-500">
                   <Dumbbell className="w-7 h-7" />
                 </div>
                 <div className="max-w-sm mx-auto">
-                  <h3 className="text-base font-bold text-gray-900">No hay sesiones en el historial</h3>
-                  <p className="text-xs text-gray-500 mt-1">
+                  <h3 className="text-base font-bold text-gray-900 dark:text-gray-100">No hay sesiones en el historial</h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                     {workouts.length === 0
                       ? 'Aún no has registrado ningún entrenamiento. Empieza hoy registrando tu primera sesión.'
                       : 'No se encontraron sesiones con los filtros aplicados.'}
@@ -837,11 +837,11 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
 
           {/* 1. Vista Tabla */}
           {filteredWorkouts.length > 0 && viewMode === 'table' && (
-            <div className="bg-white rounded-2xl border border-gray-200/90 shadow-2xs overflow-hidden">
+            <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200/90 dark:border-gray-700 shadow-2xs overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse text-xs">
                   <thead>
-                    <tr className="bg-gray-50/80 border-b border-gray-200 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                    <tr className="bg-gray-50/80 dark:bg-gray-800/60 border-b border-gray-200 dark:border-gray-700 text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                       <th className="py-3 px-4">Fecha & Hora</th>
                       <th className="py-3 px-4">Entrenamiento</th>
                       <th className="py-3 px-3">Tipo</th>
@@ -852,7 +852,7 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                       <th className="py-3 px-4 text-right">Acciones</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100">
+                  <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
                     {paginatedWorkouts.map((workout) => {
                       const style = getTypeStyle(workout.typeName);
                       const TypeIcon = style.icon;
@@ -861,20 +861,20 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                       return (
                         <tr
                           key={`wkt-${workout.id}`}
-                          className="hover:bg-blue-50/40 transition-colors group cursor-pointer"
+                          className="hover:bg-blue-50/40 dark:hover:bg-blue-900/10 transition-colors group cursor-pointer"
                           onClick={() => setSelectedWorkout(workout)}
                         >
                           {/* Fecha / Hora */}
                           <td className="py-3 px-4 whitespace-nowrap">
-                            <div className="font-semibold text-gray-900">
+                            <div className="font-semibold text-gray-900 dark:text-gray-100">
                               {dateObj.toLocaleDateString('es-ES', {
                                 day: 'numeric',
                                 month: 'short',
                                 year: 'numeric',
                               })}
                             </div>
-                            <div className="text-[11px] text-gray-400 flex items-center gap-1 mt-0.5">
-                              <Clock className="w-3 h-3 text-gray-300" />
+                            <div className="text-[11px] text-gray-400 dark:text-gray-500 flex items-center gap-1 mt-0.5">
+                              <Clock className="w-3 h-3 text-gray-300 dark:text-gray-600" />
                               {dateObj.toLocaleTimeString('es-ES', {
                                 hour: '2-digit',
                                 minute: '2-digit',
@@ -883,7 +883,7 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                           </td>
 
                           {/* Nombre */}
-                          <td className="py-3 px-4 font-bold text-gray-900 max-w-[200px]">
+                          <td className="py-3 px-4 font-bold text-gray-900 dark:text-gray-100 max-w-[200px]">
                             <div className="truncate flex items-center gap-1.5" title={workout.name}>
                               <span>{workout.name}</span>
                               {workout.notes && (
@@ -905,9 +905,9 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                           </td>
 
                           {/* Duración */}
-                          <td className="py-3 px-3 text-center whitespace-nowrap text-gray-700 font-semibold tabular-nums">
+                          <td className="py-3 px-3 text-center whitespace-nowrap text-gray-700 dark:text-gray-300 font-semibold tabular-nums">
                             {workout.totalTimeSeconds ? (
-                              <span className="bg-gray-50 px-2 py-0.5 rounded-md border border-gray-100">
+                              <span className="bg-gray-50 dark:bg-gray-800/50 px-2 py-0.5 rounded-md border border-gray-100 dark:border-gray-800">
                                 {Math.round(workout.totalTimeSeconds / 60)} min
                               </span>
                             ) : (
@@ -916,25 +916,25 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                           </td>
 
                           {/* Volumen */}
-                          <td className="py-3 px-3 text-center whitespace-nowrap font-bold text-gray-800 tabular-nums">
+                          <td className="py-3 px-3 text-center whitespace-nowrap font-bold text-gray-800 dark:text-gray-200 tabular-nums">
                             {workout.totalVolume > 0 ? (
-                              <span className="text-blue-700 bg-blue-50/70 px-2 py-0.5 rounded-md border border-blue-100">
+                              <span className="text-blue-700 dark:text-blue-300 bg-blue-50/70 dark:bg-blue-900/20 px-2 py-0.5 rounded-md border border-blue-100 dark:border-blue-800">
                                 {(workout.totalVolume / 1000).toFixed(1)}k kg
                               </span>
                             ) : (
-                              <span className="text-gray-400">0 kg</span>
+                              <span className="text-gray-400 dark:text-gray-500">0 kg</span>
                             )}
                           </td>
 
                           {/* Series */}
-                          <td className="py-3 px-3 text-center whitespace-nowrap font-bold text-gray-700 tabular-nums">
+                          <td className="py-3 px-3 text-center whitespace-nowrap font-bold text-gray-700 dark:text-gray-300 tabular-nums">
                             {workout.totalSets}
                           </td>
 
                           {/* Ejercicios resumidos */}
                           <td className="py-3 px-4 hidden md:table-cell max-w-[320px]">
                             <div
-                              className="flex flex-wrap gap-1 cursor-pointer hover:bg-blue-50/50 rounded-lg p-1 -m-1 transition-colors"
+                              className="flex flex-wrap gap-1 cursor-pointer hover:bg-blue-50/50 dark:hover:bg-blue-900/10 rounded-lg p-1 -m-1 transition-colors"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setExerciseDetail({
@@ -949,21 +949,21 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                               {workout.exercisesSummary.slice(0, 3).map((ex, idx) => (
                                 <span
                                   key={idx}
-                                  className="inline-flex items-center gap-1 bg-gray-100 text-gray-800 text-[10px] px-2 py-0.5 rounded-md border border-gray-200/70 truncate max-w-[220px]"
+                                  className="inline-flex items-center gap-1 bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 text-[10px] px-2 py-0.5 rounded-md border border-gray-200/70 dark:border-gray-700 truncate max-w-[220px]"
                                   title={`${ex.name}: ${ex.repsSummary || `${ex.setsCount} series`}`}
                                 >
-                                  <strong className="font-semibold text-gray-900 truncate">{ex.name}</strong>
-                                  <span className="text-blue-700 font-mono shrink-0">
+                                  <strong className="font-semibold text-gray-900 dark:text-gray-100 truncate">{ex.name}</strong>
+                                  <span className="text-blue-700 dark:text-blue-400 font-mono shrink-0">
                                     ({ex.repsSummary || `${ex.setsCount}s`})
                                   </span>
                                 </span>
                               ))}
                               {workout.exercisesSummary.length > 3 && (
-                                <span className="text-[10px] text-gray-400 font-semibold self-center">
+                                <span className="text-[10px] text-gray-400 dark:text-gray-500 font-semibold self-center">
                                   +{workout.exercisesSummary.length - 3} más
                                 </span>
                               )}
-                              <ChevronRight className="w-3 h-3 text-gray-400 shrink-0 self-center ml-0.5" />
+                              <ChevronRight className="w-3 h-3 text-gray-400 dark:text-gray-500 shrink-0 self-center ml-0.5" />
                             </div>
                           </td>
 
@@ -1042,13 +1042,13 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                     {/* Month header */}
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <h2 className="text-sm font-bold text-gray-700 capitalize">{monthLabel}</h2>
-                        <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full font-medium">
+                        <h2 className="text-sm font-bold text-gray-700 dark:text-gray-300 capitalize">{monthLabel}</h2>
+                        <span className="text-xs text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-full font-medium">
                           {monthWorkouts.length} sesión{monthWorkouts.length !== 1 ? 'es' : ''}
                         </span>
                       </div>
                       {monthVolume > 0 && (
-                        <span className="text-xs text-gray-400 font-medium">
+                        <span className="text-xs text-gray-400 dark:text-gray-500 font-medium">
                           {(monthVolume / 1000).toFixed(1)}k kg en esta página
                         </span>
                       )}
@@ -1063,7 +1063,7 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                         return (
                           <Card
                             key={`wkt-card-${workout.id}`}
-                            className="overflow-hidden border-gray-200 hover:border-blue-300 hover:shadow-md transition-all flex flex-col justify-between"
+                            className="overflow-hidden border-gray-200 dark:border-gray-700 hover:border-blue-300 hover:shadow-md transition-all flex flex-col justify-between"
                           >
                             <div>
                               <div className={`h-1 w-full ${style.bar}`} />
@@ -1073,7 +1073,7 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                                 <div className="flex items-start gap-3">
                                   <div className="min-w-0 flex-1">
                                     <div className="flex items-center gap-2 flex-wrap">
-                                      <h3 className="font-bold text-gray-900 text-sm truncate">
+                                      <h3 className="font-bold text-gray-900 dark:text-gray-100 text-sm truncate">
                                         {workout.name}
                                       </h3>
                                       <span
@@ -1083,7 +1083,7 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                                         {workout.typeName}
                                       </span>
                                     </div>
-                                    <div className="flex items-center gap-2 text-xs text-gray-500 mt-1">
+                                    <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mt-1">
                                       <span className="flex items-center gap-1">
                                         <Calendar className="w-3 h-3" />
                                         {new Date(workout.startTime).toLocaleDateString('es-ES', {
@@ -1106,31 +1106,31 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
 
                                 {/* KPIs */}
                                 <div className="grid grid-cols-3 gap-2 text-center">
-                                  <div className="bg-gray-50 rounded-lg p-2 border border-gray-100">
-                                    <p className="text-[9px] uppercase font-bold text-gray-400 tracking-wider">
+                                  <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-2 border border-gray-100 dark:border-gray-800">
+                                    <p className="text-[9px] uppercase font-bold text-gray-400 dark:text-gray-500 tracking-wider">
                                       Duración
                                     </p>
-                                    <p className="text-xs font-black text-gray-900 tabular-nums mt-0.5">
+                                    <p className="text-xs font-black text-gray-900 dark:text-gray-100 tabular-nums mt-0.5">
                                       {workout.totalTimeSeconds
                                         ? `${Math.round(workout.totalTimeSeconds / 60)} min`
                                         : '—'}
                                     </p>
                                   </div>
-                                  <div className="bg-gray-50 rounded-lg p-2 border border-gray-100">
-                                    <p className="text-[9px] uppercase font-bold text-gray-400 tracking-wider">
+                                  <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-2 border border-gray-100 dark:border-gray-800">
+                                    <p className="text-[9px] uppercase font-bold text-gray-400 dark:text-gray-500 tracking-wider">
                                       Volumen
                                     </p>
-                                    <p className="text-xs font-black text-gray-900 tabular-nums mt-0.5">
+                                    <p className="text-xs font-black text-gray-900 dark:text-gray-100 tabular-nums mt-0.5">
                                       {workout.totalVolume > 0
                                         ? `${(workout.totalVolume / 1000).toFixed(1)}k kg`
                                         : '0 kg'}
                                     </p>
                                   </div>
-                                  <div className="bg-gray-50 rounded-lg p-2 border border-gray-100">
-                                    <p className="text-[9px] uppercase font-bold text-gray-400 tracking-wider">
+                                  <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-2 border border-gray-100 dark:border-gray-800">
+                                    <p className="text-[9px] uppercase font-bold text-gray-400 dark:text-gray-500 tracking-wider">
                                       Series
                                     </p>
-                                    <p className="text-xs font-black text-gray-900 tabular-nums mt-0.5">
+                                    <p className="text-xs font-black text-gray-900 dark:text-gray-100 tabular-nums mt-0.5">
                                       {workout.totalSets}
                                     </p>
                                   </div>
@@ -1141,18 +1141,18 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                                   {workout.exercisesSummary.slice(0, 3).map((ex, idx) => (
                                     <div
                                       key={idx}
-                                      className="flex items-center justify-between text-xs text-gray-700"
+                                      className="flex items-center justify-between text-xs text-gray-700 dark:text-gray-300"
                                     >
                                       <span className="truncate pr-2 font-medium">
                                         {idx + 1}. {ex.name}
                                       </span>
-                                      <span className="font-semibold tabular-nums shrink-0 font-mono text-[11px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded border border-blue-100/60">
+                                      <span className="font-semibold tabular-nums shrink-0 font-mono text-[11px] bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded border border-blue-100/60 dark:border-blue-800">
                                         {ex.repsSummary || `${ex.setsCount} ser. ${ex.maxWeight > 0 ? `· ${ex.maxWeight}kg` : ''}`}
                                       </span>
                                     </div>
                                   ))}
                                   {workout.exercisesSummary.length > 3 && (
-                                    <p className="text-[11px] text-gray-400 italic text-center pt-0.5">
+                                    <p className="text-[11px] text-gray-400 dark:text-gray-500 italic text-center pt-0.5">
                                       +{workout.exercisesSummary.length - 3} ejercicios más
                                     </p>
                                   )}
@@ -1162,11 +1162,11 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
 
                             {/* Actions */}
                             <div className="p-4 pt-0">
-                              <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
+                              <div className="flex items-center gap-2 pt-2 border-t border-gray-100 dark:border-gray-800">
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  className="text-xs gap-1.5 hover:bg-gray-100 text-gray-600 flex-1 cursor-pointer"
+                                  className="text-xs gap-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400 flex-1 cursor-pointer"
                                   onClick={() => setSelectedWorkout(workout)}
                                 >
                                   <Layers className="w-3.5 h-3.5" />
@@ -1220,15 +1220,15 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
 
           {/* Paginación */}
           {filteredWorkouts.length > 0 && (
-            <div className="bg-white p-3 sm:p-4 rounded-2xl border border-gray-200/80 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3">
-              <div className="flex items-center gap-3 text-xs text-gray-600">
+            <div className="bg-white dark:bg-gray-900 p-3 sm:p-4 rounded-2xl border border-gray-200/80 dark:border-gray-700 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="flex items-center gap-3 text-xs text-gray-600 dark:text-gray-400">
                 <span>
-                  Mostrando <strong className="text-gray-900">{startIndex + 1}</strong> –{' '}
-                  <strong className="text-gray-900">{endIndex}</strong> de{' '}
-                  <strong className="text-gray-900">{totalItems}</strong>
+                  Mostrando <strong className="text-gray-900 dark:text-gray-100">{startIndex + 1}</strong> –{' '}
+                  <strong className="text-gray-900 dark:text-gray-100">{endIndex}</strong> de{' '}
+                  <strong className="text-gray-900 dark:text-gray-100">{totalItems}</strong>
                 </span>
-                <div className="flex items-center gap-1 border-l border-gray-200 pl-3">
-                  <span className="text-gray-400">Ver:</span>
+                <div className="flex items-center gap-1 border-l border-gray-200 dark:border-gray-700 pl-3">
+                  <span className="text-gray-400 dark:text-gray-500">Ver:</span>
                   {[10, 20, 50].map((sz) => (
                     <button
                       key={sz}
@@ -1236,7 +1236,7 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                       className={`px-2 py-0.5 rounded-md font-bold text-xs transition-colors cursor-pointer ${
                         pageSize === sz
                           ? 'bg-blue-600 text-white shadow-2xs'
-                          : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
+                          : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100'
                       }`}
                     >
                       {sz}
@@ -1271,7 +1271,7 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                   {paginationPages.map((page, idx) => {
                     if (page === '...') {
                       return (
-                        <span key={`ellipsis-${idx}`} className="px-1 text-xs text-gray-400 font-bold">
+                        <span key={`ellipsis-${idx}`} className="px-1 text-xs text-gray-400 dark:text-gray-500 font-bold">
                           …
                         </span>
                       );
@@ -1285,7 +1285,7 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                         className={`h-8 min-w-[32px] px-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                           isCurrent
                             ? 'bg-blue-600 text-white shadow-xs'
-                            : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                            : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100'
                         }`}
                       >
                         {pageNum}
@@ -1326,22 +1326,22 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
       {activeTab === 'templates' && (
         <div className="space-y-4">
           {/* Toolbar de Plantillas */}
-          <div className="bg-white p-3 sm:p-4 rounded-2xl border border-gray-200/80 shadow-xs space-y-3">
+          <div className="bg-white dark:bg-gray-900 p-3 sm:p-4 rounded-2xl border border-gray-200/80 dark:border-gray-700 shadow-xs space-y-3">
             <div className="flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-center justify-between">
               {/* Search */}
               <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500 pointer-events-none" />
                 <input
                   type="text"
                   value={templateSearch}
                   onChange={(e) => setTemplateSearch(e.target.value)}
                   placeholder="Buscar en mis plantillas por nombre o ejercicio..."
-                  className="w-full pl-9 pr-8 py-2 text-sm border border-gray-200 rounded-xl bg-gray-50/50 hover:bg-white focus:bg-white shadow-2xs focus:outline-none focus:ring-2 focus:ring-purple-500/30 focus:border-purple-500 transition-all"
+                  className="w-full pl-9 pr-8 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50/50 dark:bg-gray-800 hover:bg-white dark:hover:bg-gray-800 focus:bg-white dark:focus:bg-gray-800 dark:text-gray-100 shadow-2xs focus:outline-none focus:ring-2 focus:ring-purple-500/30 focus:border-purple-500 transition-all"
                 />
                 {templateSearch && (
                   <button
                     onClick={() => setTemplateSearch('')}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-0.5 rounded-full cursor-pointer"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 p-0.5 rounded-full cursor-pointer"
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
@@ -1350,14 +1350,14 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
 
               <div className="flex items-center gap-2">
                 {/* View Switcher (Table vs Cards) para Plantillas */}
-                <div className="flex items-center bg-gray-100 p-1 rounded-xl border border-gray-200 shrink-0">
+                <div className="flex items-center bg-gray-100 dark:bg-gray-800 p-1 rounded-xl border border-gray-200 dark:border-gray-700 shrink-0">
                   <button
                     type="button"
                     onClick={() => handleTemplateViewChange('table')}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                       templateViewMode === 'table'
-                        ? 'bg-white text-gray-900 shadow-xs'
-                        : 'text-gray-500 hover:text-gray-900'
+                        ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-xs'
+                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
                     }`}
                     title="Vista Tabla de plantillas"
                   >
@@ -1369,8 +1369,8 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                     onClick={() => handleTemplateViewChange('cards')}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                       templateViewMode === 'cards'
-                        ? 'bg-white text-gray-900 shadow-xs'
-                        : 'text-gray-500 hover:text-gray-900'
+                        ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-xs'
+                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
                     }`}
                     title="Vista Tarjetas de plantillas"
                   >
@@ -1389,10 +1389,10 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
             </div>
 
             {/* Template Count */}
-            <div className="flex items-center justify-between text-xs text-gray-500 pt-1 border-t border-gray-100">
+            <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 pt-1 border-t border-gray-100 dark:border-gray-800">
               <div className="flex items-center gap-1.5">
                 <span>
-                  Total: <strong className="text-gray-800 font-bold">{filteredTemplates.length}</strong> plantillas
+                  Total: <strong className="text-gray-800 dark:text-gray-200 font-bold">{filteredTemplates.length}</strong> plantillas
                 </span>
                 {templateSearch && (
                   <>
@@ -1406,14 +1406,14 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
 
           {/* Empty state de plantillas */}
           {filteredTemplates.length === 0 && (
-            <Card className="border-dashed bg-gray-50/70 border-gray-200">
+            <Card className="border-dashed bg-gray-50/70 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700">
               <CardContent className="py-14 text-center space-y-4">
-                <div className="w-14 h-14 bg-purple-50 rounded-2xl flex items-center justify-center mx-auto text-purple-600">
+                <div className="w-14 h-14 bg-purple-50 dark:bg-purple-900/20 rounded-2xl flex items-center justify-center mx-auto text-purple-600 dark:text-purple-300">
                   <Bookmark className="w-7 h-7" />
                 </div>
                 <div className="max-w-sm mx-auto">
-                  <h3 className="text-base font-bold text-gray-900">No tienes plantillas guardadas</h3>
-                  <p className="text-xs text-gray-500 mt-1">
+                  <h3 className="text-base font-bold text-gray-900 dark:text-gray-100">No tienes plantillas guardadas</h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                     {templates.length === 0
                       ? 'Crea plantillas personalizadas de tus rutinas habituales para iniciarlas rápidamente cuando quieras.'
                       : 'No se encontraron plantillas con ese nombre.'}
@@ -1431,11 +1431,11 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
 
           {/* 1. Vista Tabla de Plantillas */}
           {filteredTemplates.length > 0 && templateViewMode === 'table' && (
-            <div className="bg-white rounded-2xl border border-gray-200/90 shadow-2xs overflow-hidden">
+            <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200/90 dark:border-gray-700 shadow-2xs overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse text-xs">
                   <thead>
-                    <tr className="bg-gray-50/80 border-b border-gray-200 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                    <tr className="bg-gray-50/80 dark:bg-gray-800/60 border-b border-gray-200 dark:border-gray-700 text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                       <th className="py-3 px-4">Plantilla</th>
                       <th className="py-3 px-3">Tipo</th>
                       <th className="py-3 px-3 text-center">Ejercicios</th>
@@ -1444,7 +1444,7 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                       <th className="py-3 px-4 text-right">Acciones</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100">
+                  <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
                     {filteredTemplates.map((template) => {
                       const style = getTypeStyle(template.typeName);
                       const TypeIcon = style.icon;
@@ -1452,15 +1452,15 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                       return (
                         <tr
                           key={`tpl-row-${template.id}`}
-                          className="hover:bg-purple-50/30 transition-colors group"
+                          className="hover:bg-purple-50/30 dark:hover:bg-purple-900/10 transition-colors group"
                         >
                           {/* Nombre y Descripción */}
-                          <td className="py-3.5 px-4 font-bold text-gray-900 max-w-[220px]">
-                            <div className="truncate text-sm font-extrabold text-gray-900" title={template.name}>
+                          <td className="py-3.5 px-4 font-bold text-gray-900 dark:text-gray-100 max-w-[220px]">
+                            <div className="truncate text-sm font-extrabold text-gray-900 dark:text-gray-100" title={template.name}>
                               {template.name}
                             </div>
                             {template.description && (
-                              <p className="text-[11px] text-gray-500 font-normal italic truncate mt-0.5" title={template.description}>
+                              <p className="text-[11px] text-gray-500 dark:text-gray-400 font-normal italic truncate mt-0.5" title={template.description}>
                                 {template.description}
                               </p>
                             )}
@@ -1477,13 +1477,13 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                           </td>
 
                           {/* Conteo de Ejercicios */}
-                          <td className="py-3.5 px-3 text-center whitespace-nowrap font-bold text-gray-800 tabular-nums">
+                          <td className="py-3.5 px-3 text-center whitespace-nowrap font-bold text-gray-800 dark:text-gray-200 tabular-nums">
                             {template.exercisesCount}
                           </td>
 
                           {/* Conteo de Series */}
-                          <td className="py-3.5 px-3 text-center whitespace-nowrap font-semibold text-gray-600 tabular-nums">
-                            <span className="bg-purple-50 text-purple-800 border border-purple-100 px-2 py-0.5 rounded-md">
+                          <td className="py-3.5 px-3 text-center whitespace-nowrap font-semibold text-gray-600 dark:text-gray-400 tabular-nums">
+                            <span className="bg-purple-50 dark:bg-purple-900/20 text-purple-800 dark:text-purple-300 border border-purple-100 dark:border-purple-800 px-2 py-0.5 rounded-md">
                               {template.totalSetsCount || template.exercisesCount} series
                             </span>
                           </td>
@@ -1491,7 +1491,7 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                           {/* Detalle de ejercicios */}
                           <td className="py-3.5 px-4 hidden md:table-cell max-w-[340px]">
                             <div
-                              className="flex flex-wrap gap-1.5 cursor-pointer hover:bg-purple-50/30 rounded-lg p-1 -m-1 transition-colors"
+                              className="flex flex-wrap gap-1.5 cursor-pointer hover:bg-purple-50/30 dark:hover:bg-purple-900/10 rounded-lg p-1 -m-1 transition-colors"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setExerciseDetail({
@@ -1511,21 +1511,21 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                               {template.exercises.slice(0, 5).map((ex, idx) => (
                                 <span
                                   key={idx}
-                                  className="inline-flex items-center gap-1 bg-gray-50 text-gray-800 text-[11px] px-2 py-0.5 rounded-lg border border-gray-200/70"
+                                  className="inline-flex items-center gap-1 bg-gray-50 dark:bg-gray-800/50 text-gray-800 dark:text-gray-200 text-[11px] px-2 py-0.5 rounded-lg border border-gray-200/70 dark:border-gray-700"
                                   title={`${ex.name}: ${ex.formattedSummary || (ex.targetReps ? `${ex.targetReps} reps` : 'Libre')}`}
                                 >
-                                  <strong className="font-semibold text-gray-900">{ex.name}</strong>
-                                  <span className="text-purple-700 font-mono text-[10px]">
+                                  <strong className="font-semibold text-gray-900 dark:text-gray-100">{ex.name}</strong>
+                                  <span className="text-purple-700 dark:text-purple-300 font-mono text-[10px]">
                                     ({ex.formattedSummary || (ex.targetReps ? `${ex.targetReps} reps` : 'Libre')})
                                   </span>
                                 </span>
                               ))}
                               {template.exercises.length > 5 && (
-                                <span className="text-[10px] text-purple-400 font-semibold self-center">
+                                <span className="text-[10px] text-purple-400 dark:text-purple-300 font-semibold self-center">
                                   +{template.exercises.length - 5} más
                                 </span>
                               )}
-                              <ChevronRight className="w-3 h-3 text-gray-400 shrink-0 self-center ml-0.5" />
+                              <ChevronRight className="w-3 h-3 text-gray-400 dark:text-gray-500 shrink-0 self-center ml-0.5" />
                             </div>
                           </td>
 
@@ -1577,7 +1577,7 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                 return (
                   <Card
                     key={`tpl-card-${template.id}`}
-                    className="border-gray-200/90 shadow-2xs hover:shadow-md hover:border-indigo-300 transition-all flex flex-col justify-between overflow-hidden"
+                    className="border-gray-200/90 dark:border-gray-700 shadow-2xs hover:shadow-md hover:border-indigo-300 transition-all flex flex-col justify-between overflow-hidden"
                   >
                     <div>
                       <div className="h-1 bg-gradient-to-r from-indigo-500 to-blue-500" />
@@ -1591,12 +1591,12 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                                 <TypeIcon className="w-2.5 h-2.5" />
                                 {template.typeName}
                               </span>
-                              <span className="text-[10px] text-gray-400 font-medium">
+                              <span className="text-[10px] text-gray-400 dark:text-gray-500 font-medium">
                                 {template.exercisesCount} ejercicio{template.exercisesCount !== 1 ? 's' : ''}
                                 {template.totalSetsCount ? ` · ${template.totalSetsCount} series` : ''}
                               </span>
                             </div>
-                            <CardTitle className="text-base font-bold text-gray-900 truncate">
+                            <CardTitle className="text-base font-bold text-gray-900 dark:text-gray-100 truncate">
                               {template.name}
                             </CardTitle>
                           </div>
@@ -1618,7 +1618,7 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                         </div>
 
                         {template.description && (
-                          <CardDescription className="text-xs text-gray-500 italic line-clamp-2 mt-1">
+                          <CardDescription className="text-xs text-gray-500 dark:text-gray-400 italic line-clamp-2 mt-1">
                             {template.description}
                           </CardDescription>
                         )}
@@ -1626,16 +1626,16 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
 
                       <CardContent className="p-4 pt-0 space-y-2">
                         {/* Listado de ejercicios en la plantilla */}
-                        <div className="bg-gray-50/80 rounded-xl p-2.5 border border-gray-100 space-y-1.5 max-h-48 overflow-y-auto">
+                        <div className="bg-gray-50/80 dark:bg-gray-800/50 rounded-xl p-2.5 border border-gray-100 dark:border-gray-800 space-y-1.5 max-h-48 overflow-y-auto">
                           {template.exercises.map((ex, idx) => (
                             <div
                               key={idx}
-                              className="flex items-center justify-between text-xs text-gray-700"
+                              className="flex items-center justify-between text-xs text-gray-700 dark:text-gray-300"
                             >
                               <span className="truncate pr-2 font-medium">
                                 {idx + 1}. {ex.name}
                               </span>
-                              <span className="shrink-0 text-purple-700 font-mono text-[11px] font-semibold bg-purple-50 px-2 py-0.5 rounded-md border border-purple-100/60">
+                              <span className="shrink-0 text-purple-700 dark:text-purple-300 font-mono text-[11px] font-semibold bg-purple-50 dark:bg-purple-900/20 px-2 py-0.5 rounded-md border border-purple-100/60 dark:border-purple-800">
                                 {ex.formattedSummary || (ex.targetReps ? `${ex.targetReps} reps` : 'Libre')}
                               </span>
                             </div>
@@ -1685,16 +1685,16 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-150"
           onClick={(e) => e.target === e.currentTarget && !isConverting && setConvertingWorkout(null)}
         >
-          <div className="bg-white rounded-2xl max-w-md w-full p-5 shadow-2xl border border-gray-200 space-y-4 animate-in zoom-in-95 duration-150">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl max-w-md w-full p-5 shadow-2xl border border-gray-200 dark:border-gray-700 space-y-4 animate-in zoom-in-95 duration-150">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-purple-100 flex items-center justify-center text-purple-600 shrink-0">
+              <div className="w-10 h-10 rounded-2xl bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center text-purple-600 dark:text-purple-300 shrink-0">
                 <Bookmark className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-base font-bold text-gray-900">
+                <h3 className="text-base font-bold text-gray-900 dark:text-gray-100">
                   Convertir en Plantilla
                 </h3>
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-gray-500 dark:text-gray-400">
                   Guarda la estructura de este entrenamiento como rutina reutilizable
                 </p>
               </div>
@@ -1702,7 +1702,7 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
 
             <div className="space-y-3 pt-1">
               <div className="space-y-1">
-                <label className="text-xs font-bold text-gray-700">
+                <label className="text-xs font-bold text-gray-700 dark:text-gray-300">
                   Nombre de la plantilla <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -1710,12 +1710,12 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                   value={templateNameInput}
                   onChange={(e) => setTemplateNameInput(e.target.value)}
                   placeholder="Ej: Empuje Pesado, Full Body A..."
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl bg-gray-50/50 hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 font-medium text-gray-900"
+                  className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50/50 dark:bg-gray-800 hover:bg-white dark:hover:bg-gray-800 focus:bg-white dark:focus:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 font-medium text-gray-900 dark:text-gray-100 dark:placeholder-gray-500"
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-bold text-gray-700">
+                <label className="text-xs font-bold text-gray-700 dark:text-gray-300">
                   Descripción o notas (opcional)
                 </label>
                 <textarea
@@ -1723,12 +1723,12 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                   onChange={(e) => setTemplateDescInput(e.target.value)}
                   placeholder="Ej: Buena sesión de fuerza, descansos de 2 min..."
                   rows={2}
-                  className="w-full px-3 py-2 text-xs border border-gray-200 rounded-xl bg-gray-50/50 hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 text-gray-800"
+                  className="w-full px-3 py-2 text-xs border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50/50 dark:bg-gray-800 hover:bg-white dark:hover:bg-gray-800 focus:bg-white dark:focus:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 text-gray-800 dark:text-gray-200 dark:placeholder-gray-500"
                 />
               </div>
 
               {/* Resumen de ejercicios a incluir */}
-              <div className="bg-purple-50/70 border border-purple-100 rounded-xl p-3 space-y-1.5">
+              <div className="bg-purple-50/70 dark:bg-purple-900/20 border border-purple-100 dark:border-purple-800 rounded-xl p-3 space-y-1.5">
                 <div className="flex items-center justify-between text-xs">
                   <span className="font-bold text-purple-950">
                     {convertingWorkout.exercisesSummary.length} ejercicios incluidos
@@ -1750,7 +1750,7 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100 dark:border-gray-800">
               <Button
                 variant="outline"
                 size="sm"
@@ -1800,26 +1800,26 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-150"
           onClick={(e) => e.target === e.currentTarget && !isDeleting && setDeletingItem(null)}
         >
-          <div className="bg-white rounded-2xl max-w-sm w-full p-5 shadow-2xl border border-gray-200 space-y-4 animate-in zoom-in-95 duration-150">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl max-w-sm w-full p-5 shadow-2xl border border-gray-200 dark:border-gray-700 space-y-4 animate-in zoom-in-95 duration-150">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center text-red-600 shrink-0">
                 <Trash2 className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-sm font-bold text-gray-900">
+                <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">
                   {deletingItem.type === 'template' ? 'Eliminar Plantilla' : 'Eliminar Entrenamiento'}
                 </h3>
-                <p className="text-xs text-gray-500">Esta acción no se puede deshacer</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Esta acción no se puede deshacer</p>
               </div>
             </div>
 
-            <p className="text-xs text-gray-600">
+            <p className="text-xs text-gray-600 dark:text-gray-400">
               ¿Estás seguro de que deseas eliminar{' '}
-              <strong className="text-gray-900 font-semibold">"{deletingItem.name}"</strong>?
+              <strong className="text-gray-900 dark:text-gray-100 font-semibold">"{deletingItem.name}"</strong>?
               {deletingItem.type === 'workout' && ' Se eliminarán todos los registros y series de esta sesión.'}
             </p>
 
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100 dark:border-gray-800">
               <Button
                 variant="outline"
                 size="sm"

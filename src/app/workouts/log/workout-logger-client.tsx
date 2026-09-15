@@ -392,7 +392,7 @@ export function WorkoutLoggerClient({
                   if (e.key === 'Enter') setIsEditingName(false);
                 }}
                 onBlur={() => setIsEditingName(false)}
-                className="text-lg font-bold h-9 bg-white"
+                className="text-lg font-bold h-9 bg-white dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700"
                 placeholder="Nombre del entrenamiento"
               />
               <Button
@@ -410,7 +410,7 @@ export function WorkoutLoggerClient({
             <div className="flex items-center gap-2 flex-wrap group">
               <h1
                 onClick={() => setIsEditingName(true)}
-                className="text-xl sm:text-2xl font-bold text-gray-900 cursor-pointer hover:text-blue-600 transition-colors"
+                className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 cursor-pointer hover:text-blue-600 transition-colors"
                 title="Haz clic para editar el nombre"
               >
                 {typeName}
@@ -418,7 +418,7 @@ export function WorkoutLoggerClient({
               <button
                 type="button"
                 onClick={() => setIsEditingName(true)}
-                className="p-1 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
+                className="p-1 rounded-lg text-gray-400 dark:text-gray-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors cursor-pointer"
                 title="Editar nombre del entrenamiento"
               >
                 <Pencil className="w-4 h-4" />
@@ -427,19 +427,19 @@ export function WorkoutLoggerClient({
           )}
 
           <div className="flex items-center gap-2 flex-wrap">
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-gray-500 dark:text-gray-400">
               {mode === 'new-template'
                 ? 'Configura los ejercicios y cargas objetivo de la plantilla'
                 : 'Registra tus series y repeticiones'}
             </p>
             {mode === 'repeat' && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
                 <RotateCcw className="w-2.5 h-2.5" />
                 Repetición
               </span>
             )}
             {mode === 'new-template' && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
                 <Bookmark className="w-2.5 h-2.5" />
                 Nueva Plantilla
               </span>
@@ -454,7 +454,7 @@ export function WorkoutLoggerClient({
               variant="outline"
               size="sm"
               onClick={toggleExpandAll}
-              className="text-xs text-gray-600 hover:text-gray-900"
+              className="text-xs text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
             >
               {exercises.every((ex) => expandedExercises[ex.id]) ? 'Compactar todo' : 'Desglosar todo'}
             </Button>
@@ -471,7 +471,7 @@ export function WorkoutLoggerClient({
             className={`${
               mode === 'new-template'
                 ? 'bg-purple-600 hover:bg-purple-700 text-white font-bold shadow-sm'
-                : 'bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-300 font-semibold'
+                : 'bg-purple-50 dark:bg-purple-900/20 hover:bg-purple-100 dark:hover:bg-purple-900/30 text-purple-700 dark:text-purple-300 border border-purple-300 dark:border-purple-800 font-semibold'
             } text-xs cursor-pointer gap-1.5`}
           >
             <Bookmark className="w-4 h-4" />
@@ -497,10 +497,10 @@ export function WorkoutLoggerClient({
           const primaryWeight = ex.sets[0]?.weight;
 
           return (
-            <Card key={ex.id} className="overflow-hidden border border-gray-200 shadow-sm transition-all">
-              <CardHeader className="bg-gray-50/80 py-2.5 px-4 flex flex-row items-center justify-between gap-2 border-b">
+            <Card key={ex.id} className="overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm transition-all">
+              <CardHeader className="bg-gray-50/80 dark:bg-gray-800/60 py-2.5 px-4 flex flex-row items-center justify-between gap-2 border-b dark:border-gray-700">
                 <div className="flex items-center gap-2 flex-1 min-w-0">
-                  <span className="text-xs font-bold text-gray-500 w-5 shrink-0 text-center">{exIndex + 1}</span>
+                  <span className="text-xs font-bold text-gray-500 dark:text-gray-400 w-5 shrink-0 text-center">{exIndex + 1}</span>
                   <ExerciseCombobox
                     options={exerciseOptions}
                     value={ex.exerciseId.toString()}
@@ -528,7 +528,7 @@ export function WorkoutLoggerClient({
                     variant="ghost"
                     size="sm"
                     onClick={() => toggleExpand(ex.id)}
-                    className="h-8 px-2 text-xs font-medium text-gray-600 hover:text-blue-600 hover:bg-blue-50 flex items-center gap-1"
+                    className="h-8 px-2 text-xs font-medium text-gray-600 dark:text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 flex items-center gap-1"
                     title={isExpanded ? 'Vista compacta / rápida' : 'Desglosar series individuales'}
                   >
                     {isExpanded ? (
@@ -538,7 +538,7 @@ export function WorkoutLoggerClient({
                       </>
                     ) : (
                       <>
-                        <ChevronDown className="w-3.5 h-3.5 text-gray-500" />
+                        <ChevronDown className="w-3.5 h-3.5 text-gray-500 dark:text-gray-400" />
                         <span className="hidden sm:inline">Desglosar</span>
                       </>
                     )}
@@ -549,7 +549,7 @@ export function WorkoutLoggerClient({
                     variant="ghost"
                     size="icon"
                     onClick={() => removeExercise(ex.id)}
-                    className="h-8 w-8 text-gray-400 hover:text-red-500 hover:bg-red-50"
+                    className="h-8 w-8 text-gray-400 dark:text-gray-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
                   >
                     <Trash2 className="w-4 h-4" />
                   </Button>
@@ -559,11 +559,11 @@ export function WorkoutLoggerClient({
               <CardContent className="p-0">
                 {!isExpanded ? (
                   /* VISTA COMPACTA / RÁPIDA (CrossFit, WODs, Fuerza rápida) */
-                  <div className="p-3 bg-white flex flex-wrap items-center justify-between gap-3">
+                  <div className="p-3 bg-white dark:bg-gray-900 flex flex-wrap items-center justify-between gap-3">
                     <div className="flex items-center gap-2 flex-1 min-w-[260px]">
                       {/* Series / Rondas */}
                       <div className="flex flex-col flex-1 max-w-[100px]">
-                        <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">
+                        <span className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">
                           Series / Rondas
                         </span>
                         <Input
@@ -575,15 +575,15 @@ export function WorkoutLoggerClient({
                             const count = parseInt(e.target.value, 10);
                             if (!isNaN(count)) setSetsCount(ex.id, count);
                           }}
-                          className="h-9 text-center font-bold text-sm tabular-nums bg-gray-50/50"
+                          className="h-9 text-center font-bold text-sm tabular-nums bg-gray-50/50 dark:bg-gray-800/50 dark:text-gray-100 dark:border-gray-700"
                         />
                       </div>
 
-                      <span className="text-gray-400 font-bold self-end pb-2">×</span>
+                      <span className="text-gray-400 dark:text-gray-500 font-bold self-end pb-2">×</span>
 
                       {/* Reps */}
                       <div className="flex flex-col flex-1 min-w-[70px]">
-                        <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">
+                        <span className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">
                           Reps
                         </span>
                         <Input
@@ -595,15 +595,15 @@ export function WorkoutLoggerClient({
                             const reps = parseInt(e.target.value, 10) || 0;
                             updateAllSetsField(ex.id, 'repCount', reps);
                           }}
-                          className="h-9 text-center font-bold text-sm tabular-nums bg-gray-50/50"
+                          className="h-9 text-center font-bold text-sm tabular-nums bg-gray-50/50 dark:bg-gray-800/50 dark:text-gray-100 dark:border-gray-700"
                         />
                       </div>
 
-                      <span className="text-gray-400 font-bold self-end pb-2">@</span>
+                      <span className="text-gray-400 dark:text-gray-500 font-bold self-end pb-2">@</span>
 
                       {/* Peso (Kg) */}
                       <div className="flex flex-col flex-1 min-w-[75px]">
-                        <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">
+                        <span className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">
                           Kg (opc.)
                         </span>
                         <Input
@@ -615,7 +615,7 @@ export function WorkoutLoggerClient({
                             const val = e.target.value ? parseFloat(e.target.value) : null;
                             updateAllSetsField(ex.id, 'weight', val);
                           }}
-                          className="h-9 text-center font-bold text-sm tabular-nums bg-gray-50/50"
+                          className="h-9 text-center font-bold text-sm tabular-nums bg-gray-50/50 dark:bg-gray-800/50 dark:text-gray-100 dark:border-gray-700"
                         />
                       </div>
                     </div>
@@ -629,11 +629,11 @@ export function WorkoutLoggerClient({
                           allCompleted
                             ? 'bg-green-600 text-white hover:bg-green-700'
                             : completedCount > 0
-                            ? 'bg-amber-100 text-amber-900 hover:bg-amber-200 border border-amber-300'
-                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200'
+                            ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-900 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-900/40 border border-amber-300 dark:border-amber-800'
+                            : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700'
                         }`}
                       >
-                        <Check className={`w-4 h-4 ${allCompleted ? 'text-white' : 'text-gray-500'}`} />
+                        <Check className={`w-4 h-4 ${allCompleted ? 'text-white' : 'text-gray-500 dark:text-gray-400'}`} />
                         <span>
                           {allCompleted
                             ? 'Completado'
@@ -648,7 +648,7 @@ export function WorkoutLoggerClient({
                   /* VISTA DETALLADA (Serie a Serie) */
                   <div>
                     {/* Cabecera de columnas */}
-                    <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-medium text-gray-500 uppercase border-b bg-gray-50/50">
+                    <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase border-b dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50">
                       <div className="col-span-2 text-center">Serie</div>
                       <div className="col-span-4 text-center">Kg</div>
                       <div className="col-span-4 text-center">Reps</div>
@@ -660,11 +660,11 @@ export function WorkoutLoggerClient({
                       <div
                         key={set.id}
                         className={`grid grid-cols-12 gap-2 px-4 py-2 items-center border-b last:border-0 transition-colors ${
-                          set.isCompleted ? 'bg-green-50/50' : 'hover:bg-gray-50/30'
+                          set.isCompleted ? 'bg-green-50/50 dark:bg-green-900/10' : 'hover:bg-gray-50/30 dark:hover:bg-gray-800/50'
                         }`}
                       >
                         <div className="col-span-2 flex items-center justify-center gap-1">
-                          <span className="font-semibold text-xs text-gray-600">{setIndex + 1}</span>
+                          <span className="font-semibold text-xs text-gray-600 dark:text-gray-400">{setIndex + 1}</span>
                           {ex.sets.length > 1 && (
                             <button
                               type="button"
@@ -707,7 +707,7 @@ export function WorkoutLoggerClient({
                             type="button"
                             onClick={() => updateSet(ex.id, set.id, 'isCompleted', !set.isCompleted)}
                             className={`w-7 h-7 rounded-md flex items-center justify-center transition-colors cursor-pointer ${
-                              set.isCompleted ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-400 hover:bg-gray-300'
+                              set.isCompleted ? 'bg-green-500 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
                             }`}
                           >
                             <Check className="w-3.5 h-3.5" />
@@ -717,12 +717,12 @@ export function WorkoutLoggerClient({
                     ))}
 
                     {/* Acciones de la vista detallada */}
-                    <div className="flex items-center justify-between px-4 py-2.5 bg-gray-50/70 border-t">
+                    <div className="flex items-center justify-between px-4 py-2.5 bg-gray-50/70 dark:bg-gray-800/50 border-t dark:border-gray-700">
                       <Button
                         type="button"
                         variant="ghost"
                         size="sm"
-                        className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 text-xs h-8"
+                        className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs h-8"
                         onClick={() => addSet(ex.id)}
                       >
                         <Plus className="w-3.5 h-3.5 mr-1" />
@@ -732,7 +732,7 @@ export function WorkoutLoggerClient({
                       <button
                         type="button"
                         onClick={() => toggleAllSetsCompleted(ex.id)}
-                        className="text-xs text-gray-500 hover:text-gray-800 underline cursor-pointer"
+                        className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 underline cursor-pointer"
                       >
                         {allCompleted ? 'Desmarcar todas' : 'Marcar todas hechas'}
                       </button>
@@ -747,7 +747,7 @@ export function WorkoutLoggerClient({
         <Button
           type="button"
           variant="outline"
-          className="w-full border-dashed border-2 py-6 text-gray-500 hover:text-gray-700 hover:border-gray-400"
+          className="w-full border-dashed border-2 py-6 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-400 dark:hover:border-gray-500"
           onClick={addExercise}
         >
           <Plus className="w-5 h-5 mr-2" />
@@ -755,8 +755,8 @@ export function WorkoutLoggerClient({
         </Button>
 
         {/* Barra de acciones al final de la página */}
-        <div className="bg-gray-50/90 rounded-2xl p-4 border border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="text-xs text-gray-500 text-center sm:text-left">
+        <div className="bg-gray-50/90 dark:bg-gray-800/50 rounded-2xl p-4 border border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="text-xs text-gray-500 dark:text-gray-400 text-center sm:text-left">
             <span>{exercises.length} ejercicio{exercises.length !== 1 ? 's' : ''} configurado{exercises.length !== 1 ? 's' : ''}</span>
           </div>
 
@@ -840,9 +840,9 @@ export function WorkoutLoggerClient({
                   id="saveTemplate"
                   checked={saveAsTemplate}
                   onChange={(e) => setSaveAsTemplate(e.target.checked)}
-                  className="rounded border-gray-300 h-4 w-4 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                  className="rounded border-gray-300 dark:border-gray-600 h-4 w-4 text-blue-600 focus:ring-blue-500 cursor-pointer"
                 />
-                <Label htmlFor="saveTemplate" className="text-sm cursor-pointer font-normal text-gray-700">
+                <Label htmlFor="saveTemplate" className="text-sm cursor-pointer font-normal text-gray-700 dark:text-gray-300">
                   Guardar como plantilla reutilizable
                 </Label>
               </div>
@@ -868,8 +868,8 @@ export function WorkoutLoggerClient({
                 <Bookmark className="w-4 h-4" />
               </div>
               <div>
-                <DialogTitle className="text-base font-bold text-gray-900">Guardar como Plantilla</DialogTitle>
-                <DialogDescription className="text-xs text-gray-500 mt-0.5">
+                <DialogTitle className="text-base font-bold text-gray-900 dark:text-gray-100">Guardar como Plantilla</DialogTitle>
+                <DialogDescription className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                   Guarda esta rutina en tu catálogo de plantillas para reutilizarla cuando quieras.
                 </DialogDescription>
               </div>
@@ -878,7 +878,7 @@ export function WorkoutLoggerClient({
 
           <div className="space-y-4 py-2">
             <div className="space-y-1.5">
-              <Label htmlFor="direct-template-name" className="text-xs font-semibold text-gray-700">
+              <Label htmlFor="direct-template-name" className="text-xs font-semibold text-gray-700 dark:text-gray-300">
                 Nombre de la plantilla <span className="text-red-500">*</span>
               </Label>
               <Input
@@ -892,14 +892,14 @@ export function WorkoutLoggerClient({
 
             {workoutTypes.length > 0 && (
               <div className="space-y-1.5">
-                <Label htmlFor="direct-template-type" className="text-xs font-semibold text-gray-700">
+                <Label htmlFor="direct-template-type" className="text-xs font-semibold text-gray-700 dark:text-gray-300">
                   Tipo de entrenamiento
                 </Label>
                 <select
                   id="direct-template-type"
                   value={directTemplateTypeId}
                   onChange={(e) => setDirectTemplateTypeId(parseInt(e.target.value, 10))}
-                  className="w-full h-9 px-3 py-1.5 text-xs bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 text-gray-800 font-medium"
+                  className="w-full h-9 px-3 py-1.5 text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 text-gray-800 dark:text-gray-200 font-medium"
                 >
                   {workoutTypes.map((t) => (
                     <option key={t.id} value={t.id}>
@@ -911,7 +911,7 @@ export function WorkoutLoggerClient({
             )}
 
             <div className="space-y-1.5">
-              <Label htmlFor="direct-template-desc" className="text-xs font-semibold text-gray-700">
+              <Label htmlFor="direct-template-desc" className="text-xs font-semibold text-gray-700 dark:text-gray-300">
                 Descripción o notas (opcional)
               </Label>
               <Textarea
@@ -924,7 +924,7 @@ export function WorkoutLoggerClient({
               />
             </div>
 
-            <div className="bg-purple-50/70 border border-purple-100 rounded-xl p-3">
+            <div className="bg-purple-50/70 dark:bg-purple-900/20 border border-purple-100 dark:border-purple-800 rounded-xl p-3">
               <div className="flex items-center justify-between mb-1.5">
                 <span className="text-xs font-bold text-purple-950">
                   Ejercicios incluidos ({exercises.length})

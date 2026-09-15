@@ -20,11 +20,11 @@ export default async function WorkoutsHistoryPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
             <History className="w-6 h-6 text-blue-600" />
             Entrenamientos & Rutinas
           </h1>
-          <p className="text-sm text-gray-500 mt-1">
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
             {history.length} {history.length === 1 ? 'sesión registrada' : 'sesiones registradas'} · {templates.length} {templates.length === 1 ? 'plantilla' : 'plantillas'}
           </p>
         </div>
