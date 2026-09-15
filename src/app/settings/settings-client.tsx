@@ -23,12 +23,16 @@ import {
   Calendar,
   Star,
   LogOut,
+  Sun,
+  Moon,
+  Palette,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { SignOutButton } from '@clerk/nextjs';
 import { renameCustomExercise, deleteCustomExercise } from './actions';
 import { createCustomExercise } from '@/app/workouts/actions';
+import { useTheme } from '@/components/ThemeProvider';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -92,15 +96,15 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <Card className="border-gray-200">
-      <CardHeader className="pb-3 border-b border-gray-100 bg-gray-50/60 rounded-t-xl">
+    <Card className="border-gray-200 dark:border-gray-800">
+      <CardHeader className="pb-3 border-b border-gray-100 bg-gray-50/60 rounded-t-xl dark:border-gray-800 dark:bg-gray-800/60">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-blue-100 rounded-lg text-blue-600 shrink-0">
             <Icon className="w-4 h-4" />
           </div>
           <div>
-            <CardTitle className="text-sm font-bold text-gray-900">{title}</CardTitle>
-            {subtitle && <p className="text-xs text-gray-500 mt-0.5">{subtitle}</p>}
+            <CardTitle className="text-sm font-bold text-gray-900 dark:text-gray-100">{title}</CardTitle>
+            {subtitle && <p className="text-xs text-gray-500 mt-0.5 dark:text-gray-400">{subtitle}</p>}
           </div>
         </div>
       </CardHeader>
@@ -130,17 +134,17 @@ function ProfileSection({ profile }: { profile: UserProfile }) {
           <img
             src={profile.imageUrl}
             alt={fullName}
-            className="w-16 h-16 rounded-full object-cover border-2 border-gray-200 shadow-sm"
+            className="w-16 h-16 rounded-full object-cover border-2 border-gray-200 shadow-sm dark:border-gray-700"
           />
         ) : (
-          <div className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 text-xl font-bold border-2 border-blue-200">
+          <div className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 text-xl font-bold border-2 border-blue-200 dark:bg-blue-900/30 dark:border-blue-800">
             {fullName.charAt(0).toUpperCase()}
           </div>
         )}
         <div className="min-w-0">
-          <p className="font-bold text-gray-900 text-base truncate">{fullName}</p>
-          <p className="text-sm text-gray-500 truncate">{profile.email}</p>
-          <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1">
+          <p className="font-bold text-gray-900 text-base truncate dark:text-gray-100">{fullName}</p>
+          <p className="text-sm text-gray-500 truncate dark:text-gray-400">{profile.email}</p>
+          <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1 dark:text-gray-500">
             <Calendar className="w-3 h-3" />
             Activo desde {memberDate}
           </p>
@@ -148,25 +152,25 @@ function ProfileSection({ profile }: { profile: UserProfile }) {
       </div>
 
       {/* Stats rápidas */}
-      <div className="grid grid-cols-3 gap-3 mt-4 pt-4 border-t border-gray-100">
+      <div className="grid grid-cols-3 gap-3 mt-4 pt-4 border-t border-gray-100 dark:border-gray-800">
         <div className="text-center">
-          <p className="text-2xl font-black text-gray-900 tabular-nums">{profile.totalWorkouts}</p>
-          <p className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Entrenos</p>
+          <p className="text-2xl font-black text-gray-900 tabular-nums dark:text-gray-100">{profile.totalWorkouts}</p>
+          <p className="text-[10px] uppercase font-bold text-gray-400 tracking-wider dark:text-gray-500">Entrenos</p>
         </div>
-        <div className="text-center border-x border-gray-100">
-          <p className="text-2xl font-black text-gray-900 tabular-nums">{profile.customExercises}</p>
-          <p className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Ejercicios custom</p>
+        <div className="text-center border-x border-gray-100 dark:border-gray-800">
+          <p className="text-2xl font-black text-gray-900 tabular-nums dark:text-gray-100">{profile.customExercises}</p>
+          <p className="text-[10px] uppercase font-bold text-gray-400 tracking-wider dark:text-gray-500">Ejercicios custom</p>
         </div>
         <div className="text-center">
           <p className="text-2xl font-black text-blue-600">
             <Star className="w-5 h-5 mx-auto" />
           </p>
-          <p className="text-[10px] uppercase font-bold text-gray-400 tracking-wider mt-0.5">Perfil Clerk</p>
+          <p className="text-[10px] uppercase font-bold text-gray-400 tracking-wider mt-0.5 dark:text-gray-500">Perfil Clerk</p>
         </div>
       </div>
 
-      <div className="mt-4 pt-4 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-3">
-        <p className="text-xs text-gray-400 flex items-center gap-1">
+      <div className="mt-4 pt-4 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-3 dark:border-gray-800">
+        <p className="text-xs text-gray-400 flex items-center gap-1 dark:text-gray-500">
           <ChevronRight className="w-3 h-3 shrink-0" />
           Para editar tu perfil, haz clic en tu avatar en la barra superior.
         </p>
@@ -185,17 +189,22 @@ function ProfileSection({ profile }: { profile: UserProfile }) {
 // 2. Goals section
 // ─────────────────────────────────────────────────────────────────────────────
 function GoalsSection() {
-  const [goal, setGoal] = useState(3);
-  const [notes, setNotes] = useState('');
+  const [goal, setGoal] = useState(() => {
+    if (typeof window === 'undefined') return 3;
+    const stored = localStorage.getItem(LS_GOAL);
+    const n = stored ? parseInt(stored, 10) : 3;
+    return Number.isNaN(n) ? 3 : n;
+  });
+  const [notes, setNotes] = useState(() => {
+    if (typeof window === 'undefined') return '';
+    return localStorage.getItem(LS_NOTES) ?? '';
+  });
   const [saved, setSaved] = useState(false);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
-    const storedGoal = localStorage.getItem(LS_GOAL);
-    const storedNotes = localStorage.getItem(LS_NOTES);
-    if (storedGoal) setGoal(parseInt(storedGoal, 10));
-    if (storedNotes) setNotes(storedNotes);
   }, []);
 
   const handleSave = () => {
@@ -205,7 +214,7 @@ function GoalsSection() {
     setTimeout(() => setSaved(false), 2000);
   };
 
-  if (!mounted) return <div className="h-32 animate-pulse bg-gray-100 rounded-lg" />;
+  if (!mounted) return <div className="h-32 animate-pulse bg-gray-100 dark:bg-gray-800 rounded-lg" />;
 
   return (
     <Section
@@ -216,7 +225,7 @@ function GoalsSection() {
       <div className="space-y-5">
         {/* Meta semanal visual */}
         <div>
-          <label className="block text-xs font-semibold text-gray-700 mb-3">
+          <label className="block text-xs font-semibold text-gray-700 mb-3 dark:text-gray-300">
             Días de entrenamiento por semana
           </label>
           <div className="flex items-center gap-2">
@@ -227,14 +236,14 @@ function GoalsSection() {
                 className={`w-9 h-9 rounded-lg text-sm font-bold transition-all ${
                   day <= goal
                     ? 'bg-blue-600 text-white shadow-sm scale-105'
-                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700'
                 }`}
               >
                 {day}
               </button>
             ))}
           </div>
-          <p className="text-xs text-gray-500 mt-2">
+          <p className="text-xs text-gray-500 mt-2 dark:text-gray-400">
             Meta actual:{' '}
             <span className="font-bold text-blue-600">
               {goal} día{goal !== 1 ? 's' : ''} / semana
@@ -243,16 +252,16 @@ function GoalsSection() {
         </div>
 
         {/* Llama visual de la racha */}
-        <div className="flex items-center gap-2 p-3 bg-orange-50 border border-orange-100 rounded-xl">
+        <div className="flex items-center gap-2 p-3 bg-orange-50 border border-orange-100 rounded-xl dark:bg-orange-900/20 dark:border-orange-800/60">
           <Flame className="w-4 h-4 text-orange-500 shrink-0" />
-          <p className="text-xs text-orange-800">
+          <p className="text-xs text-orange-800 dark:text-orange-300">
             Esta meta se usa como referencia en tu mapa de consistencia del Dashboard.
           </p>
         </div>
 
         {/* Notas de objetivo */}
         <div>
-          <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+          <label className="block text-xs font-semibold text-gray-700 mb-1.5 dark:text-gray-300">
             Nota de objetivo (opcional)
           </label>
           <textarea
@@ -260,7 +269,7 @@ function GoalsSection() {
             onChange={(e) => setNotes(e.target.value)}
             placeholder="Ej: Preparación para triatlón, perder 5kg antes de junio..."
             rows={2}
-            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-400 transition"
+            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-400 transition dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100 dark:placeholder-gray-500"
           />
         </div>
 
@@ -369,7 +378,7 @@ function CustomExercisesSection({
     >
       <div className="space-y-3">
         {exercises.length === 0 && !showNewForm && (
-          <div className="text-center py-8 text-gray-400 text-sm">
+          <div className="text-center py-8 text-gray-400 text-sm dark:text-gray-500">
             <Dumbbell className="w-8 h-8 mx-auto mb-2 opacity-40" />
             <p>Aún no has creado ejercicios personalizados.</p>
           </div>
@@ -380,13 +389,13 @@ function CustomExercisesSection({
           {exercises.map((ex) => (
             <div
               key={ex.id}
-              className="flex items-center gap-2 p-2.5 bg-gray-50 rounded-xl border border-gray-200/80 group"
+              className="flex items-center gap-2 p-2.5 bg-gray-50 rounded-xl border border-gray-200/80 group dark:bg-gray-800/50 dark:border-gray-700"
             >
               {editingId === ex.id ? (
                 /* Edit mode */
                 <>
                   <input
-                    className="flex-1 px-2 py-1 text-sm border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400/40"
+                    className="flex-1 px-2 py-1 text-sm border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400/40 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
                     value={editName}
                     onChange={(e) => setEditName(e.target.value)}
                     onKeyDown={(e) => {
@@ -398,13 +407,13 @@ function CustomExercisesSection({
                   <button
                     onClick={() => handleSaveEdit(ex.id)}
                     disabled={isPending}
-                    className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition"
+                    className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition dark:hover:bg-emerald-900/20"
                   >
                     <Check className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => setEditingId(null)}
-                    className="p-1.5 text-gray-400 hover:bg-gray-200 rounded-lg transition"
+                    className="p-1.5 text-gray-400 hover:bg-gray-200 rounded-lg transition dark:hover:bg-gray-700"
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -412,7 +421,7 @@ function CustomExercisesSection({
               ) : confirmDeleteId === ex.id ? (
                 /* Confirm delete */
                 <>
-                  <span className="flex-1 text-xs text-red-600 font-medium">
+                  <span className="flex-1 text-xs text-red-600 font-medium dark:text-red-400">
                     ¿Eliminar «{ex.name}»? Esta acción no se puede deshacer.
                   </span>
                   <button
@@ -424,7 +433,7 @@ function CustomExercisesSection({
                   </button>
                   <button
                     onClick={() => setConfirmDeleteId(null)}
-                    className="p-1.5 text-gray-400 hover:bg-gray-200 rounded-lg transition"
+                    className="p-1.5 text-gray-400 hover:bg-gray-200 rounded-lg transition dark:hover:bg-gray-700"
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -433,21 +442,21 @@ function CustomExercisesSection({
                 /* Normal mode */
                 <>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-gray-900 truncate">{ex.name}</p>
-                    <p className="text-[10px] text-gray-400">
+                    <p className="text-sm font-semibold text-gray-900 truncate dark:text-gray-100">{ex.name}</p>
+                    <p className="text-[10px] text-gray-400 dark:text-gray-500">
                       {ex.categoryName}
                       {ex.usageCount > 0 && ` · usado ${ex.usageCount} ${ex.usageCount === 1 ? 'vez' : 'veces'}`}
                     </p>
                   </div>
                   <button
                     onClick={() => handleStartEdit(ex)}
-                    className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition opacity-0 group-hover:opacity-100"
+                    className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition opacity-0 group-hover:opacity-100 dark:hover:bg-blue-900/20"
                   >
                     <Pencil className="w-3.5 h-3.5" />
                   </button>
                   <button
                     onClick={() => setConfirmDeleteId(ex.id)}
-                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition opacity-0 group-hover:opacity-100"
+                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition opacity-0 group-hover:opacity-100 dark:hover:bg-red-900/20"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
@@ -459,20 +468,20 @@ function CustomExercisesSection({
 
         {/* New exercise form */}
         {showNewForm ? (
-          <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl space-y-2">
+          <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl space-y-2 dark:bg-blue-900/20 dark:border-blue-800">
             <input
               type="text"
               placeholder="Nombre del ejercicio…"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400/40 bg-white"
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400/40 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
               autoFocus
               onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
             />
             <select
               value={newCategoryId}
               onChange={(e) => setNewCategoryId(e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-400/40"
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-400/40 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
             >
               <option value="">Sin categoría</option>
               {categories.map((cat) => (
@@ -604,14 +613,17 @@ function WorkoutTypesSection({ workoutTypes }: { workoutTypes: WorkoutType[] }) 
 // 5. Preferences section
 // ─────────────────────────────────────────────────────────────────────────────
 function PreferencesSection() {
-  const [unit, setUnit] = useState<'kg' | 'lb'>('kg');
+  const [unit, setUnit] = useState<'kg' | 'lb'>(() => {
+    if (typeof window === 'undefined') return 'kg';
+    const stored = localStorage.getItem(LS_UNIT);
+    return stored === 'kg' || stored === 'lb' ? stored : 'kg';
+  });
   const [saved, setSaved] = useState(false);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
-    const stored = localStorage.getItem(LS_UNIT);
-    if (stored === 'kg' || stored === 'lb') setUnit(stored);
   }, []);
 
   const handleSave = () => {
@@ -620,7 +632,7 @@ function PreferencesSection() {
     setTimeout(() => setSaved(false), 2000);
   };
 
-  if (!mounted) return <div className="h-24 animate-pulse bg-gray-100 rounded-lg" />;
+  if (!mounted) return <div className="h-24 animate-pulse bg-gray-100 dark:bg-gray-800 rounded-lg" />;
 
   return (
     <Section
@@ -631,7 +643,7 @@ function PreferencesSection() {
       <div className="space-y-5">
         {/* Units */}
         <div>
-          <label className="block text-xs font-semibold text-gray-700 mb-2">
+          <label className="block text-xs font-semibold text-gray-700 mb-2 dark:text-gray-300">
             Unidad de peso
           </label>
           <div className="flex gap-2">
@@ -642,7 +654,7 @@ function PreferencesSection() {
                 className={`flex-1 py-2.5 rounded-xl text-sm font-bold border transition-all ${
                   unit === u
                     ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
-                    : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                    : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700 dark:hover:bg-gray-700'
                 }`}
               >
                 <Scale className="w-4 h-4 inline mr-1.5" />
@@ -667,18 +679,75 @@ function PreferencesSection() {
         </Button>
 
         {/* Danger zone */}
-        <div className="pt-4 border-t border-gray-100">
-          <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-xl">
+        <div className="pt-4 border-t border-gray-100 dark:border-gray-800">
+          <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-xl dark:bg-red-900/20 dark:border-red-800">
             <AlertTriangle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
             <div className="space-y-2 flex-1">
-              <p className="text-xs font-bold text-red-800">Zona de peligro</p>
-              <p className="text-xs text-red-700">
+              <p className="text-xs font-bold text-red-800 dark:text-red-200">Zona de peligro</p>
+              <p className="text-xs text-red-700 dark:text-red-300/80">
                 Para eliminar tu cuenta o exportar todos tus datos, utiliza el panel de usuario de Clerk
                 (botón en la esquina superior derecha).
               </p>
             </div>
           </div>
         </div>
+      </div>
+    </Section>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 6. Theme section
+// ─────────────────────────────────────────────────────────────────────────────
+function ThemeSection() {
+  const { theme, toggleTheme } = useTheme();
+
+  return (
+    <Section
+      icon={Palette}
+      title="Tema"
+      subtitle="Personaliza la apariencia de la aplicación"
+    >
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          {theme === 'dark' ? (
+            <div className="w-10 h-10 rounded-xl bg-gray-800 flex items-center justify-center text-yellow-400">
+              <Moon className="w-5 h-5" />
+            </div>
+          ) : (
+            <div className="w-10 h-10 rounded-xl bg-yellow-100 flex items-center justify-center text-yellow-600">
+              <Sun className="w-5 h-5" />
+            </div>
+          )}
+          <div>
+            <p className="text-sm font-bold text-gray-900 dark:text-gray-100">
+              {theme === 'dark' ? 'Modo Oscuro' : 'Modo Claro'}
+            </p>
+            <p className="text-xs text-gray-500">
+              {theme === 'dark'
+                ? 'Colores oscuros para reducir la fatiga visual'
+                : 'Colores claros para una lectura cómoda'}
+            </p>
+          </div>
+        </div>
+        <button
+          onClick={toggleTheme}
+          className="relative w-14 h-7 rounded-full transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-blue-500/30 cursor-pointer shrink-0"
+          style={{ backgroundColor: theme === 'dark' ? '#1d4ed8' : '#d1d5db' }}
+          title={`Cambiar a ${theme === 'dark' ? 'modo claro' : 'modo oscuro'}`}
+        >
+          <div
+            className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full shadow-md transition-transform duration-300 flex items-center justify-center ${
+              theme === 'dark' ? 'translate-x-7' : 'translate-x-0'
+            }`}
+          >
+            {theme === 'dark' ? (
+              <Moon className="w-2.5 h-2.5 text-blue-600" />
+            ) : (
+              <Sun className="w-2.5 h-2.5 text-yellow-600" />
+            )}
+          </div>
+        </button>
       </div>
     </Section>
   );
@@ -700,6 +769,7 @@ export function SettingsClient({
       <CustomExercisesSection initialExercises={customExercises} categories={categories} />
       <WorkoutTypesSection workoutTypes={workoutTypes} />
       <PreferencesSection />
+      <ThemeSection />
     </div>
   );
 }

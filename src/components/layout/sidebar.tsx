@@ -20,15 +20,15 @@ export function Sidebar() {
   return (
     <>
       {/* Sidebar Desktop */}
-      <aside className="hidden lg:flex lg:flex-col lg:w-64 bg-white border-r border-gray-200">
+      <aside className="hidden lg:flex lg:flex-col lg:w-64 bg-white border-r border-gray-200 dark:bg-gray-900 dark:border-gray-800 dark:text-gray-100">
         {/* Brand Header */}
-        <div className="p-5 border-b border-gray-100 flex items-center gap-3">
+        <div className="p-5 border-b border-gray-100 flex items-center gap-3 dark:border-gray-800">
           <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-sm">
             <Dumbbell className="w-5 h-5" />
           </div>
           <div>
-            <span className="font-bold text-gray-900 text-sm tracking-tight block">Workout Manager</span>
-            <span className="text-[11px] text-gray-400 font-medium block">Entrena & Progresa</span>
+            <span className="font-bold text-gray-900 text-sm tracking-tight block dark:text-gray-100">Workout Manager</span>
+            <span className="text-[11px] text-gray-400 font-medium block dark:text-gray-500">Entrena & Progresa</span>
           </div>
         </div>
 
@@ -47,11 +47,11 @@ export function Sidebar() {
                     className={cn(
                       'flex items-center px-3.5 py-2.5 text-sm font-medium rounded-xl transition-all',
                       isActive
-                        ? 'bg-blue-50 text-blue-700 font-semibold shadow-xs'
-                        : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                        ? 'bg-blue-50 text-blue-700 font-semibold shadow-xs dark:bg-blue-900/20 dark:text-blue-400'
+                        : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-100'
                     )}
                   >
-                    <Icon className={cn('w-4 h-4 mr-3', isActive ? 'text-blue-600' : 'text-gray-400')} />
+                    <Icon className={cn('w-4 h-4 mr-3', isActive ? 'text-blue-600' : 'text-gray-400 dark:text-gray-500')} />
                     {item.name}
                   </Link>
                 );
@@ -70,7 +70,7 @@ export function Sidebar() {
 
               <Link
                 href="/workouts/log?mode=new-template"
-                className="flex items-center justify-center w-full px-4 py-2 text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200/80 rounded-xl transition-all shadow-2xs"
+                className="flex items-center justify-center w-full px-4 py-2 text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200/80 rounded-xl transition-all shadow-2xs dark:bg-purple-900/20 dark:text-purple-400 dark:border-purple-800 dark:hover:bg-purple-900/30"
               >
                 <Bookmark className="w-3.5 h-3.5 mr-1.5 text-purple-600" />
                 Nueva Plantilla
@@ -79,26 +79,26 @@ export function Sidebar() {
           </div>
 
           {/* Footer de Usuario y Cerrar Sesión */}
-          <div className="p-4 border-t border-gray-100 bg-gray-50/70 space-y-2">
+          <div className="p-4 border-t border-gray-100 bg-gray-50/70 space-y-2 dark:border-gray-800 dark:bg-gray-800/70">
             {isLoaded && user && (
-              <div className="flex items-center gap-3 p-2 rounded-xl bg-white border border-gray-200/80 shadow-2xs">
+              <div className="flex items-center gap-3 p-2 rounded-xl bg-white border border-gray-200/80 shadow-2xs dark:bg-gray-800/50 dark:border-gray-700">
                 {user.imageUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={user.imageUrl}
                     alt={user.fullName || 'Usuario'}
-                    className="w-8 h-8 rounded-full object-cover border border-gray-200 shrink-0"
+                    className="w-8 h-8 rounded-full object-cover border border-gray-200 shrink-0 dark:border-gray-700"
                   />
                 ) : (
-                  <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold shrink-0">
+                  <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold shrink-0 dark:bg-blue-900/30 dark:text-blue-400">
                     {(user.firstName || user.username || 'U').charAt(0).toUpperCase()}
                   </div>
                 )}
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs font-bold text-gray-900 truncate">
+                  <p className="text-xs font-bold text-gray-900 truncate dark:text-gray-100">
                     {user.fullName || user.firstName || 'Mi Cuenta'}
                   </p>
-                  <p className="text-[10px] text-gray-500 truncate">
+                  <p className="text-[10px] text-gray-500 truncate dark:text-gray-400">
                     {user.primaryEmailAddress?.emailAddress}
                   </p>
                 </div>
@@ -108,7 +108,7 @@ export function Sidebar() {
             <SignOutButton>
               <button
                 type="button"
-                className="flex items-center justify-center w-full px-3 py-2 text-xs font-medium text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg border border-transparent transition-colors cursor-pointer"
+                className="flex items-center justify-center w-full px-3 py-2 text-xs font-medium text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg border border-transparent transition-colors cursor-pointer dark:text-gray-400 dark:hover:text-red-400 dark:hover:bg-red-900/20"
               >
                 <LogOut className="w-3.5 h-3.5 mr-2" />
                 Cerrar sesión
@@ -119,7 +119,7 @@ export function Sidebar() {
       </aside>
 
       {/* Bottom Navigation Mobile */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-4 py-2 z-50 shadow-lg">
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-4 py-2 z-50 shadow-lg dark:bg-gray-900 dark:border-gray-800">
         <div className="flex items-center justify-around">
           {navigation.map((item) => {
             const Icon = item.icon;
