@@ -204,14 +204,18 @@ export async function saveAsTemplate(data: {
   const { userId } = await auth();
   if (!userId) throw new Error('No autorizado');
 
-  // 1. Obtener el workout con sus ejercicios
+  // 1. Obtener el workout con sus ejercicios y series
   const workout = await db.query.workouts.findFirst({
     where: eq(workouts.id, data.workoutId),
     with: {
       exercises: {
-        with: { exercise: true },
+        with: {
+          exercise: true,
+          sets: true,
+        },
         orderBy: (fields, { asc }) => asc(fields.orderIndex),
       },
+      type: true,
     },
   });
 
@@ -223,7 +227,7 @@ export async function saveAsTemplate(data: {
     .values({
       userId,
       name: data.name,
-      description: data.description,
+      description: data.description || null,
       typeId: workout.typeId,
       sourceWorkoutId: workout.id,
     })
@@ -232,19 +236,43 @@ export async function saveAsTemplate(data: {
   // 3. Copiar los ejercicios a la plantilla
   if (workout.exercises.length > 0) {
     await db.insert(templateExercises).values(
-      workout.exercises.map((ex) => ({
-        templateId: newTemplate.id,
-        exerciseId: ex.exerciseId,
-        orderIndex: ex.orderIndex,
-        targetReps: ex.targetReps,
-        targetWeight: ex.targetWeight,
-        targetDistance: ex.targetDistance,
-        timeCapSeconds: ex.targetDurationSeconds,
-      }))
+      workout.exercises.map((ex) => {
+        const firstSet = ex.sets?.[0];
+        return {
+          templateId: newTemplate.id,
+          exerciseId: ex.exerciseId,
+          orderIndex: ex.orderIndex,
+          targetReps: ex.targetReps ?? firstSet?.repCount ?? null,
+          targetWeight: ex.targetWeight ?? (firstSet?.weight ? Number(firstSet.weight) : null),
+          targetDistance: ex.targetDistance ?? firstSet?.distance ?? null,
+          timeCapSeconds: ex.targetDurationSeconds ?? firstSet?.durationSeconds ?? null,
+        };
+      })
     );
   }
 
-  return { success: true };
+  revalidatePath('/workouts');
+  revalidatePath('/dashboard');
+  revalidatePath('/workouts/new');
+
+  return {
+    success: true,
+    template: {
+      id: newTemplate.id,
+      name: newTemplate.name,
+      typeName: workout.type?.name || 'General',
+      typeId: newTemplate.typeId || 1,
+      createdAt: newTemplate.createdAt,
+      description: newTemplate.description,
+      exercisesCount: workout.exercises.length,
+      exercises: workout.exercises.map((e) => ({
+        name: e.exercise.name,
+        targetReps: e.targetReps ?? e.sets?.[0]?.repCount ?? null,
+        targetWeight: e.targetWeight ?? (e.sets?.[0]?.weight ? Number(e.sets[0].weight) : null),
+        targetDurationSeconds: e.targetDurationSeconds ?? e.sets?.[0]?.durationSeconds ?? null,
+      })),
+    },
+  };
 }
 
 // Crear plantilla directamente sin necesidad de haber guardado un workout

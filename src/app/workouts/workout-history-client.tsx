@@ -34,7 +34,7 @@ import {
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { deleteWorkout, deleteWorkoutTemplate } from './actions';
+import { deleteWorkout, deleteWorkoutTemplate, saveAsTemplate } from './actions';
 
 // ---------- Types ----------
 export interface WorkoutHistoryItem {
@@ -118,11 +118,13 @@ function WorkoutDetailModal({
   workout,
   onClose,
   onRepeat,
+  onConvertToTemplate,
   onDelete,
 }: {
   workout: WorkoutHistoryItem;
   onClose: () => void;
   onRepeat: () => void;
+  onConvertToTemplate: () => void;
   onDelete: () => void;
 }) {
   const style = getTypeStyle(workout.typeName);
@@ -226,7 +228,7 @@ function WorkoutDetailModal({
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-3 border-t border-gray-100 bg-gray-50/80 flex items-center justify-between gap-2">
+        <div className="px-5 py-3 border-t border-gray-100 bg-gray-50/80 flex items-center justify-between gap-2 flex-wrap">
           <Button
             variant="ghost"
             size="sm"
@@ -238,6 +240,15 @@ function WorkoutDetailModal({
           </Button>
 
           <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onConvertToTemplate}
+              className="text-xs text-purple-700 hover:text-purple-800 hover:bg-purple-50 border-purple-200 rounded-xl gap-1.5 cursor-pointer font-semibold"
+            >
+              <Bookmark className="w-3.5 h-3.5 text-purple-600" />
+              <span>Guardar como Plantilla</span>
+            </Button>
             <Button variant="outline" size="sm" onClick={onClose} className="text-xs rounded-xl cursor-pointer">
               Cerrar
             </Button>
@@ -283,6 +294,12 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
     name: string;
   } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Template conversion modal state
+  const [convertingWorkout, setConvertingWorkout] = useState<WorkoutHistoryItem | null>(null);
+  const [templateNameInput, setTemplateNameInput] = useState('');
+  const [templateDescInput, setTemplateDescInput] = useState('');
+  const [isConverting, setIsConverting] = useState(false);
 
   // Sync props
   useEffect(() => {
@@ -363,6 +380,48 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
 
   const handleStartTemplate = (templateId: number) => {
     router.push(`/workouts/log?mode=template&templateId=${templateId}`);
+  };
+
+  const openConvertToTemplate = (workout: WorkoutHistoryItem) => {
+    const cleanName =
+      workout.name
+        .replace(/\s*\(Copia\)+/gi, '')
+        .replace(/\s*\(Repetici[oó]n\)+/gi, '')
+        .replace(/\s*·\s*\d{1,2}\s+[a-záéíóú]+/gi, '')
+        .trim() || 'Mi Plantilla';
+    setConvertingWorkout(workout);
+    setTemplateNameInput(cleanName);
+    setTemplateDescInput(workout.notes || '');
+  };
+
+  const handleConfirmConvertToTemplate = async () => {
+    if (!convertingWorkout) return;
+    if (!templateNameInput.trim()) {
+      alert('Por favor introduce un nombre para la plantilla');
+      return;
+    }
+
+    setIsConverting(true);
+    try {
+      const res = await saveAsTemplate({
+        workoutId: convertingWorkout.id,
+        name: templateNameInput.trim(),
+        description: templateDescInput.trim() || undefined,
+      });
+
+      if (res.template) {
+        setTemplates((prev) => [res.template as UserTemplateItem, ...prev]);
+      }
+
+      setConvertingWorkout(null);
+      if (selectedWorkout) setSelectedWorkout(null);
+      setActiveTab('templates');
+    } catch (err) {
+      console.error(err);
+      alert('Error al guardar la plantilla');
+    } finally {
+      setIsConverting(false);
+    }
   };
 
   // Confirm delete handler
@@ -716,6 +775,16 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                               <Button
                                 variant="ghost"
                                 size="sm"
+                                className="h-7 px-2 text-xs text-purple-700 hover:text-purple-800 hover:bg-purple-50 rounded-lg cursor-pointer"
+                                onClick={() => openConvertToTemplate(workout)}
+                                title="Guardar como plantilla"
+                              >
+                                <Bookmark className="w-3.5 h-3.5 sm:mr-1 text-purple-600" />
+                                <span className="hidden xl:inline">Plantilla</span>
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
                                 className="h-7 px-2 text-xs text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg cursor-pointer"
                                 onClick={() => setSelectedWorkout(workout)}
                                 title="Ver detalles"
@@ -906,7 +975,17 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  className="text-xs gap-1.5 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 text-gray-700 flex-1 font-semibold cursor-pointer"
+                                  className="text-xs gap-1 hover:bg-purple-50 hover:text-purple-700 hover:border-purple-200 text-purple-700 flex-1 font-semibold cursor-pointer"
+                                  onClick={() => openConvertToTemplate(workout)}
+                                  title="Guardar como plantilla"
+                                >
+                                  <Bookmark className="w-3.5 h-3.5 text-purple-600" />
+                                  Plantilla
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="text-xs gap-1 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 text-gray-700 flex-1 font-semibold cursor-pointer"
                                   onClick={() => handleRepeatWorkout(workout.id)}
                                 >
                                   <Play className="w-3.5 h-3.5 fill-current" />
@@ -1201,6 +1280,7 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
           workout={selectedWorkout}
           onClose={() => setSelectedWorkout(null)}
           onRepeat={() => handleRepeatWorkout(selectedWorkout.id)}
+          onConvertToTemplate={() => openConvertToTemplate(selectedWorkout)}
           onDelete={() =>
             setDeletingItem({
               type: 'workout',
@@ -1209,6 +1289,110 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
             })
           }
         />
+      )}
+
+      {/* Modal para Convertir Entrenamiento en Plantilla */}
+      {convertingWorkout && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-150"
+          onClick={(e) => e.target === e.currentTarget && !isConverting && setConvertingWorkout(null)}
+        >
+          <div className="bg-white rounded-2xl max-w-md w-full p-5 shadow-2xl border border-gray-200 space-y-4 animate-in zoom-in-95 duration-150">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-purple-100 flex items-center justify-center text-purple-600 shrink-0">
+                <Bookmark className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-gray-900">
+                  Convertir en Plantilla
+                </h3>
+                <p className="text-xs text-gray-500">
+                  Guarda la estructura de este entrenamiento como rutina reutilizable
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-3 pt-1">
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-gray-700">
+                  Nombre de la plantilla <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={templateNameInput}
+                  onChange={(e) => setTemplateNameInput(e.target.value)}
+                  placeholder="Ej: Empuje Pesado, Full Body A..."
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl bg-gray-50/50 hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 font-medium text-gray-900"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-gray-700">
+                  Descripción o notas (opcional)
+                </label>
+                <textarea
+                  value={templateDescInput}
+                  onChange={(e) => setTemplateDescInput(e.target.value)}
+                  placeholder="Ej: Buena sesión de fuerza, descansos de 2 min..."
+                  rows={2}
+                  className="w-full px-3 py-2 text-xs border border-gray-200 rounded-xl bg-gray-50/50 hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 text-gray-800"
+                />
+              </div>
+
+              {/* Resumen de ejercicios a incluir */}
+              <div className="bg-purple-50/70 border border-purple-100 rounded-xl p-3 space-y-1.5">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-bold text-purple-950">
+                    {convertingWorkout.exercisesSummary.length} ejercicios incluidos
+                  </span>
+                  <span className="text-[11px] text-purple-700">{convertingWorkout.typeName}</span>
+                </div>
+                <div className="max-h-28 overflow-y-auto space-y-1 pr-1">
+                  {convertingWorkout.exercisesSummary.map((ex, idx) => (
+                    <div key={idx} className="flex items-center justify-between text-xs text-purple-900">
+                      <span className="truncate pr-2 font-medium">
+                        {idx + 1}. {ex.name}
+                      </span>
+                      <span className="text-purple-600 shrink-0 font-mono text-[11px]">
+                        {ex.setsCount} series {ex.maxWeight > 0 ? `· máx ${ex.maxWeight}kg` : ''}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={isConverting}
+                onClick={() => setConvertingWorkout(null)}
+                className="text-xs rounded-xl cursor-pointer"
+              >
+                Cancelar
+              </Button>
+              <Button
+                size="sm"
+                disabled={isConverting}
+                onClick={handleConfirmConvertToTemplate}
+                className="bg-purple-600 hover:bg-purple-700 text-white text-xs gap-1.5 rounded-xl shadow-xs font-semibold cursor-pointer"
+              >
+                {isConverting ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    Guardando...
+                  </>
+                ) : (
+                  <>
+                    <Bookmark className="w-3.5 h-3.5" />
+                    Guardar Plantilla
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Modal de confirmación de eliminación */}
