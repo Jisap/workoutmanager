@@ -210,7 +210,7 @@ export function WorkoutQuickSelector({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-gray-100 dark:border-gray-800">
         <div>
           <span className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wider flex items-center gap-1.5">
-            <Sparkles className="w-3.5 h-3.5" /> Repetir Rutina o Cargar Plantilla
+            <Sparkles className="w-3.5 h-3.5" /> Repetir Entrenamiento o Cargar Plantilla
           </span>
           <h2 className="text-base font-bold text-gray-900 dark:text-gray-100 mt-0.5">
             Selecciona una sesión realizada o plantilla previa
@@ -234,7 +234,7 @@ export function WorkoutQuickSelector({
               }`}
             >
               <Clock className="w-3.5 h-3.5" />
-              <span>Rutinas Realizadas ({recentWorkouts.length})</span>
+              <span>Entrenamientos Realizados ({recentWorkouts.length})</span>
             </button>
           )}
 
@@ -303,10 +303,12 @@ export function WorkoutQuickSelector({
         )}
       </div>
 
-      {/* ─── 3. TABLA DE RUTINAS CON PAGINACIÓN ─── */}
+      {/* ─── 3. TABLA DE ENTRENAMIENTOS / PLANTILLAS CON PAGINACIÓN ─── */}
       {paginatedList.length === 0 ? (
         <div className="p-8 text-center border border-dashed border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50/50 dark:bg-gray-800/30">
-          <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">No se encontraron rutinas</p>
+          <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+            No se encontraron {activeTab === 'recent' ? 'entrenamientos' : 'plantillas'}
+          </p>
           <p className="text-xs text-gray-400 mt-1">Prueba con otros términos de búsqueda o filtros</p>
         </div>
       ) : (
@@ -314,7 +316,7 @@ export function WorkoutQuickSelector({
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="bg-gray-50/90 dark:bg-gray-800/70 border-b border-gray-200 dark:border-gray-700 text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                <th className="py-3 px-3 sm:px-4">Rutina</th>
+                <th className="py-3 px-3 sm:px-4">{activeTab === 'recent' ? 'Entrenamiento' : 'Plantilla'}</th>
                 <th className="py-3 px-3">
                   {activeTab === 'recent' ? 'Fecha' : 'Ejercicios'}
                 </th>
@@ -485,7 +487,7 @@ export function WorkoutQuickSelector({
             <span>
               Mostrando <strong className="text-gray-900 dark:text-gray-100">{startIndex + 1}</strong>–
               <strong className="text-gray-900 dark:text-gray-100">{endIndex}</strong> de{' '}
-              <strong className="text-gray-900 dark:text-gray-100">{totalItems}</strong> {activeTab === 'recent' ? 'rutinas' : 'plantillas'}
+              <strong className="text-gray-900 dark:text-gray-100">{totalItems}</strong> {activeTab === 'recent' ? 'entrenamientos' : 'plantillas'}
             </span>
             <div className="flex items-center gap-1 border-l border-gray-200 dark:border-gray-700 pl-3">
               <span className="text-gray-400">Ver:</span>

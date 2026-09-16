@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { ExerciseCombobox, type ExerciseOption } from '@/components/workout/exercise-combobox';
-import { Plus, Trash2, Clock, Check, ChevronDown, ChevronUp, Pencil, RotateCcw, Bookmark, Sparkles, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Clock, Check, ChevronDown, ChevronUp, Pencil, RotateCcw, Bookmark, Sparkles, Loader2, Play } from 'lucide-react';
 import { saveWorkout, saveAsTemplate as saveAsTemplateAction, createDirectTemplate } from '../actions';
 import { CreateExerciseDialog, type Category } from '@/components/workout/create-exercise-dialog';
 
@@ -89,7 +89,7 @@ export function WorkoutLoggerClient({
     setTypeName(initialName);
     setTemplateName(initialName);
     const cleanName = initialName.replace(/\s*·\s*\d{1,2}\s+[a-záéíóú]+/gi, '').trim();
-    setDirectTemplateName(cleanName || 'Mi Rutina');
+    setDirectTemplateName(cleanName || 'Mi Plantilla');
   }, [initialName]);
 
   // Sincronizar lista de ejercicios disponibles
@@ -317,7 +317,7 @@ export function WorkoutLoggerClient({
     }
   };
 
-  const handleSaveDirectTemplate = async () => {
+  const handleSaveDirectTemplate = async (andStartWorkout: boolean = false) => {
     if (!directTemplateName.trim()) {
       alert('Por favor introduce un nombre para la plantilla');
       return;
@@ -357,7 +357,7 @@ export function WorkoutLoggerClient({
         }
       }
 
-      await createDirectTemplate({
+      const res = await createDirectTemplate({
         name: directTemplateName.trim(),
         description: directTemplateDescription.trim() || undefined,
         typeId: directTemplateTypeId,
@@ -365,7 +365,12 @@ export function WorkoutLoggerClient({
       });
 
       setIsTemplateDialogOpen(false);
-      router.push('/workouts');
+
+      if (andStartWorkout && res.templateId) {
+        router.push(`/workouts/log?mode=template&templateId=${res.templateId}`);
+      } else {
+        router.push('/workouts/new');
+      }
     } catch (error) {
       console.error(error);
       alert('Error al guardar la plantilla');
@@ -465,7 +470,7 @@ export function WorkoutLoggerClient({
             type="button"
             onClick={() => {
               const cleanName = typeName.replace(/\s*·\s*\d{1,2}\s+[a-záéíóú]+/gi, '').trim();
-              setDirectTemplateName(cleanName || 'Mi Rutina');
+              setDirectTemplateName(cleanName || 'Mi Plantilla');
               setIsTemplateDialogOpen(true);
             }}
             className={`${
@@ -478,6 +483,22 @@ export function WorkoutLoggerClient({
             <span>Guardar Plantilla</span>
           </Button>
 
+          {mode === 'new-template' && (
+            <Button
+              type="button"
+              onClick={() => {
+                const cleanName = typeName.replace(/\s*·\s*\d{1,2}\s+[a-záéíóú]+/gi, '').trim();
+                setDirectTemplateName(cleanName || 'Mi Plantilla');
+                handleSaveDirectTemplate(true);
+              }}
+              disabled={isSavingTemplate || exercises.length === 0}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold cursor-pointer gap-1.5 shadow-sm"
+            >
+              <Play className="w-3.5 h-3.5 fill-current" />
+              <span>Guardar e Iniciar</span>
+            </Button>
+          )}
+
           {mode !== 'new-template' && (
             <Button onClick={() => setIsFinishDialogOpen(true)} className="bg-green-600 hover:bg-green-700 text-xs font-semibold cursor-pointer">
               <Clock className="w-4 h-4 mr-1.5" />
@@ -486,6 +507,18 @@ export function WorkoutLoggerClient({
           )}
         </div>
       </div>
+
+      {/* Banner de Modo Planificación */}
+      {mode === 'new-template' && (
+        <div className="p-3.5 bg-purple-50/80 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800/60 rounded-2xl flex items-center justify-between gap-3 text-xs text-purple-900 dark:text-purple-200">
+          <div className="flex items-center gap-2">
+            <Bookmark className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0" />
+            <span>
+              <strong>Modo Planificación:</strong> Diseña tus ejercicios y series objetivo. Pulsa <strong>"Guardar Plantilla"</strong> para tenerla lista cuando vayas al gimnasio.
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Lista de Ejercicios */}
       <div className="space-y-4">
@@ -767,7 +800,7 @@ export function WorkoutLoggerClient({
               type="button"
               onClick={() => {
                 const cleanName = typeName.replace(/\s*·\s*\d{1,2}\s+[a-záéíóú]+/gi, '').trim();
-                setDirectTemplateName(cleanName || 'Mi Rutina');
+                setDirectTemplateName(cleanName || 'Mi Plantilla');
                 setIsTemplateDialogOpen(true);
               }}
               className="flex-1 sm:flex-initial bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-300 text-xs font-semibold"
@@ -872,7 +905,7 @@ export function WorkoutLoggerClient({
               <div>
                 <DialogTitle className="text-base font-bold text-gray-900 dark:text-gray-100">Guardar como Plantilla</DialogTitle>
                 <DialogDescription className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                  Guarda esta rutina en tu catálogo de plantillas para reutilizarla cuando quieras.
+                  Guarda esta configuración en tu catálogo de plantillas para reutilizarla cuando quieras.
                 </DialogDescription>
               </div>
             </div>
@@ -950,7 +983,7 @@ export function WorkoutLoggerClient({
             </div>
           </div>
 
-          <DialogFooter className="gap-2 sm:gap-0">
+          <DialogFooter className="gap-2 sm:gap-1.5 flex-wrap">
             <Button
               type="button"
               variant="outline"
@@ -962,21 +995,30 @@ export function WorkoutLoggerClient({
             </Button>
             <Button
               type="button"
-              onClick={handleSaveDirectTemplate}
+              onClick={() => handleSaveDirectTemplate(false)}
               disabled={isSavingTemplate || exercises.length === 0}
-              className="bg-purple-600 hover:bg-purple-700 text-white font-semibold text-xs"
+              className="bg-purple-600 hover:bg-purple-700 text-white font-semibold text-xs gap-1.5"
             >
               {isSavingTemplate ? (
                 <>
-                  <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
                   Guardando...
                 </>
               ) : (
                 <>
-                  <Bookmark className="w-3.5 h-3.5 mr-1.5" />
+                  <Bookmark className="w-3.5 h-3.5" />
                   Guardar Plantilla
                 </>
               )}
+            </Button>
+            <Button
+              type="button"
+              onClick={() => handleSaveDirectTemplate(true)}
+              disabled={isSavingTemplate || exercises.length === 0}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs gap-1.5"
+            >
+              <Play className="w-3.5 h-3.5 fill-current" />
+              Guardar e Iniciar Ahora
             </Button>
           </DialogFooter>
         </DialogContent>
