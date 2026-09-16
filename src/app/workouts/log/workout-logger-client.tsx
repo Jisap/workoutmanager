@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { ExerciseCombobox, type ExerciseOption } from '@/components/workout/exercise-combobox';
-import { Plus, Trash2, Clock, Check, ChevronDown, ChevronUp, Pencil, RotateCcw, Bookmark, Sparkles, Loader2, Play } from 'lucide-react';
+import { Plus, Trash2, Clock, Check, ChevronDown, ChevronUp, Pencil, RotateCcw, Bookmark, Sparkles, Loader2, Play, Save } from 'lucide-react';
 import { saveWorkout, saveAsTemplate as saveAsTemplateAction, createDirectTemplate } from '../actions';
 import { CreateExerciseDialog, type Category } from '@/components/workout/create-exercise-dialog';
 
@@ -277,6 +277,42 @@ export function WorkoutLoggerClient({
     setExercises((prev) => prev.filter((ex) => ex.id !== exerciseId));
   };
 
+  const handleDirectSave = async () => {
+    if (exercises.length === 0) {
+      alert('Añade al menos un ejercicio antes de guardar');
+      return;
+    }
+    setIsSaving(true);
+    try {
+      const payload = {
+        typeId: parseInt(typeId || '1', 10),
+        name: typeName,
+        totalTimeSeconds: (parseInt(totalTimeMinutes, 10) || 0) * 60,
+        notes,
+        exercises: exercises.map((ex, index) => ({
+          exerciseId: ex.exerciseId,
+          orderIndex: index,
+          sets: ex.sets.map((s) => ({
+            repCount: s.repCount,
+            weight: s.weight,
+            distance: null,
+            durationSeconds: null,
+            rpe: null,
+            isRx: true,
+          })),
+        })),
+      };
+
+      await saveWorkout(payload);
+      router.push('/dashboard');
+    } catch (error) {
+      console.error(error);
+      alert('Error al guardar el entrenamiento');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleFinish = async () => {
     setIsSaving(true);
     try {
@@ -465,45 +501,69 @@ export function WorkoutLoggerClient({
             </Button>
           )}
 
-          {/* Botón Guardar Plantilla */}
-          <Button
-            type="button"
-            onClick={() => {
-              const cleanName = typeName.replace(/\s*·\s*\d{1,2}\s+[a-záéíóú]+/gi, '').trim();
-              setDirectTemplateName(cleanName || 'Mi Plantilla');
-              setIsTemplateDialogOpen(true);
-            }}
-            className={`${
-              mode === 'new-template'
-                ? 'bg-purple-600 hover:bg-purple-700 text-white font-bold shadow-sm'
-                : 'bg-purple-50 dark:bg-purple-900/20 hover:bg-purple-100 dark:hover:bg-purple-900/30 text-purple-700 dark:text-purple-300 border border-purple-300 dark:border-purple-800 font-semibold'
-            } text-xs cursor-pointer gap-1.5`}
-          >
-            <Bookmark className="w-4 h-4" />
-            <span>Guardar Plantilla</span>
-          </Button>
+          {/* MODO PLANIFICACIÓN: Botones para Plantillas */}
+          {mode === 'new-template' ? (
+            <>
+              <Button
+                type="button"
+                onClick={() => {
+                  const cleanName = typeName.replace(/\s*·\s*\d{1,2}\s+[a-záéíóú]+/gi, '').trim();
+                  setDirectTemplateName(cleanName || 'Mi Plantilla');
+                  setIsTemplateDialogOpen(true);
+                }}
+                disabled={isSavingTemplate || exercises.length === 0}
+                className="bg-purple-600 hover:bg-purple-700 text-white font-bold shadow-xs text-xs cursor-pointer gap-1.5"
+              >
+                <Bookmark className="w-4 h-4" />
+                <span>Guardar Plantilla</span>
+              </Button>
 
-          {mode === 'new-template' && (
-            <Button
-              type="button"
-              onClick={() => {
-                const cleanName = typeName.replace(/\s*·\s*\d{1,2}\s+[a-záéíóú]+/gi, '').trim();
-                setDirectTemplateName(cleanName || 'Mi Plantilla');
-                handleSaveDirectTemplate(true);
-              }}
-              disabled={isSavingTemplate || exercises.length === 0}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold cursor-pointer gap-1.5 shadow-sm"
-            >
-              <Play className="w-3.5 h-3.5 fill-current" />
-              <span>Guardar e Iniciar</span>
-            </Button>
-          )}
+              <Button
+                type="button"
+                onClick={() => {
+                  const cleanName = typeName.replace(/\s*·\s*\d{1,2}\s+[a-záéíóú]+/gi, '').trim();
+                  setDirectTemplateName(cleanName || 'Mi Plantilla');
+                  handleSaveDirectTemplate(true);
+                }}
+                disabled={isSavingTemplate || exercises.length === 0}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold cursor-pointer gap-1.5 shadow-xs"
+              >
+                <Play className="w-3.5 h-3.5 fill-current" />
+                <span>Guardar e Iniciar</span>
+              </Button>
+            </>
+          ) : (
+            <>
+              {/* MODO ENTRENAMIENTO EN VIVO: Guardar Entrenamiento vs Finalizar Sesión */}
+              <Button
+                type="button"
+                onClick={handleDirectSave}
+                disabled={isSaving || exercises.length === 0}
+                className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold cursor-pointer gap-1.5 shadow-xs"
+              >
+                {isSaving ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Guardando...</span>
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4" />
+                    <span>Guardar Entrenamiento</span>
+                  </>
+                )}
+              </Button>
 
-          {mode !== 'new-template' && (
-            <Button onClick={() => setIsFinishDialogOpen(true)} className="bg-green-600 hover:bg-green-700 text-xs font-semibold cursor-pointer">
-              <Clock className="w-4 h-4 mr-1.5" />
-              Finalizar Sesión
-            </Button>
+              <Button
+                type="button"
+                onClick={() => setIsFinishDialogOpen(true)}
+                disabled={isSaving || exercises.length === 0}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold cursor-pointer gap-1.5 shadow-xs"
+              >
+                <Clock className="w-4 h-4" />
+                <span>Finalizar Sesión</span>
+              </Button>
+            </>
           )}
         </div>
       </div>
@@ -795,29 +855,66 @@ export function WorkoutLoggerClient({
             <span>{exercises.length} ejercicio{exercises.length !== 1 ? 's' : ''} configurado{exercises.length !== 1 ? 's' : ''}</span>
           </div>
 
-          <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-            <Button
-              type="button"
-              onClick={() => {
-                const cleanName = typeName.replace(/\s*·\s*\d{1,2}\s+[a-záéíóú]+/gi, '').trim();
-                setDirectTemplateName(cleanName || 'Mi Plantilla');
-                setIsTemplateDialogOpen(true);
-              }}
-              className="flex-1 sm:flex-initial bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-300 text-xs font-semibold"
-            >
-              <Bookmark className="w-4 h-4 mr-1.5 text-purple-600" />
-              Guardar Plantilla
-            </Button>
-
-            {mode !== 'new-template' && (
-              <Button
-                type="button"
-                onClick={() => setIsFinishDialogOpen(true)}
-                className="flex-1 sm:flex-initial bg-green-600 hover:bg-green-700 text-white text-xs font-semibold"
-              >
-                <Clock className="w-4 h-4 mr-1.5" />
-                Finalizar Sesión
-              </Button>
+          <div className="flex items-center gap-2 w-full sm:w-auto justify-end flex-wrap">
+            {mode === 'new-template' ? (
+              <>
+                <Button
+                  type="button"
+                  onClick={() => {
+                    const cleanName = typeName.replace(/\s*·\s*\d{1,2}\s+[a-záéíóú]+/gi, '').trim();
+                    setDirectTemplateName(cleanName || 'Mi Plantilla');
+                    setIsTemplateDialogOpen(true);
+                  }}
+                  disabled={isSavingTemplate || exercises.length === 0}
+                  className="flex-1 sm:flex-initial bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold gap-1.5 cursor-pointer"
+                >
+                  <Bookmark className="w-4 h-4" />
+                  Guardar Plantilla
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => {
+                    const cleanName = typeName.replace(/\s*·\s*\d{1,2}\s+[a-záéíóú]+/gi, '').trim();
+                    setDirectTemplateName(cleanName || 'Mi Plantilla');
+                    handleSaveDirectTemplate(true);
+                  }}
+                  disabled={isSavingTemplate || exercises.length === 0}
+                  className="flex-1 sm:flex-initial bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold gap-1.5 cursor-pointer"
+                >
+                  <Play className="w-3.5 h-3.5 fill-current" />
+                  Guardar e Iniciar
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button
+                  type="button"
+                  onClick={handleDirectSave}
+                  disabled={isSaving || exercises.length === 0}
+                  className="flex-1 sm:flex-initial bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold gap-1.5 cursor-pointer"
+                >
+                  {isSaving ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Guardando...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4" />
+                      <span>Guardar Entrenamiento</span>
+                    </>
+                  )}
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => setIsFinishDialogOpen(true)}
+                  disabled={isSaving || exercises.length === 0}
+                  className="flex-1 sm:flex-initial bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold gap-1.5 cursor-pointer"
+                >
+                  <Clock className="w-4 h-4" />
+                  <span>Finalizar Sesión</span>
+                </Button>
+              </>
             )}
           </div>
         </div>
@@ -888,7 +985,7 @@ export function WorkoutLoggerClient({
               Cancelar
             </Button>
             <Button onClick={handleFinish} disabled={isSaving}>
-              {isSaving ? 'Guardando...' : 'Guardar Entrenamiento'}
+              {isSaving ? 'Guardando...' : 'Finalizar y Guardar Sesión'}
             </Button>
           </DialogFooter>
         </DialogContent>
