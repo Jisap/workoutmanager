@@ -32,6 +32,8 @@ import {
   History,
   Sparkles,
   Pencil,
+  Check,
+  Save,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -164,6 +166,15 @@ function WorkoutDetailModal({
                 <TypeIcon className="w-3 h-3" />
                 {workout.typeName}
               </span>
+              {workout.totalTimeSeconds && workout.totalTimeSeconds > 0 ? (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                  <Check className="w-2.5 h-2.5 stroke-[3]" /> Finalizado
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                  <Save className="w-2.5 h-2.5" /> Sin finalizar (Guardado)
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <h3 className="font-extrabold text-base text-gray-900 dark:text-gray-100 truncate">{workout.name}</h3>
@@ -320,7 +331,9 @@ function WorkoutDetailModal({
               className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs gap-1.5 rounded-xl shadow-sm cursor-pointer"
             >
               <Play className="w-3.5 h-3.5 fill-current" />
-              Repetir entrenamiento
+              {workout.totalTimeSeconds && workout.totalTimeSeconds > 0
+                ? 'Repetir entrenamiento'
+                : 'Iniciar entrenamiento'}
             </Button>
           </div>
         </div>
@@ -679,10 +692,21 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
   const [workouts, setWorkouts] = useState<WorkoutHistoryItem[]>(history);
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState<string>('all');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'finished' | 'draft'>('all');
   const [selectedWorkout, setSelectedWorkout] = useState<WorkoutHistoryItem | null>(null);
   const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
   const [pageSize, setPageSize] = useState<number>(10);
   const [currentPage, setCurrentPage] = useState<number>(1);
+
+  // Conteo de finalizados y guardados sin finalizar
+  const finishedCount = useMemo(
+    () => workouts.filter((w) => !!(w.totalTimeSeconds && w.totalTimeSeconds > 0)).length,
+    [workouts]
+  );
+  const draftCount = useMemo(
+    () => workouts.filter((w) => !w.totalTimeSeconds || w.totalTimeSeconds === 0).length,
+    [workouts]
+  );
 
   // Templates state
   const [templates, setTemplates] = useState<UserTemplateItem[]>(initialTemplates);
@@ -769,13 +793,18 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
   const filteredWorkouts = useMemo(() => {
     return workouts.filter((w) => {
       const matchType = filterType === 'all' || w.typeName === filterType;
+      const isFinished = !!(w.totalTimeSeconds && w.totalTimeSeconds > 0);
+      const matchStatus =
+        filterStatus === 'all' ||
+        (filterStatus === 'finished' && isFinished) ||
+        (filterStatus === 'draft' && !isFinished);
       const matchSearch =
         search.trim() === '' ||
         w.name.toLowerCase().includes(search.toLowerCase()) ||
         w.exercisesSummary.some((e) => e.name.toLowerCase().includes(search.toLowerCase()));
-      return matchType && matchSearch;
+      return matchType && matchStatus && matchSearch;
     });
-  }, [workouts, search, filterType]);
+  }, [workouts, search, filterType, filterStatus]);
 
   // Filtered templates list
   const filteredTemplates = useMemo(() => {
@@ -792,7 +821,7 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, filterType, pageSize]);
+  }, [search, filterType, filterStatus, pageSize]);
 
   // Pagination calculations for workouts
   const totalItems = filteredWorkouts.length;
@@ -1033,7 +1062,7 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                 )}
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 {/* Filter by Type */}
                 <div className="relative shrink-0 flex-1 sm:flex-initial">
                   <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 dark:text-gray-500 pointer-events-none" />
@@ -1084,16 +1113,55 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
               </div>
             </div>
 
+            {/* Píldoras de filtrado por Estado (Todos / Finalizados / Sin finalizar) */}
+            <div className="flex items-center gap-1.5 pt-1 overflow-x-auto pb-0.5">
+              <button
+                type="button"
+                onClick={() => setFilterStatus('all')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                  filterStatus === 'all'
+                    ? 'bg-blue-600 text-white shadow-2xs'
+                    : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+                }`}
+              >
+                Todos ({workouts.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilterStatus('finished')}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                  filterStatus === 'finished'
+                    ? 'bg-emerald-600 text-white shadow-2xs'
+                    : 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/50 hover:bg-emerald-100 dark:hover:bg-emerald-900/40'
+                }`}
+              >
+                <Check className="w-3 h-3 stroke-[3]" />
+                Finalizados ({finishedCount})
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilterStatus('draft')}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                  filterStatus === 'draft'
+                    ? 'bg-amber-600 text-white shadow-2xs'
+                    : 'bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/50 hover:bg-amber-100 dark:hover:bg-amber-900/40'
+                }`}
+              >
+                <Save className="w-3 h-3" />
+                Sin finalizar ({draftCount})
+              </button>
+            </div>
+
             {/* Filter Summary & Count */}
             <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 pt-1 border-t border-gray-100 dark:border-gray-800">
               <div className="flex items-center gap-1.5">
                 <span>
-                  Total: <strong className="text-gray-800 dark:text-gray-200 font-bold">{filteredWorkouts.length}</strong> sesiones
+                  Mostrando: <strong className="text-gray-800 dark:text-gray-200 font-bold">{filteredWorkouts.length}</strong> {filteredWorkouts.length === 1 ? 'sesión' : 'sesiones'}
                 </span>
-                {(search || filterType !== 'all') && (
+                {(search || filterType !== 'all' || filterStatus !== 'all') && (
                   <>
                     <span>·</span>
-                    <span className="text-blue-600 font-medium">Filtro aplicado</span>
+                    <span className="text-blue-600 dark:text-blue-400 font-semibold">Filtros activos</span>
                   </>
                 )}
               </div>
@@ -1114,7 +1182,7 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                   <Dumbbell className="w-7 h-7" />
                 </div>
                 <div className="max-w-sm mx-auto">
-                  <h3 className="text-base font-bold text-gray-900 dark:text-gray-100">No hay sesiones en el historial</h3>
+                  <h3 className="text-base font-bold text-gray-900 dark:text-gray-100">No hay sesiones que coincidan</h3>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                     {workouts.length === 0
                       ? 'Aún no has registrado ningún entrenamiento. Empieza hoy registrando tu primera sesión.'
@@ -1136,6 +1204,7 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                     onClick={() => {
                       setSearch('');
                       setFilterType('all');
+                      setFilterStatus('all');
                     }}
                   >
                     Limpiar filtros
@@ -1155,7 +1224,7 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                       <th className="py-3 px-4">Fecha & Hora</th>
                       <th className="py-3 px-4">Entrenamiento</th>
                       <th className="py-3 px-3">Tipo</th>
-                      <th className="py-3 px-3 text-center">Duración</th>
+                      <th className="py-3 px-3 text-center">Estado / Duración</th>
                       <th className="py-3 px-3 text-center">Volumen</th>
                       <th className="py-3 px-3 text-center">Series</th>
                       <th className="py-3 px-4 hidden md:table-cell">Ejercicios Realizados</th>
@@ -1167,6 +1236,7 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                       const style = getTypeStyle(workout.typeName);
                       const TypeIcon = style.icon;
                       const dateObj = new Date(workout.startTime);
+                      const isFinished = !!(workout.totalTimeSeconds && workout.totalTimeSeconds > 0);
 
                       return (
                         <tr
@@ -1214,14 +1284,24 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                             </span>
                           </td>
 
-                          {/* Duración */}
-                          <td className="py-3 px-3 text-center whitespace-nowrap text-gray-700 dark:text-gray-300 font-semibold tabular-nums">
-                            {workout.totalTimeSeconds ? (
-                              <span className="bg-gray-50 dark:bg-gray-800/50 px-2 py-0.5 rounded-md border border-gray-100 dark:border-gray-800">
-                                {Math.round(workout.totalTimeSeconds / 60)} min
-                              </span>
+                          {/* Estado / Duración */}
+                          <td className="py-3 px-3 text-center whitespace-nowrap">
+                            {isFinished ? (
+                              <div className="inline-flex flex-col items-center gap-0.5">
+                                <span className="inline-flex items-center gap-1 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 px-2 py-0.5 rounded-full text-[10px] font-bold">
+                                  <Check className="w-2.5 h-2.5 stroke-[3]" /> Finalizado
+                                </span>
+                                <span className="text-[11px] text-gray-500 dark:text-gray-400 font-semibold tabular-nums">
+                                  {Math.round(workout.totalTimeSeconds! / 60)} min
+                                </span>
+                              </div>
                             ) : (
-                              <span className="text-gray-300">—</span>
+                              <div className="inline-flex flex-col items-center gap-0.5">
+                                <span className="inline-flex items-center gap-1 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 px-2 py-0.5 rounded-full text-[10px] font-bold">
+                                  <Save className="w-2.5 h-2.5" /> Sin finalizar
+                                </span>
+                                <span className="text-[10px] text-gray-400 dark:text-gray-500">Guardado</span>
+                              </div>
                             )}
                           </td>
 
@@ -1411,6 +1491,15 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                                         <TypeIcon className="w-2.5 h-2.5" />
                                         {workout.typeName}
                                       </span>
+                                      {workout.totalTimeSeconds && workout.totalTimeSeconds > 0 ? (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                                          <Check className="w-2 h-2 stroke-[3]" /> Finalizado
+                                        </span>
+                                      ) : (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                                          <Save className="w-2 h-2" /> Sin finalizar
+                                        </span>
+                                      )}
                                     </div>
                                     <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mt-1">
                                       <span className="flex items-center gap-1">
@@ -1440,7 +1529,7 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                                       Duración
                                     </p>
                                     <p className="text-xs font-black text-gray-900 dark:text-gray-100 tabular-nums mt-0.5">
-                                      {workout.totalTimeSeconds
+                                      {workout.totalTimeSeconds && workout.totalTimeSeconds > 0
                                         ? `${Math.round(workout.totalTimeSeconds / 60)} min`
                                         : '—'}
                                     </p>

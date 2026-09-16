@@ -287,7 +287,7 @@ export function WorkoutLoggerClient({
       const payload = {
         typeId: parseInt(typeId || '1', 10),
         name: typeName,
-        totalTimeSeconds: (parseInt(totalTimeMinutes, 10) || 0) * 60,
+        totalTimeSeconds: 0, // 0 = Guardado sin finalizar / En progreso
         notes,
         exercises: exercises.map((ex, index) => ({
           exerciseId: ex.exerciseId,
@@ -304,7 +304,7 @@ export function WorkoutLoggerClient({
       };
 
       await saveWorkout(payload);
-      router.push('/dashboard');
+      router.push('/workouts');
     } catch (error) {
       console.error(error);
       alert('Error al guardar el entrenamiento');
