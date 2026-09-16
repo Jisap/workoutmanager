@@ -375,7 +375,7 @@ export function WorkoutLoggerClient({
   };
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6 pb-32">
+    <div className="mx-auto w-full max-w-2xl lg:max-w-4xl xl:max-w-5xl space-y-6 pb-32">
       {/* Barra superior con título y controles */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="space-y-1 min-w-0 flex-1">
@@ -489,6 +489,7 @@ export function WorkoutLoggerClient({
 
       {/* Lista de Ejercicios */}
       <div className="space-y-4">
+        <div className="grid grid-cols-1 gap-4 items-start">
         {exercises.map((ex, exIndex) => {
           const isExpanded = !!expandedExercises[ex.id];
           const allCompleted = ex.sets.length > 0 && ex.sets.every((s) => s.isCompleted);
@@ -497,7 +498,7 @@ export function WorkoutLoggerClient({
           const primaryWeight = ex.sets[0]?.weight;
 
           return (
-            <Card key={ex.id} className="overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm transition-all">
+            <Card key={ex.id} className="w-full overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm transition-all">
               <CardHeader className="bg-gray-50/80 dark:bg-gray-800/60 py-2.5 px-4 flex flex-row items-center justify-between gap-2 border-b dark:border-gray-700">
                 <div className="flex items-center gap-2 flex-1 min-w-0">
                   <span className="text-xs font-bold text-gray-500 dark:text-gray-400 w-5 shrink-0 text-center">{exIndex + 1}</span>
@@ -559,8 +560,8 @@ export function WorkoutLoggerClient({
               <CardContent className="p-0">
                 {!isExpanded ? (
                   /* VISTA COMPACTA / RÁPIDA (CrossFit, WODs, Fuerza rápida) */
-                  <div className="p-3 bg-white dark:bg-gray-900 flex flex-wrap items-center justify-between gap-3">
-                    <div className="flex items-center gap-2 flex-1 min-w-[260px]">
+                  <div className="p-3 bg-white dark:bg-gray-900 flex flex-wrap items-end justify-between gap-3">
+                    <div className="flex items-end gap-2 flex-1 min-w-[260px]">
                       {/* Series / Rondas */}
                       <div className="flex flex-col flex-1 max-w-[100px]">
                         <span className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">
@@ -743,6 +744,7 @@ export function WorkoutLoggerClient({
             </Card>
           );
         })}
+        </div>
 
         <Button
           type="button"

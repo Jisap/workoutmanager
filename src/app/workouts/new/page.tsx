@@ -110,7 +110,7 @@ export default async function NewWorkoutPage() {
   }));
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6 pb-24">
+    <div className="mx-auto w-full max-w-2xl lg:max-w-4xl xl:max-w-5xl space-y-6 pb-24">
       {/* Header con volver */}
       <div className="flex items-center gap-4">
         <Link href="/dashboard">
@@ -141,7 +141,7 @@ export default async function NewWorkoutPage() {
           <span className="text-xs text-gray-400 dark:text-gray-500">Elige una modalidad</span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {types.map((type) => (
             <Link key={type.id} href={`/workouts/log?mode=free&typeId=${type.id}`}>
               <Card className="hover:border-blue-300 hover:shadow-xs hover:bg-gray-50/50 dark:hover:bg-gray-800 transition-all cursor-pointer h-full border-gray-200 dark:border-gray-700 group">

@@ -732,21 +732,33 @@ export async function getConsistencyData(userId: string) {
 }
 
 export async function getWorkoutHistory(userId: string, limit: number = 200) {
-  const history = await db.query.workouts.findMany({
-    where: eq(workouts.userId, userId),
-    orderBy: [desc(workouts.startTime)],
-    limit,
-    with: {
-      type: true,
-      exercises: {
-        with: {
-          exercise: true,
-          sets: true,
+  const [history, userTemplates] = await Promise.all([
+    db.query.workouts.findMany({
+      where: eq(workouts.userId, userId),
+      orderBy: [desc(workouts.startTime)],
+      limit,
+      with: {
+        type: true,
+        exercises: {
+          with: {
+            exercise: true,
+            sets: true,
+          },
+          orderBy: (fields, { asc }) => asc(fields.orderIndex),
         },
-        orderBy: (fields, { asc }) => asc(fields.orderIndex),
       },
-    },
-  });
+    }),
+    db.query.workoutTemplates.findMany({
+      where: eq(workoutTemplates.userId, userId),
+      columns: { id: true, sourceWorkoutId: true },
+    }),
+  ]);
+
+  const savedWorkoutIds = new Set(
+    userTemplates
+      .map((t) => t.sourceWorkoutId)
+      .filter((id): id is number => id !== null && id !== undefined)
+  );
 
   return history.map((w) => {
     let totalVolume = 0;
@@ -814,6 +826,8 @@ export async function getWorkoutHistory(userId: string, limit: number = 200) {
       name: w.name,
       typeName: w.type?.name || 'General',
       typeId: w.typeId,
+      templateId: w.templateId ?? null,
+      savedAsTemplate: savedWorkoutIds.has(w.id),
       startTime: w.startTime,
       totalTimeSeconds: w.totalTimeSeconds,
       notes: w.notes,
@@ -968,6 +982,65 @@ export async function getUserTemplates(userId: string) {
   });
 }
 
+export async function updateWorkout(data: {
+  id: number;
+  name: string;
+  notes?: string | null;
+}) {
+  const { userId } = await auth();
+  if (!userId) throw new Error('No autorizado');
+
+  const trimmedName = data.name.trim();
+  if (!trimmedName) throw new Error('El nombre del entrenamiento no puede estar vacío');
+
+  const [updated] = await db
+    .update(workouts)
+    .set({
+      name: trimmedName,
+      notes: data.notes !== undefined ? data.notes : undefined,
+    })
+    .where(and(eq(workouts.id, data.id), eq(workouts.userId, userId)))
+    .returning();
+
+  if (!updated) throw new Error('Entrenamiento no encontrado o no autorizado');
+
+  revalidatePath('/workouts');
+  revalidatePath('/dashboard');
+  revalidatePath('/progress');
+  revalidatePath('/workouts/new');
+
+  return { success: true, workout: updated };
+}
+
+export async function updateWorkoutTemplate(data: {
+  id: number;
+  name: string;
+  description?: string | null;
+}) {
+  const { userId } = await auth();
+  if (!userId) throw new Error('No autorizado');
+
+  const trimmedName = data.name.trim();
+  if (!trimmedName) throw new Error('El nombre de la plantilla no puede estar vacío');
+
+  const [updated] = await db
+    .update(workoutTemplates)
+    .set({
+      name: trimmedName,
+      description: data.description !== undefined ? data.description : undefined,
+    })
+    .where(and(eq(workoutTemplates.id, data.id), eq(workoutTemplates.userId, userId)))
+    .returning();
+
+  if (!updated) throw new Error('Plantilla no encontrada o no autorizada');
+
+  revalidatePath('/workouts');
+  revalidatePath('/dashboard');
+  revalidatePath('/workouts/new');
+
+  return { success: true, template: updated };
+}
+
 export async function deleteWorkout(workoutId: number) {
   const { userId } = await auth();
   if (!userId) throw new Error('No autorizado');
@@ -998,5 +1071,6 @@ export async function deleteWorkoutTemplate(templateId: number) {
 
   return { success: true };
 }
+
 
 

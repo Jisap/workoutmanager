@@ -31,10 +31,11 @@ import {
   Bookmark,
   History,
   Sparkles,
+  Pencil,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { deleteWorkout, deleteWorkoutTemplate, saveAsTemplate } from './actions';
+import { deleteWorkout, deleteWorkoutTemplate, saveAsTemplate, updateWorkout, updateWorkoutTemplate } from './actions';
 
 // ---------- Types ----------
 export interface WorkoutHistoryItem {
@@ -42,6 +43,8 @@ export interface WorkoutHistoryItem {
   name: string;
   typeName: string;
   typeId: number;
+  templateId?: number | null;
+  savedAsTemplate?: boolean;
   startTime: Date | string;
   totalTimeSeconds: number | null;
   notes: string | null;
@@ -107,6 +110,10 @@ function getTypeStyle(typeName: string): {
   return { badge: 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700', icon: BarChart2, bar: 'bg-gray-400' };
 }
 
+function isWorkoutSavedAsTemplate(workout: WorkoutHistoryItem): boolean {
+  return !!workout.savedAsTemplate || workout.templateId != null;
+}
+
 function formatMonthKey(dateStr: string): string {
   const [year, month] = dateStr.split('-');
   const d = new Date(Number(year), Number(month) - 1, 1);
@@ -131,12 +138,14 @@ function WorkoutDetailModal({
   onRepeat,
   onConvertToTemplate,
   onDelete,
+  onEdit,
 }: {
   workout: WorkoutHistoryItem;
   onClose: () => void;
   onRepeat: () => void;
   onConvertToTemplate: () => void;
   onDelete: () => void;
+  onEdit: () => void;
 }) {
   const style = getTypeStyle(workout.typeName);
   const TypeIcon = style.icon;
@@ -156,7 +165,17 @@ function WorkoutDetailModal({
                 {workout.typeName}
               </span>
             </div>
-            <h3 className="font-extrabold text-base text-gray-900 dark:text-gray-100 truncate">{workout.name}</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="font-extrabold text-base text-gray-900 dark:text-gray-100 truncate">{workout.name}</h3>
+              <button
+                type="button"
+                onClick={onEdit}
+                className="p-1 rounded-lg text-gray-400 dark:text-gray-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors cursor-pointer"
+                title="Editar nombre y notas del entrenamiento"
+              >
+                <Pencil className="w-3.5 h-3.5" />
+              </button>
+            </div>
             <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1.5">
               <Calendar className="w-3 h-3" />
               {new Date(workout.startTime).toLocaleDateString('es-ES', {
@@ -257,25 +276,40 @@ function WorkoutDetailModal({
 
         {/* Footer */}
         <div className="px-5 py-3 border-t border-gray-100 dark:border-gray-700 bg-gray-50/80 dark:bg-gray-800/60 flex items-center justify-between gap-2 flex-wrap">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onDelete}
-            className="text-xs text-red-600 hover:text-red-700 hover:bg-red-50 rounded-xl gap-1.5 px-2.5 cursor-pointer"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            <span>Eliminar</span>
-          </Button>
+          <div className="flex items-center gap-1.5">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onDelete}
+              className="text-xs text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-xl gap-1.5 px-2.5 cursor-pointer"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Eliminar</span>
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onEdit}
+              className="text-xs text-blue-700 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/30 border-blue-200 dark:border-blue-800 rounded-xl gap-1.5 px-2.5 cursor-pointer font-semibold"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+              <span>Editar</span>
+            </Button>
+          </div>
 
           <div className="flex items-center gap-2">
             <Button
               variant="outline"
               size="sm"
               onClick={onConvertToTemplate}
-              className="text-xs text-purple-700 hover:text-purple-800 hover:bg-purple-50 border-purple-200 rounded-xl gap-1.5 cursor-pointer font-semibold"
+              title={isWorkoutSavedAsTemplate(workout) ? 'Ya guardado como plantilla' : 'Guardar como plantilla'}
+              className="text-xs text-purple-700 hover:text-purple-800 hover:bg-purple-50 dark:hover:bg-purple-900/20 border-purple-200 dark:border-purple-800 rounded-xl gap-1.5 cursor-pointer font-semibold"
             >
-              <Bookmark className="w-3.5 h-3.5 text-purple-600" />
-              <span>Guardar como Plantilla</span>
+              <Bookmark
+                className="w-3.5 h-3.5 text-purple-600"
+                fill={isWorkoutSavedAsTemplate(workout) ? 'currentColor' : 'none'}
+              />
+              <span>{isWorkoutSavedAsTemplate(workout) ? 'Guardado como Plantilla' : 'Guardar como Plantilla'}</span>
             </Button>
             <Button variant="outline" size="sm" onClick={onClose} className="text-xs rounded-xl cursor-pointer">
               Cerrar
@@ -290,6 +324,206 @@ function WorkoutDetailModal({
             </Button>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------- Edit Workout Modal ----------
+function EditWorkoutModal({
+  workout,
+  onClose,
+  onSave,
+  isSaving,
+}: {
+  workout: { id: number; name: string; notes: string };
+  onClose: () => void;
+  onSave: (name: string, notes: string) => void;
+  isSaving: boolean;
+}) {
+  const [name, setName] = useState(workout.name);
+  const [notes, setNotes] = useState(workout.notes || '');
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) return;
+    onSave(name.trim(), notes.trim());
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-150"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div className="bg-white dark:bg-gray-900 rounded-2xl max-w-md w-full shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden animate-in zoom-in-95 duration-150">
+        <form onSubmit={handleSubmit}>
+          <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between bg-gray-50/80 dark:bg-gray-800/60">
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400">
+                <Pencil className="w-4 h-4" />
+              </div>
+              <h3 className="font-bold text-base text-gray-900 dark:text-gray-100">Editar Entrenamiento</h3>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1.5 rounded-lg text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-700 transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          <div className="p-5 space-y-4">
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">
+                Nombre del entrenamiento *
+              </label>
+              <input
+                type="text"
+                required
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Ej: Torso Hipertrofia, Push Day A..."
+                className="w-full px-3 py-2 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-gray-900 dark:text-gray-100"
+                autoFocus
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">
+                Notas / Sensaciones
+              </label>
+              <textarea
+                rows={3}
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Ej: Buena sesión de fuerza, descansos controlados..."
+                className="w-full px-3 py-2 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-gray-900 dark:text-gray-100 resize-none"
+              />
+            </div>
+          </div>
+
+          <div className="px-5 py-3 border-t border-gray-100 dark:border-gray-700 bg-gray-50/80 dark:bg-gray-800/60 flex items-center justify-end gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={onClose} className="rounded-xl text-xs cursor-pointer">
+              Cancelar
+            </Button>
+            <Button
+              type="submit"
+              size="sm"
+              disabled={isSaving || !name.trim()}
+              className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold shadow-sm cursor-pointer"
+            >
+              {isSaving ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />
+                  Guardando...
+                </>
+              ) : (
+                'Guardar Cambios'
+              )}
+            </Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ---------- Edit Template Modal ----------
+function EditTemplateModal({
+  template,
+  onClose,
+  onSave,
+  isSaving,
+}: {
+  template: { id: number; name: string; description: string };
+  onClose: () => void;
+  onSave: (name: string, description: string) => void;
+  isSaving: boolean;
+}) {
+  const [name, setName] = useState(template.name);
+  const [description, setDescription] = useState(template.description || '');
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) return;
+    onSave(name.trim(), description.trim());
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-150"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div className="bg-white dark:bg-gray-900 rounded-2xl max-w-md w-full shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden animate-in zoom-in-95 duration-150">
+        <form onSubmit={handleSubmit}>
+          <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between bg-gray-50/80 dark:bg-gray-800/60">
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-lg bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400">
+                <Bookmark className="w-4 h-4" />
+              </div>
+              <h3 className="font-bold text-base text-gray-900 dark:text-gray-100">Editar Plantilla</h3>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1.5 rounded-lg text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-700 transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          <div className="p-5 space-y-4">
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">
+                Nombre de la plantilla *
+              </label>
+              <input
+                type="text"
+                required
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Ej: Push Pull Legs, WOD Fran..."
+                className="w-full px-3 py-2 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 text-gray-900 dark:text-gray-100"
+                autoFocus
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">
+                Descripción / Enfoque
+              </label>
+              <textarea
+                rows={3}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Ej: Rutina de hipertrofia frecuencia 2, enfocada en hombro lateral..."
+                className="w-full px-3 py-2 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 text-gray-900 dark:text-gray-100 resize-none"
+              />
+            </div>
+          </div>
+
+          <div className="px-5 py-3 border-t border-gray-100 dark:border-gray-700 bg-gray-50/80 dark:bg-gray-800/60 flex items-center justify-end gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={onClose} className="rounded-xl text-xs cursor-pointer">
+              Cancelar
+            </Button>
+            <Button
+              type="submit"
+              size="sm"
+              disabled={isSaving || !name.trim()}
+              className="bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-semibold shadow-sm cursor-pointer"
+            >
+              {isSaving ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />
+                  Guardando...
+                </>
+              ) : (
+                'Guardar Cambios'
+              )}
+            </Button>
+          </div>
+        </form>
       </div>
     </div>
   );
@@ -463,6 +697,22 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
   } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // Edit workout modal state
+  const [editingWorkout, setEditingWorkout] = useState<{
+    id: number;
+    name: string;
+    notes: string;
+  } | null>(null);
+  const [isSavingWorkoutEdit, setIsSavingWorkoutEdit] = useState(false);
+
+  // Edit template modal state
+  const [editingTemplate, setEditingTemplate] = useState<{
+    id: number;
+    name: string;
+    description: string;
+  } | null>(null);
+  const [isSavingTemplateEdit, setIsSavingTemplateEdit] = useState(false);
+
   // Template conversion modal state
   const [convertingWorkout, setConvertingWorkout] = useState<WorkoutHistoryItem | null>(null);
 
@@ -596,6 +846,8 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
 
       if (res.template) {
         setTemplates((prev) => [res.template as UserTemplateItem, ...prev]);
+        const savedId = convertingWorkout.id;
+        setWorkouts((prev) => prev.map((w) => (w.id === savedId ? { ...w, savedAsTemplate: true } : w)));
       }
 
       setConvertingWorkout(null);
@@ -630,6 +882,64 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
       alert('Error al eliminar');
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  // Confirm edit workout handler
+  const handleConfirmEditWorkout = async (name: string, notes: string) => {
+    if (!editingWorkout) return;
+    setIsSavingWorkoutEdit(true);
+    try {
+      await updateWorkout({
+        id: editingWorkout.id,
+        name,
+        notes: notes || null,
+      });
+
+      setWorkouts((prev) =>
+        prev.map((w) =>
+          w.id === editingWorkout.id ? { ...w, name, notes: notes || null } : w
+        )
+      );
+
+      if (selectedWorkout && selectedWorkout.id === editingWorkout.id) {
+        setSelectedWorkout((prev) =>
+          prev ? { ...prev, name, notes: notes || null } : null
+        );
+      }
+
+      setEditingWorkout(null);
+    } catch (err) {
+      console.error(err);
+      alert('Error al actualizar el entrenamiento');
+    } finally {
+      setIsSavingWorkoutEdit(false);
+    }
+  };
+
+  // Confirm edit template handler
+  const handleConfirmEditTemplate = async (name: string, description: string) => {
+    if (!editingTemplate) return;
+    setIsSavingTemplateEdit(true);
+    try {
+      await updateWorkoutTemplate({
+        id: editingTemplate.id,
+        name,
+        description: description || null,
+      });
+
+      setTemplates((prev) =>
+        prev.map((t) =>
+          t.id === editingTemplate.id ? { ...t, name, description: description || null } : t
+        )
+      );
+
+      setEditingTemplate(null);
+    } catch (err) {
+      console.error(err);
+      alert('Error al actualizar la plantilla');
+    } finally {
+      setIsSavingTemplateEdit(false);
     }
   };
 
@@ -976,17 +1286,20 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                className="h-7 px-2 text-xs text-purple-700 hover:text-purple-800 hover:bg-purple-50 rounded-lg cursor-pointer"
+                                className="h-7 px-2 text-xs text-purple-700 hover:text-purple-800 hover:bg-purple-50 dark:hover:bg-purple-950/30 rounded-lg cursor-pointer"
                                 onClick={() => openConvertToTemplate(workout)}
-                                title="Guardar como plantilla"
+                                title={isWorkoutSavedAsTemplate(workout) ? 'Ya guardado como plantilla' : 'Guardar como plantilla'}
                               >
-                                <Bookmark className="w-3.5 h-3.5 sm:mr-1 text-purple-600" />
+                                <Bookmark
+                                  className="w-3.5 h-3.5 sm:mr-1 text-purple-600"
+                                  fill={isWorkoutSavedAsTemplate(workout) ? 'currentColor' : 'none'}
+                                />
                                 <span className="hidden xl:inline">Plantilla</span>
                               </Button>
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                className="h-7 px-2 text-xs text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg cursor-pointer"
+                                className="h-7 px-2 text-xs text-gray-600 dark:text-gray-300 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 rounded-lg cursor-pointer"
                                 onClick={() => setSelectedWorkout(workout)}
                                 title="Ver detalles"
                               >
@@ -994,9 +1307,25 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                                 <span className="hidden sm:inline">Detalles</span>
                               </Button>
                               <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 px-2 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950/30 rounded-lg cursor-pointer font-medium"
+                                onClick={() =>
+                                  setEditingWorkout({
+                                    id: workout.id,
+                                    name: workout.name,
+                                    notes: workout.notes || '',
+                                  })
+                                }
+                                title="Editar nombre y notas"
+                              >
+                                <Pencil className="w-3.5 h-3.5 sm:mr-1" />
+                                <span className="hidden sm:inline">Editar</span>
+                              </Button>
+                              <Button
                                 variant="outline"
                                 size="sm"
-                                className="h-7 px-2 text-xs text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50 border-emerald-200 rounded-lg font-semibold cursor-pointer"
+                                className="h-7 px-2 text-xs text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800 rounded-lg font-semibold cursor-pointer"
                                 onClick={() => handleRepeatWorkout(workout.id)}
                                 title="Repetir entrenamiento"
                               >
@@ -1006,7 +1335,7 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                className="h-7 w-7 p-0 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg cursor-pointer"
+                                className="h-7 w-7 p-0 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg cursor-pointer"
                                 onClick={() =>
                                   setDeletingItem({
                                     type: 'workout',
@@ -1162,11 +1491,11 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
 
                             {/* Actions */}
                             <div className="p-4 pt-0">
-                              <div className="flex items-center gap-2 pt-2 border-t border-gray-100 dark:border-gray-800">
+                              <div className="flex items-center gap-1.5 pt-2 border-t border-gray-100 dark:border-gray-800">
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  className="text-xs gap-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400 flex-1 cursor-pointer"
+                                  className="text-xs gap-1 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400 flex-1 cursor-pointer"
                                   onClick={() => setSelectedWorkout(workout)}
                                 >
                                   <Layers className="w-3.5 h-3.5" />
@@ -1177,15 +1506,18 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                                   size="sm"
                                   className="text-xs gap-1 hover:bg-purple-50 hover:text-purple-700 hover:border-purple-200 text-purple-700 flex-1 font-semibold cursor-pointer"
                                   onClick={() => openConvertToTemplate(workout)}
-                                  title="Guardar como plantilla"
+                                  title={isWorkoutSavedAsTemplate(workout) ? 'Ya guardado como plantilla' : 'Guardar como plantilla'}
                                 >
-                                  <Bookmark className="w-3.5 h-3.5 text-purple-600" />
+                                  <Bookmark
+                                    className="w-3.5 h-3.5 text-purple-600"
+                                    fill={isWorkoutSavedAsTemplate(workout) ? 'currentColor' : 'none'}
+                                  />
                                   Plantilla
                                 </Button>
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  className="text-xs gap-1 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 text-gray-700 flex-1 font-semibold cursor-pointer"
+                                  className="text-xs gap-1 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 text-gray-700 dark:text-gray-200 flex-1 font-semibold cursor-pointer"
                                   onClick={() => handleRepeatWorkout(workout.id)}
                                 >
                                   <Play className="w-3.5 h-3.5 fill-current" />
@@ -1194,7 +1526,22 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  className="text-xs p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 hover:border-red-200 rounded-xl shrink-0 cursor-pointer"
+                                  className="text-xs p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 hover:border-blue-200 rounded-xl shrink-0 cursor-pointer"
+                                  onClick={() =>
+                                    setEditingWorkout({
+                                      id: workout.id,
+                                      name: workout.name,
+                                      notes: workout.notes || '',
+                                    })
+                                  }
+                                  title="Editar nombre y notas"
+                                >
+                                  <Pencil className="w-3.5 h-3.5" />
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="text-xs p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 hover:border-red-200 rounded-xl shrink-0 cursor-pointer"
                                   onClick={() =>
                                     setDeletingItem({
                                       type: 'workout',
@@ -1544,7 +1891,23 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                className="h-7 w-7 p-0 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg cursor-pointer"
+                                className="h-7 px-2 text-xs text-purple-600 hover:text-purple-700 hover:bg-purple-50 dark:hover:bg-purple-950/30 rounded-lg cursor-pointer font-medium"
+                                onClick={() =>
+                                  setEditingTemplate({
+                                    id: template.id,
+                                    name: template.name,
+                                    description: template.description || '',
+                                  })
+                                }
+                                title="Editar nombre y descripción"
+                              >
+                                <Pencil className="w-3.5 h-3.5 sm:mr-1" />
+                                <span className="hidden sm:inline">Editar</span>
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 w-7 p-0 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg cursor-pointer"
                                 onClick={() =>
                                   setDeletingItem({
                                     type: 'template',
@@ -1600,21 +1963,38 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                               {template.name}
                             </CardTitle>
                           </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() =>
-                              setDeletingItem({
-                                type: 'template',
-                                id: template.id,
-                                name: template.name,
-                              })
-                            }
-                            className="h-7 w-7 p-0 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg shrink-0 cursor-pointer"
-                            title="Eliminar plantilla"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </Button>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() =>
+                                setEditingTemplate({
+                                  id: template.id,
+                                  name: template.name,
+                                  description: template.description || '',
+                                })
+                              }
+                              className="h-7 w-7 p-0 text-gray-400 hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-950/30 rounded-lg cursor-pointer"
+                              title="Editar plantilla"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() =>
+                                setDeletingItem({
+                                  type: 'template',
+                                  id: template.id,
+                                  name: template.name,
+                                })
+                              }
+                              className="h-7 w-7 p-0 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg cursor-pointer"
+                              title="Eliminar plantilla"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
                         </div>
 
                         {template.description && (
@@ -1669,6 +2049,13 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
           onClose={() => setSelectedWorkout(null)}
           onRepeat={() => handleRepeatWorkout(selectedWorkout.id)}
           onConvertToTemplate={() => openConvertToTemplate(selectedWorkout)}
+          onEdit={() =>
+            setEditingWorkout({
+              id: selectedWorkout.id,
+              name: selectedWorkout.name,
+              notes: selectedWorkout.notes || '',
+            })
+          }
           onDelete={() =>
             setDeletingItem({
               type: 'workout',
@@ -1850,6 +2237,26 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal para Editar Entrenamiento */}
+      {editingWorkout && (
+        <EditWorkoutModal
+          workout={editingWorkout}
+          onClose={() => setEditingWorkout(null)}
+          onSave={handleConfirmEditWorkout}
+          isSaving={isSavingWorkoutEdit}
+        />
+      )}
+
+      {/* Modal para Editar Plantilla */}
+      {editingTemplate && (
+        <EditTemplateModal
+          template={editingTemplate}
+          onClose={() => setEditingTemplate(null)}
+          onSave={handleConfirmEditTemplate}
+          isSaving={isSavingTemplateEdit}
+        />
       )}
     </div>
   );

@@ -495,7 +495,7 @@ Completado el{' '}
             </div>
 
             {/* Lista de Ejercicios */}
-            <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 max-h-72 lg:max-h-96 overflow-y-auto pr-1">
               {activeTab === 'recent' && selectedRecent ? (
                 selectedRecent.exercises.map((ex, idx) => (
 <div
