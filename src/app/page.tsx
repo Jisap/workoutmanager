@@ -16,7 +16,6 @@ import {
   TrendingUp,
   Calendar,
   Activity,
-  Clock,
   ChevronRight,
   BarChart3,
   Zap,
@@ -168,7 +167,7 @@ export default async function Home() {
               </div>
               <h3 className="text-xl font-bold text-zinc-100 mb-2">Cero Fricción en Sala</h3>
               <p className="text-sm text-zinc-400 leading-relaxed">
-                Interfaz táctil optimizada para registrar series con una sola mano entre descansos, con cronómetro automático y auto-completado.
+                Interfaz táctil optimizada para registrar series con una sola mano, búsqueda rápida en el catálogo y auto-completado de cargas previas.
               </p>
             </div>
 
@@ -213,7 +212,7 @@ export default async function Home() {
                   </Badge>
                 </div>
                 <CardDescription className="text-zinc-400 text-sm leading-relaxed">
-                  No te limites a registrar peso y repeticiones. Controla RPE, cadencia de movimiento, notas técnicas y descansos programados con cronómetro inteligente.
+                  No te limites a registrar peso y repeticiones. Controla RPE, cadencia de movimiento, notas técnicas y cálculo de 1RM dinámico en cada levantamiento.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -292,32 +291,32 @@ export default async function Home() {
               <CardHeader>
                 <div className="mb-3 flex items-center justify-between">
                   <div className="flex items-center gap-2.5">
-                    <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400">
-                      <Clock className="h-5 w-5" />
+                    <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+                      <Flame className="h-5 w-5" />
                     </div>
-                    <CardTitle className="text-xl text-zinc-100">Control de Densidad & Descanso</CardTitle>
+                    <CardTitle className="text-xl text-zinc-100">Historial & Mapa de Consistencia</CardTitle>
                   </div>
-                  <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-amber-400 font-mono text-[11px]">
-                    Cronómetro Integrado
+                  <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-400 font-mono text-[11px]">
+                    Heatmap de Actividad
                   </Badge>
                 </div>
                 <CardDescription className="text-zinc-400 text-sm leading-relaxed">
-                  Temporizadores automáticos entre series de fuerza o descansos cortos en hipertrofia. Mantén el foco en la sesión sin consultar apps externas.
+                  Visualiza cada sesión en un mapa de calor estilo GitHub, consulta tus récords personales por levantamiento y audita la frecuencia semanal con precisión.
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="flex items-center justify-between rounded-xl bg-zinc-950/60 p-4 border border-zinc-800">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-500/10 text-amber-400 font-mono font-bold text-sm">
-                      90s
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400 font-mono font-bold text-sm">
+                      <Flame className="h-5 w-5 text-emerald-400" />
                     </div>
                     <div>
-                      <div className="text-sm font-semibold text-zinc-200">Auto-Timer Activo</div>
-                      <div className="text-xs text-zinc-400 font-mono">Optimiza el tiempo bajo tensión</div>
+                      <div className="text-sm font-semibold text-zinc-200">Racha de consistencia y PRs</div>
+                      <div className="text-xs text-zinc-400 font-mono">Trazabilidad total de cada levantamiento</div>
                     </div>
                   </div>
                   <div className="text-xs font-mono text-emerald-400 bg-emerald-500/10 px-3 py-1.5 rounded-lg border border-emerald-500/20">
-                    Recuperación Óptima
+                    Historial Auditado
                   </div>
                 </div>
               </CardContent>

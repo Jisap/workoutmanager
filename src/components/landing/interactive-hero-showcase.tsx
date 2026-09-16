@@ -1,19 +1,18 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { 
   Dumbbell, 
   CheckCircle2, 
   Plus, 
   TrendingUp, 
-  Timer, 
   Flame, 
   Sparkles,
   Zap,
   Activity,
   Layers,
   ChevronRight,
-  RotateCcw
+  Award
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -26,37 +25,17 @@ export function InteractiveHeroShowcase() {
   const [reps, setReps] = useState(8);
   const [rpe, setRpe] = useState(8.5);
   const [completedSets, setCompletedSets] = useState<number[]>([1]);
-  const [restTimer, setRestTimer] = useState(74);
-  const [isTimerRunning, setIsTimerRunning] = useState(false);
 
   // Calculate estimated 1RM using Epley formula: Weight * (1 + Reps/30)
   const estimated1RM = Math.round(weight * (1 + reps / 30));
   const totalVolume = weight * reps * completedSets.length;
-
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (isTimerRunning && restTimer > 0) {
-      interval = setInterval(() => {
-        setRestTimer((prev) => (prev > 0 ? prev - 1 : 0));
-      }, 1000);
-    }
-    return () => clearInterval(interval);
-  }, [isTimerRunning, restTimer]);
 
   const toggleSet = (setNumber: number) => {
     if (completedSets.includes(setNumber)) {
       setCompletedSets(completedSets.filter(s => s !== setNumber));
     } else {
       setCompletedSets([...completedSets, setNumber]);
-      setIsTimerRunning(true);
-      setRestTimer(90);
     }
-  };
-
-  const formatTimer = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
   return (
@@ -132,24 +111,17 @@ export function InteractiveHeroShowcase() {
                         Pecho · Hipertrofia
                       </Badge>
                     </div>
-                    <p className="text-xs text-zinc-400 font-mono mt-0.5">Tempo: 3-1-X-0 · Descanso: 90s</p>
+                    <p className="text-xs text-zinc-400 font-mono mt-0.5">Tempo: 3-1-X-0 · Barra Olímpica · RPE @8.5</p>
                   </div>
                 </div>
 
-                {/* Rest Timer Widget */}
-                <div className="flex items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900/80 px-3 py-1.5">
-                  <Timer className={`h-4 w-4 ${isTimerRunning ? 'text-amber-400 animate-pulse' : 'text-zinc-400'}`} />
+                {/* Personal Record Badge */}
+                <div className="flex items-center gap-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3.5 py-1.5 shadow-sm">
+                  <Flame className="h-4 w-4 text-amber-400" />
                   <div className="text-left">
-                    <div className="text-[10px] text-zinc-500 uppercase font-mono tracking-wider">Descanso</div>
-                    <div className="text-sm font-bold font-mono text-zinc-200">{formatTimer(restTimer)}</div>
+                    <div className="text-[10px] text-amber-300 uppercase font-mono tracking-wider font-semibold">Récord Personal (PR)</div>
+                    <div className="text-xs font-bold font-mono text-zinc-100">120 kg <span className="text-[10px] text-emerald-400 font-normal ml-1">+5kg este mes</span></div>
                   </div>
-                  <button 
-                    onClick={() => { setIsTimerRunning(!isTimerRunning); if(!isTimerRunning && restTimer===0) setRestTimer(90); }}
-                    className="ml-2 text-xs text-zinc-400 hover:text-zinc-200 transition-colors"
-                    title="Iniciar/Pausar"
-                  >
-                    <RotateCcw className="h-3.5 w-3.5" />
-                  </button>
                 </div>
               </div>
 
