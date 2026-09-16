@@ -527,6 +527,19 @@ export default async function Home() {
             <span>Sistemas 100% operativos</span>
           </div>
         </div>
+
+        <div className="max-w-6xl mx-auto px-4 mt-8 flex flex-col items-center gap-3 border-t border-zinc-900 pt-6">
+          <Image
+            src="/jisap_dev.png"
+            alt="JisapDev"
+            width={120}
+            height={120}
+            className="h-12 w-auto rounded-lg object-contain"
+          />
+          <p className="text-xs text-zinc-500">
+            © {new Date().getFullYear()} JisapDev. Todos los derechos reservados.
+          </p>
+        </div>
       </footer>
     </div>
   );
