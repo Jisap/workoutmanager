@@ -21,11 +21,10 @@ export default async function NewWorkoutPage() {
   // 2. Obtener plantillas del usuario con ejercicios formateados y ricos
   const templates = await getUserTemplates(userId);
 
-  // 3. Obtener los últimos 15 entrenamientos realizados con ejercicios y sus series completas
+  // 3. Obtener los entrenamientos realizados con ejercicios y sus series completas
   const recentWorkouts = await db.query.workouts.findMany({
     where: eq(workouts.userId, userId),
     orderBy: [desc(workouts.startTime)],
-    limit: 15,
     with: {
       type: true,
       exercises: {
