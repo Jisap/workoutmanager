@@ -112,7 +112,14 @@ export const templateExercisesRelations = relations(templateExercises, ({ one })
   exercise: one(exercises, { fields: [templateExercises.exerciseId], references: [exercises.id] }),
 }));
 
-// Añadir esta relación al final del archivo
+export const exercisesRelations = relations(exercises, ({ one }) => ({
+  category: one(exerciseCategories, { fields: [exercises.categoryId], references: [exerciseCategories.id] }),
+}));
+
+export const exerciseCategoriesRelations = relations(exerciseCategories, ({ many }) => ({
+  exercises: many(exercises),
+}));
+
 export const setsRelations = relations(sets, ({ one }) => ({
   workoutExercise: one(workoutExercises, {
     fields: [sets.workoutExerciseId],

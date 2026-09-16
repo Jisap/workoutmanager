@@ -1,13 +1,14 @@
-import Link from 'next/link';
 import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
-import { getProgressData, getExerciseProgress, getAvailableExercises } from '../workouts/actions';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Trophy, TrendingUp, Calendar, Dumbbell, LineChart } from 'lucide-react';
-import { ExerciseProgressChart } from './exercise-progress-chart';
-import { getConsistencyData } from '../workouts/actions';
-import { ConsistencyHeatmap } from './consitency-heatmap';
-
+import {
+  getProgressData,
+  getExerciseProgress,
+  getAvailableExercises,
+  getConsistencyData,
+  getAdvancedProgressData,
+} from '../workouts/actions';
+import { ProgressClient } from './progress-client';
+import { LineChart } from 'lucide-react';
 
 export default async function ProgressPage({
   searchParams,
@@ -19,11 +20,12 @@ export default async function ProgressPage({
 
   const resolvedParams = await searchParams;
 
-  // Cargar datos en paralelo
-  const [progressData, availableExercises, consistencyData] = await Promise.all([
+  // Cargar datos en paralelo para máxima velocidad
+  const [advancedData, progressData, availableExercises, consistencyData] = await Promise.all([
+    getAdvancedProgressData(userId),
     getProgressData(userId),
     getAvailableExercises(userId),
-    getConsistencyData(userId), // <-- NUEVO
+    getConsistencyData(userId),
   ]);
 
   // Si no hay ejercicio especificado en la URL, seleccionar el primero disponible
@@ -36,108 +38,30 @@ export default async function ProgressPage({
     ? await getExerciseProgress(userId, selectedExerciseId)
     : null;
 
-  const selectedExercise = availableExercises.find((ex) => ex.id === selectedExerciseId);
-  const maxVolume = Math.max(...progressData.weeklyVolume.map((w) => w.volume), 1);
-
-
-
   return (
-    <div className="max-w-4xl mx-auto space-y-8 pb-24">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Tu Progreso</h1>
-        <p className="text-gray-600 dark:text-gray-400 mt-1">
-          Has completado <span className="font-semibold text-gray-900 dark:text-gray-100">{progressData.totalWorkouts}</span> entrenamientos en total.
-        </p>
+    <div className="max-w-5xl mx-auto space-y-6 pb-24">
+      {/* Header de la Página */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 dark:border-gray-800 pb-4">
+        <div>
+          <h1 className="text-2xl font-black text-gray-900 dark:text-gray-100 flex items-center gap-2">
+            <LineChart className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+            Progreso & Analítica
+          </h1>
+          <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1">
+            Métricas globales de consistencia, volumen por grupo muscular y evolución de fuerza en tus levantamientos.
+          </p>
+        </div>
       </div>
 
-      {/* Sección 1: Récords Personales (PRs) */}
-      <section>
-        <div className="flex items-center gap-2 mb-4">
-          <Trophy className="w-5 h-5 text-yellow-500" />
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Récords Personales (Top 5)</h2>
-        </div>
-
-        {progressData.prs.length === 0 ? (
-          <Card className="bg-gray-50 border-dashed dark:bg-gray-800/50 dark:border-gray-700">
-            <CardContent className="py-8 text-center text-gray-500 dark:text-gray-400">
-              Aún no hay récords registrados. ¡A darle duro!
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {progressData.prs.map((pr, index) => (
-              <Card key={index} className="border-l-4 border-l-yellow-400 dark:bg-gray-900">
-                <CardContent className="p-4">
-                  <p className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">{pr.exerciseName}</p>
-                  <div className="mt-2 flex items-baseline gap-2">
-                    <span className="text-2xl font-bold text-gray-900 dark:text-gray-100 tabular-nums">{pr.weight} kg</span>
-                    <span className="text-sm text-gray-600 dark:text-gray-400">x {pr.reps} reps</span>
-                  </div>
-                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
-                    {new Date(pr.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })}
-                  </p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
-      </section>
-
-      {/* Sección 2: Volumen Semanal */}
-      <section>
-        <div className="flex items-center gap-2 mb-4">
-          <TrendingUp className="w-5 h-5 text-blue-600" />
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Volumen Semanal (kg)</h2>
-        </div>
-
-        <Card className="dark:bg-gray-900 dark:border-gray-700">
-          <CardContent className="p-6">
-            <div className="flex items-end justify-between gap-2 h-48 mt-4">
-              {progressData.weeklyVolume.map((week, i) => {
-                const heightPercentage = (week.volume / maxVolume) * 100;
-                return (
-                  <div key={i} className="flex flex-col items-center gap-2 flex-1 group">
-                    <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-gray-900 text-white dark:bg-gray-700 dark:text-gray-100 dark:border dark:border-gray-600 text-xs rounded px-2 py-1 mb-1 whitespace-nowrap">
-                      {week.volume} kg
-                    </div>
-                    <div className="w-full bg-gray-100 dark:bg-gray-800 rounded-t-md relative h-32 flex items-end overflow-hidden">
-                      <div
-                        className="w-full bg-blue-600 dark:bg-blue-500 rounded-t-md transition-all duration-700 ease-out group-hover:bg-blue-500"
-                        style={{ height: `${Math.max(heightPercentage, 4)}%` }}
-                      />
-                    </div>
-                    <span className="text-xs font-medium text-gray-500 dark:text-gray-400">{week.label}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-      </section>
-
-      {/* Sección 3: Progresión por Ejercicio (Analítica Avanzada) */}
-      <section className="space-y-4">
-        <div className="flex items-center gap-2">
-          <LineChart className="w-5 h-5 text-purple-600" />
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Progresión por Ejercicio</h2>
-        </div>
-
-        <ExerciseProgressChart
-          availableExercises={availableExercises}
-          selectedExerciseId={selectedExerciseId}
-          data={exerciseProgress}
-        />
-      </section>
-
-      {/* Sección 4: Consistencia y Mapa de Actividad */}
-      <section className="space-y-4">
-        <div className="flex items-center gap-2">
-          <Calendar className="w-5 h-5 text-emerald-600" />
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Consistencia y Mapa de Actividad</h2>
-        </div>
-        <ConsistencyHeatmap data={consistencyData} />
-      </section>
+      {/* Componente interactivo con navegación por modalidades */}
+      <ProgressClient
+        advancedData={advancedData}
+        progressData={progressData}
+        availableExercises={availableExercises}
+        selectedExerciseId={selectedExerciseId}
+        exerciseProgress={exerciseProgress}
+        consistencyData={consistencyData}
+      />
     </div>
   );
 }

@@ -1072,5 +1072,464 @@ export async function deleteWorkoutTemplate(templateId: number) {
   return { success: true };
 }
 
+// ==========================================
+// ANALÍTICA AVANZADA Y ESTADÍSTICAS GLOBALES
+// ==========================================
+export async function getAdvancedProgressData(userId: string) {
+  const [allWorkouts, allCategories] = await Promise.all([
+    db.query.workouts.findMany({
+      where: eq(workouts.userId, userId),
+      orderBy: [desc(workouts.startTime)],
+      with: {
+        type: true,
+        exercises: {
+          with: {
+            exercise: {
+              with: {
+                category: true,
+              },
+            },
+            sets: true,
+          },
+          orderBy: (fields, { asc }) => asc(fields.orderIndex),
+        },
+      },
+    }),
+    db.select().from(exerciseCategories),
+  ]);
+
+  const categoryNameMap = new Map<number, string>(
+    allCategories.map((c) => [c.id, c.name])
+  );
+
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth();
+
+  // 1. ESTADÍSTICAS GENERALES
+  const totalWorkoutsCount = allWorkouts.length;
+  let thisMonthCount = 0;
+  let thisYearCount = 0;
+  let totalTimeSecondsAll = 0;
+  let totalVolumeAll = 0;
+
+  // Días de la semana: 0=Dom, 1=Lun, ..., 6=Sáb
+  const dayNames = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+  const dayShorts = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+  // Reordenar para empezar en Lunes: 1=Lun, 2=Mar, 3=Mié, 4=Jue, 5=Vie, 6=Sáb, 0=Dom
+  const dayCountsByIndex = [0, 0, 0, 0, 0, 0, 0];
+
+  const uniqueDateTimes: number[] = [];
+
+  for (const w of allWorkouts) {
+    const d = new Date(w.startTime);
+    if (d.getFullYear() === currentYear) {
+      thisYearCount++;
+      if (d.getMonth() === currentMonth) {
+        thisMonthCount++;
+      }
+    }
+
+    if (w.totalTimeSeconds) {
+      totalTimeSecondsAll += w.totalTimeSeconds;
+    }
+
+    // Registrar día de la semana
+    const dayIndex = d.getDay();
+    dayCountsByIndex[dayIndex] = (dayCountsByIndex[dayIndex] || 0) + 1;
+
+    // Registrar fecha única normalizada para racha
+    const normalized = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+    if (!uniqueDateTimes.includes(normalized)) {
+      uniqueDateTimes.push(normalized);
+    }
+  }
+
+  // Ordenar fechas para racha
+  uniqueDateTimes.sort((a, b) => a - b);
+  let currentStreak = 0;
+  let longestStreak = 0;
+  let tempStreak = 0;
+
+  const todayNormalized = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+
+  for (let i = 0; i < uniqueDateTimes.length; i++) {
+    const current = uniqueDateTimes[i];
+    const prev = i > 0 ? uniqueDateTimes[i - 1] : null;
+
+    if (prev) {
+      const diffDays = Math.round((current - prev) / (1000 * 60 * 60 * 24));
+      if (diffDays === 1) {
+        tempStreak++;
+      } else {
+        if (tempStreak > longestStreak) longestStreak = tempStreak;
+        tempStreak = 1;
+      }
+    } else {
+      tempStreak = 1;
+    }
+  }
+  if (tempStreak > longestStreak) longestStreak = tempStreak;
+
+  if (uniqueDateTimes.length > 0) {
+    const lastDate = uniqueDateTimes[uniqueDateTimes.length - 1];
+    const diffFromToday = Math.round((todayNormalized - lastDate) / (1000 * 60 * 60 * 24));
+    if (diffFromToday <= 1) {
+      currentStreak = tempStreak;
+    }
+  }
+
+  // Formatear distribución semanal empezando en Lunes (1 a 6, luego 0)
+  const mondayToSundayIndices = [1, 2, 3, 4, 5, 6, 0];
+  const maxDayCount = Math.max(...dayCountsByIndex, 1);
+  const weeklyDistribution = mondayToSundayIndices.map((idx) => ({
+    day: dayNames[idx],
+    short: dayShorts[idx],
+    count: dayCountsByIndex[idx],
+    percentage: Math.round((dayCountsByIndex[idx] / maxDayCount) * 100),
+  }));
+
+  // 2. RECUPERACIÓN INTELIGENTE Y TIEMPO DE DESCANSO
+  const lastWorkout = allWorkouts[0] || null;
+  let recoveryData = {
+    status: 'ready' as 'ready' | 'almost_ready' | 'recovering',
+    message: 'Listo para entrenar',
+    hoursSince: 999,
+    targetRestHours: 24,
+    remainingHours: 0,
+    percentage: 100,
+    lastWorkoutName: lastWorkout?.name || null,
+    lastWorkoutTypeName: lastWorkout?.type?.name || null,
+    lastWorkoutDate: lastWorkout?.startTime || null,
+  };
+
+  if (lastWorkout) {
+    const lastTime = new Date(lastWorkout.startTime).getTime();
+    const hoursSince = Math.max(0, Math.floor((now.getTime() - lastTime) / (1000 * 60 * 60)));
+
+    // Calcular volumen de la última sesión
+    let lastVolume = 0;
+    let maxRpe = 0;
+    for (const ex of lastWorkout.exercises) {
+      for (const s of ex.sets) {
+        const w = s.weight ? Number(s.weight) : 0;
+        const r = s.repCount ? Number(s.repCount) : 0;
+        lastVolume += w * r;
+        if (s.rpe && s.rpe > maxRpe) maxRpe = s.rpe;
+      }
+    }
+
+    let targetRestHours = 24;
+    if (lastVolume > 8000 || maxRpe >= 9) {
+      targetRestHours = 48;
+    } else if (lastVolume > 4000 || maxRpe >= 8) {
+      targetRestHours = 36;
+    }
+
+    const remainingHours = Math.max(0, targetRestHours - hoursSince);
+    const percentage = Math.min(100, Math.round((hoursSince / targetRestHours) * 100));
+
+    let status: 'ready' | 'almost_ready' | 'recovering' = 'ready';
+    let message = 'Completamente recuperado y listo para dar el 100%';
+    if (remainingHours > 16) {
+      status = 'recovering';
+      message = `Fase de recuperación activa (${remainingHours}h sugeridas)`;
+    } else if (remainingHours > 0) {
+      status = 'almost_ready';
+      message = `Casi listo (${remainingHours}h para recuperación óptima)`;
+    }
+
+    recoveryData = {
+      status,
+      message,
+      hoursSince,
+      targetRestHours,
+      remainingHours,
+      percentage,
+      lastWorkoutName: lastWorkout.name,
+      lastWorkoutTypeName: lastWorkout.type?.name || 'Entrenamiento',
+      lastWorkoutDate: lastWorkout.startTime,
+    };
+  }
+
+  // 3. ANALÍTICA DE MUSCULACIÓN (Por Grupo Muscular)
+  const muscleGroupsMap: Record<
+    string,
+    { volume: number; sets: number; exercisesMap: Record<string, { volume: number; sets: number; maxWeight: number }> }
+  > = {
+    Pecho: { volume: 0, sets: 0, exercisesMap: {} },
+    Espalda: { volume: 0, sets: 0, exercisesMap: {} },
+    Piernas: { volume: 0, sets: 0, exercisesMap: {} },
+    Gluteos: { volume: 0, sets: 0, exercisesMap: {} },
+    Hombros: { volume: 0, sets: 0, exercisesMap: {} },
+    Brazos: { volume: 0, sets: 0, exercisesMap: {} },
+    Core: { volume: 0, sets: 0, exercisesMap: {} },
+    Otros: { volume: 0, sets: 0, exercisesMap: {} },
+  };
+
+  let totalMusculacionVolume = 0;
+  let totalMusculacionSets = 0;
+
+  // 4. ANALÍTICA DE POWERLIFTING (Big 3: Sentadilla, Press Banca, Peso Muerto)
+  const big3Data = {
+    squat: {
+      name: 'Sentadilla (Squat)',
+      maxWeightReal: 0,
+      estimated1RM: 0,
+      estimated3RM: 0,
+      estimated5RM: 0,
+      totalSets: 0,
+      history: [] as { date: string; weight: number; reps: number; estimated1RM: number; workoutName: string }[],
+    },
+    bench: {
+      name: 'Press de Banca (Bench Press)',
+      maxWeightReal: 0,
+      estimated1RM: 0,
+      estimated3RM: 0,
+      estimated5RM: 0,
+      totalSets: 0,
+      history: [] as { date: string; weight: number; reps: number; estimated1RM: number; workoutName: string }[],
+    },
+    deadlift: {
+      name: 'Peso Muerto (Deadlift)',
+      maxWeightReal: 0,
+      estimated1RM: 0,
+      estimated3RM: 0,
+      estimated5RM: 0,
+      totalSets: 0,
+      history: [] as { date: string; weight: number; reps: number; estimated1RM: number; workoutName: string }[],
+    },
+  };
+
+  // 5. CROSSFIT & WODs
+  const crossfitWodsList: {
+    id: number;
+    name: string;
+    date: string;
+    totalTimeMinutes: number;
+    exercisesCount: number;
+    notes: string | null;
+  }[] = [];
+
+  // 6. HYROX & CARDIO
+  let totalCardioMinutes = 0;
+  let totalCardioSessions = 0;
+  const hyroxSessionsList: {
+    id: number;
+    name: string;
+    date: string;
+    totalTimeMinutes: number;
+    notes: string | null;
+  }[] = [];
+
+  // Procesar entrenamientos en orden cronológico (del más antiguo al más reciente) para las gráficas
+  const chronologicalWorkouts = [...allWorkouts].reverse();
+
+  for (const w of chronologicalWorkouts) {
+    const isCrossfitOrFuncional =
+      w.type?.name?.toLowerCase().includes('crossfit') ||
+      w.type?.name?.toLowerCase().includes('funcional');
+    const isHyroxOrCardio =
+      w.type?.name?.toLowerCase().includes('hyrox') ||
+      w.type?.name?.toLowerCase().includes('cardio') ||
+      w.type?.name?.toLowerCase().includes('running') ||
+      w.type?.name?.toLowerCase().includes('endurance');
+
+    if (isCrossfitOrFuncional) {
+      crossfitWodsList.push({
+        id: w.id,
+        name: w.name,
+        date: new Date(w.startTime).toISOString(),
+        totalTimeMinutes: w.totalTimeSeconds ? Math.round(w.totalTimeSeconds / 60) : 0,
+        exercisesCount: w.exercises.length,
+        notes: w.notes || null,
+      });
+    }
+
+    if (isHyroxOrCardio) {
+      totalCardioSessions++;
+      const mins = w.totalTimeSeconds ? Math.round(w.totalTimeSeconds / 60) : 0;
+      totalCardioMinutes += mins;
+      hyroxSessionsList.push({
+        id: w.id,
+        name: w.name,
+        date: new Date(w.startTime).toISOString(),
+        totalTimeMinutes: mins,
+        notes: w.notes || null,
+      });
+    }
+
+    for (const we of w.exercises) {
+      const exName = we.exercise.name;
+      const exLower = exName.toLowerCase();
+      const catName = we.exercise.category?.name || categoryNameMap.get(we.exercise.categoryId || 0) || 'Otros';
+
+      let targetGroup = 'Otros';
+      if (catName.includes('Pecho')) targetGroup = 'Pecho';
+      else if (catName.includes('Espalda')) targetGroup = 'Espalda';
+      else if (catName.includes('Pierna')) targetGroup = 'Piernas';
+      else if (catName.includes('Gluteo') || catName.includes('Glúteo')) targetGroup = 'Gluteos';
+      else if (catName.includes('Hombro')) targetGroup = 'Hombros';
+      else if (catName.includes('Brazo') || catName.includes('Bíceps') || catName.includes('Tríceps')) targetGroup = 'Brazos';
+      else if (catName.includes('Core') || catName.includes('Abdomen')) targetGroup = 'Core';
+
+      // Identificación para Big 3 de Powerlifting
+      let big3Category: 'squat' | 'bench' | 'deadlift' | null = null;
+      if (
+        (exLower.includes('sentadilla') || exLower.includes('squat')) &&
+        !exLower.includes('búlgara') &&
+        !exLower.includes('bulgarian') &&
+        !exLower.includes('pistol')
+      ) {
+        big3Category = 'squat';
+      } else if (
+        (exLower.includes('press de banca') || exLower.includes('bench press')) &&
+        !exLower.includes('mancuerna')
+      ) {
+        big3Category = 'bench';
+      } else if (
+        (exLower.includes('peso muerto') || exLower.includes('deadlift')) &&
+        !exLower.includes('rumano') &&
+        !exLower.includes('mancuerna')
+      ) {
+        big3Category = 'deadlift';
+      }
+
+      for (const s of we.sets) {
+        const wVal = s.weight ? Number(s.weight) : 0;
+        const rVal = s.repCount ? Number(s.repCount) : 0;
+        if (rVal <= 0) continue;
+
+        const vol = wVal * rVal;
+        totalVolumeAll += vol;
+        totalMusculacionVolume += vol;
+        totalMusculacionSets += 1;
+
+        // Añadir a grupo muscular
+        if (muscleGroupsMap[targetGroup]) {
+          muscleGroupsMap[targetGroup].volume += vol;
+          muscleGroupsMap[targetGroup].sets += 1;
+          if (!muscleGroupsMap[targetGroup].exercisesMap[exName]) {
+            muscleGroupsMap[targetGroup].exercisesMap[exName] = { volume: 0, sets: 0, maxWeight: 0 };
+          }
+          const exObj = muscleGroupsMap[targetGroup].exercisesMap[exName];
+          exObj.volume += vol;
+          exObj.sets += 1;
+          if (wVal > exObj.maxWeight) exObj.maxWeight = wVal;
+        }
+
+        // Añadir a Big 3 si aplica
+        if (big3Category && wVal > 0) {
+          const est1RM = rVal === 1 ? wVal : Math.round(wVal * (1 + rVal / 30) * 10) / 10;
+          const target = big3Data[big3Category];
+          target.totalSets += 1;
+          if (wVal > target.maxWeightReal) target.maxWeightReal = wVal;
+          if (est1RM > target.estimated1RM) {
+            target.estimated1RM = est1RM;
+            target.estimated3RM = Math.round((est1RM / 1.08) * 10) / 10;
+            target.estimated5RM = Math.round((est1RM / 1.15) * 10) / 10;
+          }
+
+          target.history.push({
+            date: new Date(w.startTime).toISOString(),
+            weight: wVal,
+            reps: rVal,
+            estimated1RM: est1RM,
+            workoutName: w.name,
+          });
+        }
+      }
+    }
+  }
+
+  // Formatear datos de grupos musculares
+  const muscleGroupsList = Object.entries(muscleGroupsMap)
+    .filter(([_, data]) => data.sets > 0)
+    .map(([name, data]) => {
+      const topExList = Object.entries(data.exercisesMap)
+        .map(([exName, stats]) => ({
+          name: exName,
+          volume: stats.volume,
+          sets: stats.sets,
+          maxWeight: stats.maxWeight,
+        }))
+        .sort((a, b) => b.volume - a.volume)
+        .slice(0, 3);
+
+      return {
+        name,
+        volume: data.volume,
+        sets: data.sets,
+        percentage: totalMusculacionVolume > 0 ? Math.round((data.volume / totalMusculacionVolume) * 100) : 0,
+        topExercises: topExList,
+      };
+    })
+    .sort((a, b) => b.volume - a.volume);
+
+  // Balance Push / Pull / Legs
+  const pushVol =
+    (muscleGroupsMap['Pecho']?.volume || 0) +
+    (muscleGroupsMap['Hombros']?.volume || 0);
+  const pullVol = muscleGroupsMap['Espalda']?.volume || 0;
+  const legsVol =
+    (muscleGroupsMap['Piernas']?.volume || 0) +
+    (muscleGroupsMap['Gluteos']?.volume || 0);
+  const coreVol = muscleGroupsMap['Core']?.volume || 0;
+  const pplTotal = Math.max(pushVol + pullVol + legsVol + coreVol, 1);
+
+  const pushPullLegsBalance = {
+    push: { volume: pushVol, percentage: Math.round((pushVol / pplTotal) * 100) },
+    pull: { volume: pullVol, percentage: Math.round((pullVol / pplTotal) * 100) },
+    legs: { volume: legsVol, percentage: Math.round((legsVol / pplTotal) * 100) },
+    core: { volume: coreVol, percentage: Math.round((coreVol / pplTotal) * 100) },
+  };
+
+  // SBD Total
+  const sbdTotal =
+    big3Data.squat.estimated1RM +
+    big3Data.bench.estimated1RM +
+    big3Data.deadlift.estimated1RM;
+  const sbdRealTotal =
+    big3Data.squat.maxWeightReal +
+    big3Data.bench.maxWeightReal +
+    big3Data.deadlift.maxWeightReal;
+
+  return {
+    general: {
+      totalWorkouts: totalWorkoutsCount,
+      thisMonthCount,
+      thisYearCount,
+      totalHours: Math.round((totalTimeSecondsAll / 3600) * 10) / 10,
+      totalVolumeKg: totalVolumeAll,
+      currentStreak,
+      longestStreak,
+      weeklyDistribution,
+      recovery: recoveryData,
+    },
+    musculacion: {
+      totalVolume: totalMusculacionVolume,
+      totalSets: totalMusculacionSets,
+      muscleGroups: muscleGroupsList,
+      pushPullLegsBalance,
+    },
+    powerlifting: {
+      squat: big3Data.squat,
+      bench: big3Data.bench,
+      deadlift: big3Data.deadlift,
+      sbdTotal,
+      sbdRealTotal,
+    },
+    crossfit: {
+      totalWods: crossfitWodsList.length,
+      wods: crossfitWodsList.slice(-10).reverse(),
+    },
+    hyroxCardio: {
+      totalMinutes: totalCardioMinutes,
+      totalSessions: totalCardioSessions,
+      sessions: hyroxSessionsList.slice(-10).reverse(),
+    },
+  };
+}
+
 
 
