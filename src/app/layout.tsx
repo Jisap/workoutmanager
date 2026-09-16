@@ -2,6 +2,7 @@ import { ClerkProvider, UserButton, SignInButton, SignUpButton } from '@clerk/ne
 import { Sidebar } from '@/components/layout/sidebar';
 import { auth } from '@clerk/nextjs/server';
 import { Button } from '@/components/ui/button';
+import Image from 'next/image';
 import './globals.css';
 import { Oswald, Inter, JetBrains_Mono } from 'next/font/google';
 import Script from 'next/script';
@@ -47,10 +48,14 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 <div className="flex-1 flex flex-col overflow-hidden">
                   {/* Header visible únicamente en móvil */}
                   <header className="lg:hidden bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between dark:bg-gray-900 dark:border-gray-800">
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white shadow-xs font-bold text-sm">
-                        W
-                      </div>
+                    <div className="flex items-center gap-2.5">
+                      <Image
+                        src="/logo-workout-manager.png"
+                        alt="Workout Manager"
+                        width={36}
+                        height={24}
+                        className="h-7 w-auto object-contain"
+                      />
                       <span className="font-bold text-gray-900 text-base dark:text-gray-100">
                         Workout Manager
                       </span>
@@ -69,10 +74,15 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               <div className="min-h-screen">
                 <header className="bg-white border-b border-gray-200 px-6 py-4 dark:bg-gray-900 dark:border-gray-800">
                   <div className="max-w-7xl mx-auto flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white shadow-xs font-bold text-sm">
-                        W
-                      </div>
+                    <div className="flex items-center gap-3">
+                      <Image
+                        src="/logo-workout-manager.png"
+                        alt="Workout Manager"
+                        width={120}
+                        height={80}
+                        priority
+                        className="h-10 w-auto object-contain"
+                      />
                       <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">
                         Workout Manager
                       </h1>

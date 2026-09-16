@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { Home, Dumbbell, BarChart3, Settings, Plus, LogOut, Bookmark } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -23,9 +24,14 @@ export function Sidebar() {
       <aside className="hidden lg:flex lg:flex-col lg:w-64 bg-white border-r border-gray-200 dark:bg-gray-900 dark:border-gray-800 dark:text-gray-100">
         {/* Brand Header */}
         <div className="p-5 border-b border-gray-100 flex items-center gap-3 dark:border-gray-800">
-          <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-sm">
-            <Dumbbell className="w-5 h-5" />
-          </div>
+          <Image
+            src="/logo-workout-manager.png"
+            alt="Workout Manager"
+            width={40}
+            height={26}
+            priority
+            className="h-8 w-auto object-contain"
+          />
           <div>
             <span className="font-bold text-gray-900 text-sm tracking-tight block dark:text-gray-100">Workout Manager</span>
             <span className="text-[11px] text-gray-400 font-medium block dark:text-gray-500">Entrena & Progresa</span>
