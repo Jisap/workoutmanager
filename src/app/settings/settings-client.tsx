@@ -26,11 +26,21 @@ import {
   Sun,
   Moon,
   Palette,
+  Layers,
+  FolderPlus,
+  Lock,
+  Folder,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { SignOutButton } from '@clerk/nextjs';
-import { renameCustomExercise, deleteCustomExercise } from './actions';
+import {
+  renameCustomExercise,
+  deleteCustomExercise,
+  createExerciseCategory,
+  renameExerciseCategory,
+  deleteExerciseCategory,
+} from './actions';
 import { createCustomExercise } from '@/app/workouts/actions';
 import { useTheme } from '@/components/ThemeProvider';
 
@@ -55,6 +65,8 @@ export interface ExerciseCategory {
   id: number;
   name: string;
   type: string | null;
+  isCustom?: boolean;
+  exerciseCount?: number;
 }
 
 export interface UserProfile {
@@ -524,6 +536,327 @@ function CustomExercisesSection({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// 3.5. Categories section
+// ─────────────────────────────────────────────────────────────────────────────
+function CategoriesSection({
+  initialCategories,
+}: {
+  initialCategories: ExerciseCategory[];
+}) {
+  const [categories, setCategories] = useState<ExerciseCategory[]>(initialCategories);
+  const [filter, setFilter] = useState<'all' | 'custom' | 'system'>('all');
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editName, setEditName] = useState('');
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  // New category form
+  const [showNewForm, setShowNewForm] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newType, setNewType] = useState('Fuerza');
+  const [isCreating, setIsCreating] = useState(false);
+
+  // Sync state if props change
+  useEffect(() => {
+    setCategories(initialCategories);
+  }, [initialCategories]);
+
+  const customCount = categories.filter((c) => c.isCustom).length;
+  const systemCount = categories.filter((c) => !c.isCustom).length;
+
+  const filteredCategories = categories.filter((c) => {
+    if (filter === 'custom') return c.isCustom;
+    if (filter === 'system') return !c.isCustom;
+    return true;
+  });
+
+  const handleStartEdit = (cat: ExerciseCategory) => {
+    setEditingId(cat.id);
+    setEditName(cat.name);
+  };
+
+  const handleSaveEdit = (id: number) => {
+    if (!editName.trim()) return;
+    startTransition(async () => {
+      try {
+        await renameExerciseCategory(id, editName.trim());
+        setCategories((prev) =>
+          prev.map((c) => (c.id === id ? { ...c, name: editName.trim() } : c))
+        );
+        setEditingId(null);
+      } catch (err) {
+        alert('Error al renombrar la categoría');
+      }
+    });
+  };
+
+  const handleDelete = (id: number) => {
+    setDeletingId(id);
+    startTransition(async () => {
+      try {
+        await deleteExerciseCategory(id);
+        setCategories((prev) => prev.filter((c) => c.id !== id));
+        setDeletingId(null);
+        setConfirmDeleteId(null);
+      } catch (err) {
+        alert('Error al eliminar la categoría');
+      }
+    });
+  };
+
+  const handleCreate = async () => {
+    if (!newName.trim()) return;
+    setIsCreating(true);
+    try {
+      const result = await createExerciseCategory({
+        name: newName.trim(),
+        type: newType.trim() || 'Fuerza',
+      });
+      if (result.success && result.category) {
+        setCategories((prev) => [...prev, result.category]);
+        setNewName('');
+        setNewType('Fuerza');
+        setShowNewForm(false);
+      }
+    } catch {
+      alert('Error al crear la categoría');
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  return (
+    <Section
+      icon={Layers}
+      title="Categorías de Ejercicios"
+      subtitle={`${categories.length} categorías (${customCount} personalizada${customCount !== 1 ? 's' : ''}, ${systemCount} base)`}
+    >
+      <div className="space-y-4">
+        {/* Filtros rápidos */}
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex bg-gray-100 p-1 rounded-xl border border-gray-200 text-xs font-semibold dark:bg-gray-800 dark:border-gray-700">
+            <button
+              onClick={() => setFilter('all')}
+              className={`px-3 py-1.5 rounded-lg transition-all ${
+                filter === 'all'
+                  ? 'bg-white text-gray-900 shadow-xs dark:bg-gray-700 dark:text-gray-100'
+                  : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200'
+              }`}
+            >
+              Todas ({categories.length})
+            </button>
+            <button
+              onClick={() => setFilter('custom')}
+              className={`px-3 py-1.5 rounded-lg transition-all ${
+                filter === 'custom'
+                  ? 'bg-white text-gray-900 shadow-xs dark:bg-gray-700 dark:text-gray-100'
+                  : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200'
+              }`}
+            >
+              Personalizadas ({customCount})
+            </button>
+            <button
+              onClick={() => setFilter('system')}
+              className={`px-3 py-1.5 rounded-lg transition-all ${
+                filter === 'system'
+                  ? 'bg-white text-gray-900 shadow-xs dark:bg-gray-700 dark:text-gray-100'
+                  : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200'
+              }`}
+            >
+              Sistema ({systemCount})
+            </button>
+          </div>
+
+          {!showNewForm && (
+            <Button
+              size="sm"
+              onClick={() => setShowNewForm(true)}
+              className="text-xs bg-blue-600 hover:bg-blue-700 text-white rounded-xl gap-1.5"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Nueva Categoría
+            </Button>
+          )}
+        </div>
+
+        {/* Lista de Categorías */}
+        <div className="divide-y divide-gray-100 border border-gray-100 rounded-xl overflow-hidden dark:divide-gray-800 dark:border-gray-800 max-h-80 overflow-y-auto">
+          {filteredCategories.map((cat) => (
+            <div
+              key={cat.id}
+              className={`flex items-center gap-2 p-3 transition-colors group ${
+                cat.isCustom ? 'hover:bg-purple-50/40 dark:hover:bg-purple-950/20' : 'hover:bg-gray-50 dark:hover:bg-gray-800/40'
+              }`}
+            >
+              {editingId === cat.id ? (
+                /* Edit mode */
+                <>
+                  <input
+                    type="text"
+                    value={editName}
+                    className="flex-1 px-2.5 py-1 text-xs border border-blue-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400/40 bg-white dark:bg-gray-700 dark:text-gray-100"
+                    onChange={(e) => setEditName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleSaveEdit(cat.id);
+                      if (e.key === 'Escape') setEditingId(null);
+                    }}
+                    autoFocus
+                  />
+                  <button
+                    onClick={() => handleSaveEdit(cat.id)}
+                    disabled={isPending}
+                    className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition dark:hover:bg-emerald-900/20"
+                    title="Guardar cambios"
+                  >
+                    <Check className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => setEditingId(null)}
+                    className="p-1.5 text-gray-400 hover:bg-gray-200 rounded-lg transition dark:hover:bg-gray-700"
+                    title="Cancelar"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </>
+              ) : confirmDeleteId === cat.id ? (
+                /* Confirm delete */
+                <>
+                  <span className="flex-1 text-xs text-red-600 font-medium dark:text-red-400">
+                    ¿Eliminar «{cat.name}»? Sus ejercicios quedarán sin categoría.
+                  </span>
+                  <button
+                    onClick={() => handleDelete(cat.id)}
+                    disabled={deletingId === cat.id}
+                    className="px-2 py-1 text-xs bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
+                  >
+                    {deletingId === cat.id ? '...' : 'Sí, eliminar'}
+                  </button>
+                  <button
+                    onClick={() => setConfirmDeleteId(null)}
+                    className="p-1.5 text-gray-400 hover:bg-gray-200 rounded-lg transition dark:hover:bg-gray-700"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </>
+              ) : (
+                /* Normal display mode */
+                <>
+                  <div className="flex-1 min-w-0 flex items-center gap-2">
+                    <Folder className={`w-4 h-4 shrink-0 ${cat.isCustom ? 'text-purple-600' : 'text-blue-500'}`} />
+                    <span className="text-sm font-semibold text-gray-900 truncate dark:text-gray-100">
+                      {cat.name}
+                    </span>
+                    <span
+                      className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
+                        cat.isCustom
+                          ? 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800'
+                          : 'bg-gray-100 text-gray-600 border-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700'
+                      }`}
+                    >
+                      {cat.isCustom ? 'Custom' : 'Sistema'}
+                    </span>
+                    {cat.type && (
+                      <span className="text-[11px] text-gray-400 dark:text-gray-500">
+                        · {cat.type}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-400 font-medium tabular-nums dark:text-gray-500">
+                      {cat.exerciseCount ?? 0} {cat.exerciseCount === 1 ? 'ejercicio' : 'ejercicios'}
+                    </span>
+
+                    {cat.isCustom ? (
+                      <>
+                        <button
+                          onClick={() => handleStartEdit(cat)}
+                          className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition opacity-0 group-hover:opacity-100 dark:hover:bg-blue-900/20"
+                          title="Renombrar categoría"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => setConfirmDeleteId(cat.id)}
+                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition opacity-0 group-hover:opacity-100 dark:hover:bg-red-900/20"
+                          title="Eliminar categoría"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </>
+                    ) : (
+                      <span className="p-1.5 text-gray-300 dark:text-gray-600" title="Categoría base del sistema">
+                        <Lock className="w-3.5 h-3.5" />
+                      </span>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* New category form */}
+        {showNewForm && (
+          <div className="p-3.5 bg-purple-50/70 border border-purple-200 rounded-xl space-y-3 dark:bg-purple-950/20 dark:border-purple-800">
+            <div className="flex items-center gap-2">
+              <FolderPlus className="w-4 h-4 text-purple-600" />
+              <h4 className="text-xs font-bold text-gray-900 dark:text-gray-100">Nueva Categoría Personalizada</h4>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <input
+                type="text"
+                placeholder="Nombre (ej. Kettlebell, Pliometría, Isométrico)..."
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-400/40 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                autoFocus
+                onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+              />
+              <select
+                value={newType}
+                onChange={(e) => setNewType(e.target.value)}
+                className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-purple-400/40 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+              >
+                <option value="Fuerza">Tipo: Fuerza / Musculación</option>
+                <option value="Cardio">Tipo: Cardio / Resistencia</option>
+                <option value="CrossFit">Tipo: CrossFit / WOD</option>
+                <option value="Funcional">Tipo: Funcional / HIIT</option>
+                <option value="Movilidad">Tipo: Movilidad / Flexibilidad</option>
+                <option value="Otro">Tipo: General / Otro</option>
+              </select>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                onClick={handleCreate}
+                disabled={isCreating || !newName.trim()}
+                className="flex-1 text-xs bg-purple-600 hover:bg-purple-700 text-white"
+              >
+                {isCreating ? 'Guardando…' : 'Crear Categoría'}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setShowNewForm(false);
+                  setNewName('');
+                  setNewType('Fuerza');
+                }}
+                className="text-xs"
+              >
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+    </Section>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // 4. Workout types section
 // ─────────────────────────────────────────────────────────────────────────────
 const TYPE_ICONS: Record<string, React.ElementType> = {
@@ -767,6 +1100,7 @@ export function SettingsClient({
       <ProfileSection profile={profile} />
       <GoalsSection />
       <CustomExercisesSection initialExercises={customExercises} categories={categories} />
+      <CategoriesSection initialCategories={categories} />
       <WorkoutTypesSection workoutTypes={workoutTypes} />
       <PreferencesSection />
       <ThemeSection />

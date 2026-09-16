@@ -4,7 +4,7 @@ import { db } from '@/lib/db';
 import { exerciseCategories, workoutTypes } from '@/lib/db/schema';
 import { asc, eq } from 'drizzle-orm';
 import { WorkoutLoggerClient } from './workout-logger-client';
-import { getTemplateData, getLastWorkoutData, getWorkoutData, getAvailableExercises } from '../actions';
+import { getTemplateData, getLastWorkoutData, getWorkoutData, getAvailableExercises, getAvailableCategories } from '../actions';
 
 export default async function WorkoutLogPage({
   searchParams,
@@ -23,7 +23,7 @@ export default async function WorkoutLogPage({
   // Cargar datos en paralelo
   const [availableExercises, categories, allWorkoutTypes] = await Promise.all([
     getAvailableExercises(userId),
-    db.select().from(exerciseCategories).orderBy(asc(exerciseCategories.name)),
+    getAvailableCategories(userId),
     db.select().from(workoutTypes).orderBy(asc(workoutTypes.name)),
   ]);
 

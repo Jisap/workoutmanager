@@ -3,7 +3,7 @@
 import { db } from '@/lib/db';
 import { exercises, exerciseCategories, workoutTypes, workouts, workoutExercises } from '@/lib/db/schema';
 import { auth } from '@clerk/nextjs/server';
-import { eq, and, isNotNull, sql } from 'drizzle-orm';
+import { eq, and, isNotNull, sql, or, isNull } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 
 /** Obtener todos los ejercicios personalizados del usuario con su categoría y estadísticas de uso */
@@ -85,9 +85,151 @@ export async function getWorkoutTypes() {
   return db.select().from(workoutTypes).orderBy(workoutTypes.name);
 }
 
-/** Obtener todas las categorías de ejercicios */
-export async function getExerciseCategories() {
-  return db.select().from(exerciseCategories).orderBy(exerciseCategories.name);
+/** Obtener todas las categorías de ejercicios (Globales + Personalizadas del usuario) con conteo de ejercicios */
+export async function getExerciseCategories(userIdParam?: string) {
+  let userId = userIdParam;
+  if (!userId) {
+    const authData = await auth();
+    userId = authData.userId ?? undefined;
+  }
+
+  const categoryList = await db
+    .select({
+      id: exerciseCategories.id,
+      name: exerciseCategories.name,
+      type: exerciseCategories.type,
+      isCustom: exerciseCategories.isCustom,
+      userId: exerciseCategories.userId,
+    })
+    .from(exerciseCategories)
+    .where(userId ? or(isNull(exerciseCategories.userId), eq(exerciseCategories.userId, userId)) : isNull(exerciseCategories.userId))
+    .orderBy(exerciseCategories.isCustom, exerciseCategories.name);
+
+  // Conteo de ejercicios en cada categoría (globales + del usuario)
+  const exerciseCounts = await db
+    .select({
+      categoryId: exercises.categoryId,
+      count: sql<number>`count(*)`.mapWith(Number),
+    })
+    .from(exercises)
+    .where(userId ? or(isNull(exercises.userId), eq(exercises.userId, userId)) : isNull(exercises.userId))
+    .groupBy(exercises.categoryId);
+
+  const countMap = new Map<number, number>();
+  for (const c of exerciseCounts) {
+    if (c.categoryId !== null) {
+      countMap.set(c.categoryId, c.count);
+    }
+  }
+
+  return categoryList.map((cat) => ({
+    id: cat.id,
+    name: cat.name,
+    type: cat.type ?? 'General',
+    isCustom: !!cat.isCustom,
+    exerciseCount: countMap.get(cat.id) ?? 0,
+  }));
+}
+
+/** Crear una nueva categoría personalizada para el usuario */
+export async function createExerciseCategory(data: { name: string; type?: string }) {
+  const { userId } = await auth();
+  if (!userId) throw new Error('No autorizado');
+
+  const trimmedName = data.name.trim();
+  if (!trimmedName) throw new Error('El nombre de la categoría no puede estar vacío');
+
+  try {
+    const [newCategory] = await db
+      .insert(exerciseCategories)
+      .values({
+        name: trimmedName,
+        type: data.type?.trim() || 'Fuerza',
+        isCustom: true,
+        userId,
+      })
+      .returning();
+
+    revalidatePath('/settings');
+    revalidatePath('/workouts');
+    revalidatePath('/workouts/new');
+    revalidatePath('/workouts/log');
+
+    return {
+      success: true,
+      category: {
+        id: newCategory.id,
+        name: newCategory.name,
+        type: newCategory.type ?? 'General',
+        isCustom: true,
+        exerciseCount: 0,
+      },
+    };
+  } catch (error) {
+    console.error('Error creando categoría:', error);
+    throw new Error('No se pudo crear la categoría');
+  }
+}
+
+/** Renombrar una categoría personalizada */
+export async function renameExerciseCategory(categoryId: number, newName: string) {
+  const { userId } = await auth();
+  if (!userId) throw new Error('No autorizado');
+
+  const trimmedName = newName.trim();
+  if (!trimmedName) throw new Error('El nombre no puede estar vacío');
+
+  // Verificar que la categoría pertenece al usuario y es personalizada
+  const [cat] = await db
+    .select()
+    .from(exerciseCategories)
+    .where(and(eq(exerciseCategories.id, categoryId), eq(exerciseCategories.userId, userId), eq(exerciseCategories.isCustom, true)));
+
+  if (!cat) throw new Error('Categoría no encontrada o no se puede modificar (categoría del sistema)');
+
+  await db
+    .update(exerciseCategories)
+    .set({ name: trimmedName })
+    .where(eq(exerciseCategories.id, categoryId));
+
+  revalidatePath('/settings');
+  revalidatePath('/workouts');
+  revalidatePath('/workouts/new');
+  revalidatePath('/workouts/log');
+
+  return { success: true };
+}
+
+/** Eliminar una categoría personalizada */
+export async function deleteExerciseCategory(categoryId: number) {
+  const { userId } = await auth();
+  if (!userId) throw new Error('No autorizado');
+
+  // Verificar que la categoría pertenece al usuario y es personalizada
+  const [cat] = await db
+    .select()
+    .from(exerciseCategories)
+    .where(and(eq(exerciseCategories.id, categoryId), eq(exerciseCategories.userId, userId), eq(exerciseCategories.isCustom, true)));
+
+  if (!cat) throw new Error('Categoría no encontrada o no se puede eliminar (categoría del sistema)');
+
+  // Desvincular ejercicios que usaban esta categoría
+  await db
+    .update(exercises)
+    .set({ categoryId: null })
+    .where(eq(exercises.categoryId, categoryId));
+
+  // Eliminar la categoría
+  await db
+    .delete(exerciseCategories)
+    .where(eq(exerciseCategories.id, categoryId));
+
+  revalidatePath('/settings');
+  revalidatePath('/workouts');
+  revalidatePath('/workouts/new');
+  revalidatePath('/workouts/log');
+
+  return { success: true };
 }
 
 /** Estadísticas globales del usuario para el resumen de perfil */

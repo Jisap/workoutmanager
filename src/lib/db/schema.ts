@@ -11,8 +11,10 @@ export const workoutTypes = pgTable('workout_types', {
 // 2. Categorías de Ejercicios (Pecho, Espalda, Gymnastics, Monostructural...)
 export const exerciseCategories = pgTable('exercise_categories', {
   id: serial('id').primaryKey(),
-  name: text('name').notNull().unique(),
-  type: text('type'), // Agrupación lógica (ej. 'Fuerza', 'Cardio')
+  name: text('name').notNull(),
+  type: text('type'), // Agrupación lógica (ej. 'Fuerza', 'Cardio', 'Funcional')
+  isCustom: boolean('is_custom').default(false),
+  userId: text('user_id'), // Solo si isCustom es true (Clerk ID)
 });
 
 // 3. Catálogo de Ejercicios

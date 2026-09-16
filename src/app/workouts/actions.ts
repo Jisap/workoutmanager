@@ -144,6 +144,59 @@ export async function createCustomExercise(data: {
   }
 }
 
+export async function createCustomCategory(data: {
+  name: string;
+  type?: string;
+}) {
+  const { userId } = await auth();
+  if (!userId) throw new Error('No autorizado');
+
+  const trimmedName = data.name.trim();
+  if (!trimmedName) throw new Error('El nombre de la categoría no puede estar vacío');
+
+  try {
+    const [newCategory] = await db
+      .insert(exerciseCategories)
+      .values({
+        name: trimmedName,
+        type: data.type?.trim() || 'Fuerza',
+        isCustom: true,
+        userId,
+      })
+      .returning();
+
+    revalidatePath('/settings');
+    revalidatePath('/workouts');
+    revalidatePath('/workouts/new');
+    revalidatePath('/workouts/log');
+
+    return { success: true, category: newCategory };
+  } catch (error) {
+    console.error('Error creando categoría:', error);
+    throw new Error('No se pudo crear la categoría');
+  }
+}
+
+export async function getAvailableCategories(userIdParam?: string) {
+  let userId = userIdParam;
+  if (!userId) {
+    const authData = await auth();
+    userId = authData.userId ?? undefined;
+  }
+  if (!userId) throw new Error('No autorizado');
+
+  return db
+    .select({
+      id: exerciseCategories.id,
+      name: exerciseCategories.name,
+      type: exerciseCategories.type,
+      isCustom: exerciseCategories.isCustom,
+    })
+    .from(exerciseCategories)
+    .where(or(isNull(exerciseCategories.userId), eq(exerciseCategories.userId, userId)))
+    .orderBy(asc(exerciseCategories.name));
+}
+
 // Obtener datos de una plantilla
 export async function getTemplateData(templateId: number) {
   const template = await db.query.workoutTemplates.findFirst({

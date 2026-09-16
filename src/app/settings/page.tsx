@@ -18,7 +18,7 @@ export default async function SettingsPage() {
     currentUser(),
     getCustomExercises(userId),
     getWorkoutTypes(),
-    getExerciseCategories(),
+    getExerciseCategories(userId),
     getUserStats(userId),
   ]);
 
