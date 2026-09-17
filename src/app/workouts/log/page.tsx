@@ -30,6 +30,8 @@ export default async function WorkoutLogPage({
   let initialExercisesState: any[] = [];
   let workoutName = mode === 'new-template' ? 'Nueva Plantilla' : 'Entrenamiento Libre';
   let currentTypeId = typeId ? parseInt(typeId, 10) : 1;
+  let activeWorkoutId: number | null = null;
+  let initialNotes = '';
 
   // Obtener el nombre del tipo de entrenamiento
   if ((mode === 'free' || mode === 'new-template') && typeId) {
@@ -78,25 +80,37 @@ export default async function WorkoutLogPage({
         sets: g.sets,
       }));
     }
-  } else if (mode === 'repeat') {
+  } else if (mode === 'repeat' || mode === 'resume' || mode === 'edit') {
     const targetWorkout = workoutId
       ? await getWorkoutData(workoutId)
       : await getLastWorkoutData(userId);
 
     if (targetWorkout) {
-      // Limpiar sufijos anteriores tipo (Copia), (Repetición) o fechas previas para obtener el nombre base
-      const cleanBaseName = targetWorkout.name
-        .replace(/\s*\(Copia\)+/gi, '')
-        .replace(/\s*\(Repetici[oó]n\)+/gi, '')
-        .replace(/\s*·\s*\d{1,2}\s+[a-záéíóú]+/gi, '')
-        .trim() || 'Entrenamiento';
+      const isDraftWorkout =
+        !targetWorkout.totalTimeSeconds || targetWorkout.totalTimeSeconds === 0;
 
-      const todayStr = new Date().toLocaleDateString('es-ES', {
-        day: 'numeric',
-        month: 'short',
-      });
+      // Si es un entrenamiento guardado sin finalizar o venimos explícitamente a reanudar/editar
+      if (isDraftWorkout || mode === 'resume' || mode === 'edit') {
+        activeWorkoutId = targetWorkout.id;
+        workoutName = targetWorkout.name;
+        initialNotes = targetWorkout.notes || '';
+      } else {
+        // Limpiar sufijos anteriores tipo (Copia), (Repetición) o fechas previas para obtener el nombre base
+        const cleanBaseName =
+          targetWorkout.name
+            .replace(/\s*\(Copia\)+/gi, '')
+            .replace(/\s*\(Repetici[oó]n\)+/gi, '')
+            .replace(/\s*·\s*\d{1,2}\s+[a-záéíóú]+/gi, '')
+            .trim() || 'Entrenamiento';
 
-      workoutName = `${cleanBaseName} · ${todayStr}`;
+        const todayStr = new Date().toLocaleDateString('es-ES', {
+          day: 'numeric',
+          month: 'short',
+        });
+
+        workoutName = `${cleanBaseName} · ${todayStr}`;
+      }
+
       currentTypeId = targetWorkout.typeId;
       initialExercisesState = targetWorkout.exercises.map((ex: any) => ({
         id: crypto.randomUUID(),
@@ -121,6 +135,8 @@ export default async function WorkoutLogPage({
       typeId={currentTypeId.toString()}
       initialExercisesState={initialExercisesState}
       initialName={workoutName}
+      initialNotes={initialNotes}
+      workoutId={activeWorkoutId}
     />
   );
 }

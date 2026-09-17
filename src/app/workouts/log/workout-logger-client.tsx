@@ -45,8 +45,10 @@ interface WorkoutLoggerClientProps {
   workoutTypes?: WorkoutTypeOption[];
   mode: string;
   typeId?: string;
-  initialExercisesState?: any[]; // <-- NUEVO
-  initialName?: string;          // <-- NUEVO
+  initialExercisesState?: any[];
+  initialName?: string;
+  initialNotes?: string;
+  workoutId?: number | null;
 }
 
 export function WorkoutLoggerClient({
@@ -57,6 +59,8 @@ export function WorkoutLoggerClient({
   typeId,
   initialExercisesState = [],
   initialName = 'Entrenamiento Libre',
+  initialNotes = '',
+  workoutId = null,
 }: WorkoutLoggerClientProps) {
   const router = useRouter();
 
@@ -66,7 +70,8 @@ export function WorkoutLoggerClient({
   const [exercises, setExercises] = useState<LocalExercise[]>([]);
   const [isFinishDialogOpen, setIsFinishDialogOpen] = useState(false);
   const [totalTimeMinutes, setTotalTimeMinutes] = useState('45');
-  const [notes, setNotes] = useState('');
+  const [notes, setNotes] = useState(initialNotes);
+  const [currentWorkoutId, setCurrentWorkoutId] = useState<number | null>(workoutId);
   const [isSaving, setIsSaving] = useState(false);
 
   // Estado para modal dedicado a Guardar como Plantilla Directa
@@ -285,6 +290,7 @@ export function WorkoutLoggerClient({
     setIsSaving(true);
     try {
       const payload = {
+        workoutId: currentWorkoutId,
         typeId: parseInt(typeId || '1', 10),
         name: typeName,
         totalTimeSeconds: 0, // 0 = Guardado sin finalizar / En progreso
@@ -303,7 +309,10 @@ export function WorkoutLoggerClient({
         })),
       };
 
-      await saveWorkout(payload);
+      const result = await saveWorkout(payload);
+      if (result.workoutId && !currentWorkoutId) {
+        setCurrentWorkoutId(result.workoutId);
+      }
       router.push('/workouts');
     } catch (error) {
       console.error(error);
@@ -317,6 +326,7 @@ export function WorkoutLoggerClient({
     setIsSaving(true);
     try {
       const payload = {
+        workoutId: currentWorkoutId,
         typeId: parseInt(typeId || '1', 10),
         name: typeName,
         totalTimeSeconds: (parseInt(totalTimeMinutes, 10) || 0) * 60,
@@ -473,7 +483,13 @@ export function WorkoutLoggerClient({
                 ? 'Configura los ejercicios y cargas objetivo de la plantilla'
                 : 'Registra tus series y repeticiones'}
             </p>
-            {mode === 'repeat' && (
+            {currentWorkoutId && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                <Save className="w-2.5 h-2.5" />
+                Borrador Guardado
+              </span>
+            )}
+            {mode === 'repeat' && !currentWorkoutId && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
                 <RotateCcw className="w-2.5 h-2.5" />
                 Repetición

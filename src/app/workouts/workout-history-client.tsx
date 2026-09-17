@@ -837,9 +837,13 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
   const grouped = useMemo(() => groupByMonth(paginatedWorkouts), [paginatedWorkouts]);
   const monthKeys = useMemo(() => Array.from(grouped.keys()).sort((a, b) => b.localeCompare(a)), [grouped]);
 
-  const handleRepeatWorkout = (workoutId: number) => {
+  const handleRepeatWorkout = (workoutId: number, isFinished: boolean = true) => {
     setSelectedWorkout(null);
-    router.push(`/workouts/log?mode=repeat&workoutId=${workoutId}`);
+    if (isFinished) {
+      router.push(`/workouts/log?mode=repeat&workoutId=${workoutId}`);
+    } else {
+      router.push(`/workouts/log?mode=resume&workoutId=${workoutId}`);
+    }
   };
 
   const handleStartTemplate = (templateId: number) => {
@@ -1405,12 +1409,16 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                               <Button
                                 variant="outline"
                                 size="sm"
-                                className="h-7 px-2 text-xs text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800 rounded-lg font-semibold cursor-pointer"
-                                onClick={() => handleRepeatWorkout(workout.id)}
-                                title="Repetir entrenamiento"
+                                className={`h-7 px-2 text-xs rounded-lg font-semibold cursor-pointer ${
+                                  isFinished
+                                    ? 'text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800'
+                                    : 'text-amber-700 hover:text-amber-800 hover:bg-amber-50 dark:hover:bg-amber-950/30 border-amber-200 dark:border-amber-800'
+                                }`}
+                                onClick={() => handleRepeatWorkout(workout.id, isFinished)}
+                                title={isFinished ? 'Repetir entrenamiento' : 'Continuar / Finalizar entrenamiento'}
                               >
                                 <Play className="w-3 h-3 fill-current sm:mr-1" />
-                                <span className="hidden sm:inline">Repetir</span>
+                                <span className="hidden sm:inline">{isFinished ? 'Repetir' : 'Continuar'}</span>
                               </Button>
                               <Button
                                 variant="ghost"
@@ -1468,6 +1476,7 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                       {monthWorkouts.map((workout) => {
                         const style = getTypeStyle(workout.typeName);
                         const TypeIcon = style.icon;
+                        const isFinished = !!(workout.totalTimeSeconds && workout.totalTimeSeconds > 0);
 
                         return (
                           <Card
@@ -1606,11 +1615,16 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  className="text-xs gap-1 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 text-gray-700 dark:text-gray-200 flex-1 font-semibold cursor-pointer"
-                                  onClick={() => handleRepeatWorkout(workout.id)}
+                                  className={`text-xs gap-1 font-semibold flex-1 cursor-pointer ${
+                                    isFinished
+                                      ? 'hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 text-gray-700 dark:text-gray-200'
+                                      : 'hover:bg-amber-50 hover:text-amber-700 hover:border-amber-200 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800'
+                                  }`}
+                                  onClick={() => handleRepeatWorkout(workout.id, isFinished)}
+                                  title={isFinished ? 'Repetir entrenamiento' : 'Continuar / Finalizar entrenamiento'}
                                 >
                                   <Play className="w-3.5 h-3.5 fill-current" />
-                                  Repetir
+                                  {isFinished ? 'Repetir' : 'Continuar'}
                                 </Button>
                                 <Button
                                   variant="outline"
@@ -2136,7 +2150,12 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
         <WorkoutDetailModal
           workout={selectedWorkout}
           onClose={() => setSelectedWorkout(null)}
-          onRepeat={() => handleRepeatWorkout(selectedWorkout.id)}
+          onRepeat={() =>
+            handleRepeatWorkout(
+              selectedWorkout.id,
+              !!(selectedWorkout.totalTimeSeconds && selectedWorkout.totalTimeSeconds > 0)
+            )
+          }
           onConvertToTemplate={() => openConvertToTemplate(selectedWorkout)}
           onEdit={() =>
             setEditingWorkout({

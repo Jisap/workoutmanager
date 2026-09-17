@@ -7,6 +7,7 @@ import { eq, or, isNull, desc, asc, and, sql } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 
 export async function saveWorkout(data: {
+  workoutId?: number | null;
   typeId: number;
   name: string;
   totalTimeSeconds: number;
@@ -28,26 +29,64 @@ export async function saveWorkout(data: {
   if (!userId) throw new Error('No autorizado');
 
   try {
-    // 1. Crear el registro del entrenamiento
-    const [newWorkout] = await db
-      .insert(workouts)
-      .values({
-        userId,
-        typeId: data.typeId,
-        name: data.name,
-        totalTimeSeconds: data.totalTimeSeconds,
-        notes: data.notes,
-        startTime: new Date(Date.now() - data.totalTimeSeconds * 1000), // Calculamos start time hacia atrás
-        endTime: new Date(),
-      })
-      .returning();
+    let targetWorkoutId: number;
+
+    if (data.workoutId) {
+      // 1a. Verificar pertenencia y actualizar entrenamiento existente
+      const [existing] = await db
+        .select({ id: workouts.id, startTime: workouts.startTime })
+        .from(workouts)
+        .where(and(eq(workouts.id, data.workoutId), eq(workouts.userId, userId)));
+
+      if (!existing) {
+        throw new Error('Entrenamiento no encontrado o no autorizado');
+      }
+
+      await db
+        .update(workouts)
+        .set({
+          typeId: data.typeId,
+          name: data.name,
+          totalTimeSeconds: data.totalTimeSeconds,
+          notes: data.notes,
+          startTime:
+            data.totalTimeSeconds > 0
+              ? new Date(Date.now() - data.totalTimeSeconds * 1000)
+              : existing.startTime,
+          endTime: new Date(),
+        })
+        .where(eq(workouts.id, data.workoutId));
+
+      targetWorkoutId = data.workoutId;
+
+      // Eliminar ejercicios previos (las series se eliminan por CASCADE)
+      await db
+        .delete(workoutExercises)
+        .where(eq(workoutExercises.workoutId, targetWorkoutId));
+    } else {
+      // 1b. Crear nuevo registro de entrenamiento
+      const [newWorkout] = await db
+        .insert(workouts)
+        .values({
+          userId,
+          typeId: data.typeId,
+          name: data.name,
+          totalTimeSeconds: data.totalTimeSeconds,
+          notes: data.notes,
+          startTime: new Date(Date.now() - data.totalTimeSeconds * 1000), // Calculamos start time hacia atrás
+          endTime: new Date(),
+        })
+        .returning();
+
+      targetWorkoutId = newWorkout.id;
+    }
 
     // 2. Insertar ejercicios y sus series
     for (const ex of data.exercises) {
       const [newWorkoutExercise] = await db
         .insert(workoutExercises)
         .values({
-          workoutId: newWorkout.id,
+          workoutId: targetWorkoutId,
           exerciseId: ex.exerciseId,
           orderIndex: ex.orderIndex,
         })
@@ -68,8 +107,11 @@ export async function saveWorkout(data: {
       }
     }
 
+    revalidatePath('/workouts');
     revalidatePath('/dashboard');
-    return { success: true, workoutId: newWorkout.id };
+    revalidatePath('/progress');
+    revalidatePath('/workouts/new');
+    return { success: true, workoutId: targetWorkoutId };
   } catch (error) {
     console.error('Error guardando entrenamiento:', error);
     throw new Error('No se pudo guardar el entrenamiento');

@@ -198,7 +198,13 @@ export function WorkoutQuickSelector({
 
   const handleStartWorkout = (id: number) => {
     if (activeTab === 'recent') {
-      router.push(`/workouts/log?mode=repeat&workoutId=${id}`);
+      const target = recentWorkouts.find((w) => w.id === id);
+      const isFinished = !!(target?.totalTimeSeconds && target.totalTimeSeconds > 0);
+      if (isFinished) {
+        router.push(`/workouts/log?mode=repeat&workoutId=${id}`);
+      } else {
+        router.push(`/workouts/log?mode=resume&workoutId=${id}`);
+      }
     } else {
       router.push(`/workouts/log?mode=template&templateId=${id}`);
     }
@@ -462,13 +468,23 @@ export function WorkoutQuickSelector({
                           onClick={() => handleStartWorkout(item.id)}
                           className={`h-7 px-2.5 text-xs text-white rounded-lg font-semibold shadow-2xs cursor-pointer gap-1 ${
                             isRecent
-                              ? 'bg-emerald-600 hover:bg-emerald-700'
+                              ? workout && (!workout.totalTimeSeconds || workout.totalTimeSeconds === 0)
+                                ? 'bg-amber-600 hover:bg-amber-700'
+                                : 'bg-emerald-600 hover:bg-emerald-700'
                               : 'bg-purple-600 hover:bg-purple-700'
                           }`}
-                          title="Iniciar este entrenamiento"
+                          title={
+                            isRecent && workout && (!workout.totalTimeSeconds || workout.totalTimeSeconds === 0)
+                              ? 'Continuar entrenamiento guardado'
+                              : 'Iniciar este entrenamiento'
+                          }
                         >
                           <Play className="w-3 h-3 fill-current" />
-                          <span className="hidden sm:inline">Iniciar</span>
+                          <span className="hidden sm:inline">
+                            {isRecent && workout && (!workout.totalTimeSeconds || workout.totalTimeSeconds === 0)
+                              ? 'Continuar'
+                              : 'Iniciar'}
+                          </span>
                         </Button>
                       </div>
                     </td>
@@ -615,12 +631,20 @@ export function WorkoutQuickSelector({
                 size="sm"
                 className={`gap-2 text-xs font-bold px-4 py-2 rounded-xl shadow-sm cursor-pointer ${
                   activeTab === 'recent'
-                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                    ? selectedWorkout && (!selectedWorkout.totalTimeSeconds || selectedWorkout.totalTimeSeconds === 0)
+                      ? 'bg-amber-600 hover:bg-amber-700 text-white'
+                      : 'bg-emerald-600 hover:bg-emerald-700 text-white'
                     : 'bg-purple-600 hover:bg-purple-700 text-white'
                 }`}
               >
                 <Play className="w-4 h-4 fill-current" />
-                <span>Iniciar este entrenamiento</span>
+                <span>
+                  {activeTab === 'recent'
+                    ? selectedWorkout && (!selectedWorkout.totalTimeSeconds || selectedWorkout.totalTimeSeconds === 0)
+                      ? 'Continuar y Finalizar Sesión'
+                      : 'Repetir este entrenamiento'
+                    : 'Iniciar este entrenamiento'}
+                </span>
               </Button>
             </div>
           </div>
