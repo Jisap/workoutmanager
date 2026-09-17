@@ -2,13 +2,97 @@
 
 import { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Zap, Heart, Flame, Clock, Award, Timer, Activity, Trophy, BarChart3, TrendingUp, Layers, CheckCircle2 } from 'lucide-react';
+import {
+  Zap,
+  Heart,
+  Flame,
+  Clock,
+  Award,
+  Timer,
+  Activity,
+  Trophy,
+  BarChart3,
+  TrendingUp,
+  Layers,
+  CheckCircle2,
+  Dumbbell,
+  Compass,
+  ArrowDownRight,
+  TrendingDown,
+  Sparkles,
+} from 'lucide-react';
 import { type ModalityConfig } from '@/lib/db/schema';
 import { formatModalitySummary } from '@/lib/modality-utils';
+
+interface LiftStats {
+  name: string;
+  maxWeightReal: number;
+  estimated1RM: number;
+  totalSets: number;
+  history: {
+    date: string;
+    weight: number;
+    reps: number;
+    estimated1RM: number;
+    workoutName: string;
+  }[];
+  dailyHistory: {
+    date: string;
+    weight: number;
+    reps: number;
+    estimated1RM: number;
+    workoutName: string;
+  }[];
+}
+
+interface BenchmarkItem {
+  name: string;
+  workoutType?: string;
+  attempts: number;
+  isOfficial?: boolean;
+  bestTimeSeconds: number | null;
+  isRx: boolean;
+  deltaSeconds: number | null;
+  history: {
+    date: string;
+    timeSeconds: number | null;
+    timeMinutes: number;
+    isRx: boolean;
+    notes: string | null;
+    workoutType?: string;
+  }[];
+}
+
+interface CardioPB {
+  discipline: string;
+  distance: number;
+  bestTimeSeconds: number;
+  pace: string;
+  date: string;
+  workoutName: string;
+}
 
 interface ProgressCrossfitCardioProps {
   crossfit: {
     totalWods: number;
+    rxStats?: {
+      rxWodsCount: number;
+      scaledWodsCount: number;
+      totalWods: number;
+      rxPercentage: number;
+    };
+    timeCapStats?: {
+      wodsWithCap: number;
+      finishedUnderCap: number;
+      capSuccessRate: number;
+    };
+    olympic?: {
+      snatch: LiftStats;
+      cleanAndJerk: LiftStats;
+      totalOlympic: number;
+    };
+    benchmarks?: BenchmarkItem[];
+    cardioPBs?: CardioPB[];
     wods: {
       id: number;
       name: string;
@@ -18,6 +102,7 @@ interface ProgressCrossfitCardioProps {
       totalTimeMinutes: number;
       totalTimeSeconds?: number | null;
       exercisesCount: number;
+      isRx?: boolean;
       notes: string | null;
     }[];
     modalityBreakdown?: {
@@ -38,6 +123,7 @@ interface ProgressCrossfitCardioProps {
   hyroxCardio: {
     totalMinutes: number;
     totalSessions: number;
+    cardioPBs?: CardioPB[];
     sessions: {
       id: number;
       name: string;
@@ -55,11 +141,33 @@ interface ProgressCrossfitCardioProps {
   };
 }
 
+function formatSecondsToTime(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = Math.round(seconds % 60);
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
 export function ProgressCrossfitCardio({ crossfit, hyroxCardio }: ProgressCrossfitCardioProps) {
   const [selectedModalityFilter, setSelectedModalityFilter] = useState<string>('all');
+  const [activeTab, setActiveTab] = useState<'benchmarks' | 'olympic' | 'cardioPbs'>('benchmarks');
+  const [benchmarkCategory, setBenchmarkCategory] = useState<'all' | 'official' | 'custom'>('all');
 
   const modalityBreakdown = crossfit.modalityBreakdown || [];
   const fastestForTime = crossfit.fastestForTime || [];
+  const rxStats = crossfit.rxStats || { rxWodsCount: 0, scaledWodsCount: 0, totalWods: 0, rxPercentage: 0 };
+  const olympic = crossfit.olympic;
+  const benchmarks = crossfit.benchmarks || [];
+  const cardioPBs = crossfit.cardioPBs || hyroxCardio.cardioPBs || [];
+
+  // Conteo y filtrado de benchmarks oficiales vs funcionales repetidos
+  const officialCount = useMemo(() => benchmarks.filter((b) => b.isOfficial).length, [benchmarks]);
+  const customCount = useMemo(() => benchmarks.filter((b) => !b.isOfficial).length, [benchmarks]);
+
+  const filteredBenchmarks = useMemo(() => {
+    if (benchmarkCategory === 'official') return benchmarks.filter((b) => b.isOfficial);
+    if (benchmarkCategory === 'custom') return benchmarks.filter((b) => !b.isOfficial);
+    return benchmarks;
+  }, [benchmarks, benchmarkCategory]);
 
   // Filtrado de WODs por modalidad
   const filteredWods = useMemo(() => {
@@ -81,37 +189,52 @@ export function ProgressCrossfitCardio({ crossfit, hyroxCardio }: ProgressCrossf
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <Card className="border-gray-200 dark:border-gray-700 dark:bg-gray-900 shadow-2xs">
           <CardContent className="p-4 space-y-1">
-            <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">WODs / CrossFit</span>
+            <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 flex items-center gap-1.5">
+              <Zap className="w-3.5 h-3.5 text-orange-500" />
+              WODs Realizados
+            </span>
             <p className="text-2xl font-black text-orange-600 dark:text-orange-400 tabular-nums">
               {crossfit.totalWods}
             </p>
-            <p className="text-[11px] text-gray-400">sesiones funcionales</p>
+            <p className="text-[11px] text-gray-400">sesiones funcionales registradas</p>
+          </CardContent>
+        </Card>
+
+        {/* Tasa Rx vs Scaled */}
+        <Card className="border-gray-200 dark:border-gray-700 dark:bg-gray-900 shadow-2xs">
+          <CardContent className="p-4 space-y-1">
+            <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 flex items-center gap-1.5">
+              <Award className="w-3.5 h-3.5 text-emerald-500" />
+              Tasa en Rx
+            </span>
+            <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400 tabular-nums">
+              {rxStats.rxPercentage}%
+            </p>
+            <p className="text-[11px] text-gray-400">
+              {rxStats.rxWodsCount} en Rx · {rxStats.scaledWodsCount} Escalados
+            </p>
           </CardContent>
         </Card>
 
         <Card className="border-gray-200 dark:border-gray-700 dark:bg-gray-900 shadow-2xs">
           <CardContent className="p-4 space-y-1">
-            <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">Sesiones Hyrox / Cardio</span>
+            <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 flex items-center gap-1.5">
+              <Heart className="w-3.5 h-3.5 text-pink-500" />
+              Sesiones Hyrox / Cardio
+            </span>
             <p className="text-2xl font-black text-pink-600 dark:text-pink-400 tabular-nums">
               {hyroxCardio.totalSessions}
             </p>
-            <p className="text-[11px] text-gray-400">entrenamientos de resistencia</p>
+            <p className="text-[11px] text-gray-400">{hyroxCardio.totalMinutes} min de resistencia</p>
           </CardContent>
         </Card>
 
         <Card className="border-gray-200 dark:border-gray-700 dark:bg-gray-900 shadow-2xs">
           <CardContent className="p-4 space-y-1">
-            <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">Tiempo en Cardio</span>
-            <p className="text-2xl font-black text-gray-900 dark:text-gray-100 tabular-nums">
-              {hyroxCardio.totalMinutes} <span className="text-xs font-bold text-gray-400">min</span>
-            </p>
-            <p className="text-[11px] text-gray-400">{(hyroxCardio.totalMinutes / 60).toFixed(1)} horas acumuladas</p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-gray-200 dark:border-gray-700 dark:bg-gray-900 shadow-2xs">
-          <CardContent className="p-4 space-y-1">
-            <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">Modalidades Únicas</span>
+            <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 flex items-center gap-1.5">
+              <Flame className="w-3.5 h-3.5 text-purple-500" />
+              Modalidades Únicas
+            </span>
             <p className="text-2xl font-black text-purple-600 dark:text-purple-400 tabular-nums">
               {allUsedModalities.length}
             </p>
@@ -120,7 +243,326 @@ export function ProgressCrossfitCardio({ crossfit, hyroxCardio }: ProgressCrossf
         </Card>
       </div>
 
-      {/* ─── 2. DISTRIBUCIÓN POR MODALIDAD & RANKING FOR TIME ─── */}
+      {/* ─── 2. HALTEROFILIA OLÍMPICA & BENCHMARKS (NAV TABS) ─── */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-2 border-b border-gray-100 dark:border-gray-800 pb-3">
+          <button
+            onClick={() => setActiveTab('benchmarks')}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              activeTab === 'benchmarks'
+                ? 'bg-orange-600 text-white shadow-xs'
+                : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200'
+            }`}
+          >
+            <Trophy className="w-3.5 h-3.5" />
+            Benchmarks & WODs de Referencia
+          </button>
+          <button
+            onClick={() => setActiveTab('olympic')}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              activeTab === 'olympic'
+                ? 'bg-purple-600 text-white shadow-xs'
+                : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200'
+            }`}
+          >
+            <Dumbbell className="w-3.5 h-3.5" />
+            Halterofilia Olímpica
+          </button>
+          <button
+            onClick={() => setActiveTab('cardioPbs')}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              activeTab === 'cardioPbs'
+                ? 'bg-pink-600 text-white shadow-xs'
+                : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200'
+            }`}
+          >
+            <Timer className="w-3.5 h-3.5" />
+            PBs de Ergómetros & Carrera
+          </button>
+        </div>
+
+        {/* TAB 1: BENCHMARKS & WODS DE REFERENCIA */}
+        {activeTab === 'benchmarks' && (
+          <div className="space-y-4">
+            {/* Sub-filtros por categoría */}
+            {benchmarks.length > 0 && (
+              <div className="flex flex-wrap items-center justify-between gap-2 bg-gray-50/70 dark:bg-gray-800/40 p-2 rounded-xl border border-gray-100 dark:border-gray-800">
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setBenchmarkCategory('all')}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      benchmarkCategory === 'all'
+                        ? 'bg-orange-600 text-white shadow-2xs'
+                        : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700 hover:bg-gray-100'
+                    }`}
+                  >
+                    Todos ({benchmarks.length})
+                  </button>
+                  {officialCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setBenchmarkCategory('official')}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                        benchmarkCategory === 'official'
+                          ? 'bg-amber-500 text-amber-950 shadow-2xs'
+                          : 'bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 hover:bg-amber-100'
+                      }`}
+                    >
+                      🏆 Oficiales CrossFit ({officialCount})
+                    </button>
+                  )}
+                  {customCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setBenchmarkCategory('custom')}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                        benchmarkCategory === 'custom'
+                          ? 'bg-orange-600 text-white shadow-2xs'
+                          : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700 hover:bg-gray-100'
+                      }`}
+                    >
+                      ⚡ Funcionales & WODs ({customCount})
+                    </button>
+                  )}
+                </div>
+
+                <span className="text-[11px] text-gray-400">
+                  Comparativa de progresión y récords personales
+                </span>
+              </div>
+            )}
+
+            {filteredBenchmarks.length === 0 ? (
+              <Card className="border-dashed bg-gray-50/50 dark:bg-gray-800/30">
+                <CardContent className="py-8 text-center text-xs text-gray-500 space-y-1">
+                  <p className="font-semibold text-gray-700 dark:text-gray-300">
+                    {benchmarkCategory === 'official'
+                      ? 'No hay Benchmarks oficiales de CrossFit registrados todavía (Fran, Cindy, Murph, etc.).'
+                      : benchmarkCategory === 'custom'
+                      ? 'No hay entrenamientos funcionales repetidos 2 o más veces.'
+                      : 'Aún no has registrado Benchmarks oficiales ni entrenamientos funcionales repetidos.'}
+                  </p>
+                  <p className="text-[11px] text-gray-400">
+                    Al repetir un WOD o sesión funcional con el mismo nombre, el sistema analizará automáticamente tu mejora de tiempo.
+                  </p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {filteredBenchmarks.map((bm) => (
+                  <Card key={bm.name} className="border-gray-200 dark:border-gray-700 dark:bg-gray-900 shadow-2xs">
+                    <CardContent className="p-4 space-y-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <span className="font-bold text-sm text-gray-900 dark:text-gray-100 block truncate">{bm.name}</span>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            {bm.isOfficial ? (
+                              <span className="inline-flex items-center gap-1 text-[9px] font-extrabold px-1.5 py-0.2 rounded bg-amber-100 text-amber-900 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                                🏆 Oficial CrossFit
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.2 rounded bg-orange-100/80 text-orange-900 dark:bg-orange-950/40 dark:text-orange-300 border border-orange-200 dark:border-orange-800/50">
+                                ⚡ {bm.workoutType || 'Funcional'}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md shrink-0 ${
+                          bm.isRx
+                            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300'
+                            : 'bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300'
+                        }`}>
+                          {bm.isRx ? 'Rx' : 'Scaled'}
+                        </span>
+                      </div>
+
+                      <div className="flex items-baseline justify-between pt-1">
+                        <div>
+                          <p className="text-xs text-gray-400">Mejor Tiempo / Récord</p>
+                          <p className="text-2xl font-black text-orange-600 dark:text-orange-400 font-mono">
+                            {bm.bestTimeSeconds ? formatSecondsToTime(bm.bestTimeSeconds) : 'Completado'}
+                          </p>
+                        </div>
+                        <span className="text-xs text-gray-400">{bm.attempts} {bm.attempts === 1 ? 'intento' : 'intentos'}</span>
+                      </div>
+
+                      {bm.deltaSeconds !== null && (
+                        <div className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 p-2 rounded-lg border border-emerald-100 dark:border-emerald-900/40">
+                          <TrendingDown className="w-3.5 h-3.5" />
+                          <span className="font-bold">-{bm.deltaSeconds} seg de mejora</span>
+                          <span className="text-[10px] text-gray-400">vs primer intento</span>
+                        </div>
+                      )}
+
+                      {/* Historial de intentos */}
+                      <div className="pt-2 border-t border-gray-100 dark:border-gray-800 space-y-1 text-[11px] text-gray-500">
+                        {bm.history.slice(-3).reverse().map((h, hIdx) => (
+                          <div key={hIdx} className="flex items-center justify-between">
+                            <span>{new Date(h.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}</span>
+                            <span className="font-mono font-semibold text-gray-700 dark:text-gray-300">
+                              {h.timeSeconds ? formatSecondsToTime(h.timeSeconds) : `${h.timeMinutes} min`} {h.isRx ? '(Rx)' : ''}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 2: HALTEROFILIA OLÍMPICA */}
+        {activeTab === 'olympic' && olympic && (
+          <div className="space-y-4">
+            {/* Hero Total Olímpico */}
+            <Card className="border-purple-200/80 dark:border-purple-800/60 bg-gradient-to-br from-purple-50/60 via-white to-orange-50/30 dark:from-purple-950/20 dark:via-gray-900 dark:to-orange-950/20 shadow-xs">
+              <CardContent className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-100 dark:bg-purple-900/40 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                    <Trophy className="w-3.5 h-3.5" /> Total Olímpico (Halterofilia)
+                  </span>
+                  <h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-gray-100">
+                    Snatch (Arrancada) + Clean & Jerk (Dos Tiempos)
+                  </h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Suma combinada de tu 1RM en los dos movimientos de levantamiento olímpico.
+                  </p>
+                </div>
+
+                <div className="flex items-baseline gap-2 bg-white dark:bg-gray-800/80 px-4 py-3 rounded-2xl border border-gray-200/80 dark:border-gray-700 shadow-2xs self-stretch sm:self-auto justify-center">
+                  <span className="text-3xl font-black text-purple-600 dark:text-purple-400 tabular-nums">
+                    {olympic.totalOlympic}
+                  </span>
+                  <span className="text-sm font-bold text-gray-400">kg Total</span>
+                </div>
+              </CardContent>
+            </Card>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Snatch */}
+              <Card className="border-gray-200 dark:border-gray-700 dark:bg-gray-900 shadow-2xs">
+                <CardHeader className="pb-3 border-b border-gray-100 dark:border-gray-800 bg-purple-50/40 dark:bg-purple-950/20">
+                  <CardTitle className="text-sm font-bold text-gray-900 dark:text-gray-100 flex items-center justify-between">
+                    <span>Snatch (Arrancada)</span>
+                    <span className="text-xs font-normal text-purple-600 font-semibold">{olympic.snatch.totalSets} series</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-4 space-y-3">
+                  <div className="flex items-baseline justify-between">
+                    <div>
+                      <span className="text-[10px] font-bold text-gray-400 uppercase">1RM Estimado</span>
+                      <p className="text-2xl font-black text-purple-600 dark:text-purple-400 tabular-nums">
+                        {olympic.snatch.estimated1RM > 0 ? `${olympic.snatch.estimated1RM} kg` : '—'}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[10px] font-bold text-gray-400 uppercase">Carga Real Máx</span>
+                      <p className="text-lg font-bold text-gray-800 dark:text-gray-200 tabular-nums">
+                        {olympic.snatch.maxWeightReal > 0 ? `${olympic.snatch.maxWeightReal} kg` : '—'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {olympic.snatch.history.length > 0 && (
+                    <div className="pt-2 border-t border-gray-100 dark:border-gray-800 space-y-1 text-xs text-gray-500">
+                      <span className="text-[10px] font-bold text-gray-400 uppercase">Últimos levantamientos:</span>
+                      {olympic.snatch.history.slice(-3).reverse().map((h, i) => (
+                        <div key={i} className="flex items-center justify-between text-[11px]">
+                          <span>{new Date(h.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}</span>
+                          <span className="font-mono font-semibold text-gray-800 dark:text-gray-200">
+                            {h.weight}kg × {h.reps} reps (1RM ~{h.estimated1RM}kg)
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Clean & Jerk */}
+              <Card className="border-gray-200 dark:border-gray-700 dark:bg-gray-900 shadow-2xs">
+                <CardHeader className="pb-3 border-b border-gray-100 dark:border-gray-800 bg-orange-50/40 dark:bg-orange-950/20">
+                  <CardTitle className="text-sm font-bold text-gray-900 dark:text-gray-100 flex items-center justify-between">
+                    <span>Clean & Jerk (Dos Tiempos)</span>
+                    <span className="text-xs font-normal text-orange-600 font-semibold">{olympic.cleanAndJerk.totalSets} series</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-4 space-y-3">
+                  <div className="flex items-baseline justify-between">
+                    <div>
+                      <span className="text-[10px] font-bold text-gray-400 uppercase">1RM Estimado</span>
+                      <p className="text-2xl font-black text-orange-600 dark:text-orange-400 tabular-nums">
+                        {olympic.cleanAndJerk.estimated1RM > 0 ? `${olympic.cleanAndJerk.estimated1RM} kg` : '—'}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[10px] font-bold text-gray-400 uppercase">Carga Real Máx</span>
+                      <p className="text-lg font-bold text-gray-800 dark:text-gray-200 tabular-nums">
+                        {olympic.cleanAndJerk.maxWeightReal > 0 ? `${olympic.cleanAndJerk.maxWeightReal} kg` : '—'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {olympic.cleanAndJerk.history.length > 0 && (
+                    <div className="pt-2 border-t border-gray-100 dark:border-gray-800 space-y-1 text-xs text-gray-500">
+                      <span className="text-[10px] font-bold text-gray-400 uppercase">Últimos levantamientos:</span>
+                      {olympic.cleanAndJerk.history.slice(-3).reverse().map((h, i) => (
+                        <div key={i} className="flex items-center justify-between text-[11px]">
+                          <span>{new Date(h.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}</span>
+                          <span className="font-mono font-semibold text-gray-800 dark:text-gray-200">
+                            {h.weight}kg × {h.reps} reps (1RM ~{h.estimated1RM}kg)
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 3: CARDIO & ERGÓMETROS PBs */}
+        {activeTab === 'cardioPbs' && (
+          <div className="space-y-4">
+            {cardioPBs.length === 0 ? (
+              <Card className="border-dashed bg-gray-50/50 dark:bg-gray-800/30">
+                <CardContent className="py-8 text-center text-xs text-gray-500">
+                  Registra series de Remo, SkiErg o Carrera con distancia (metros) y tiempo (segundos) para ver tus mejores marcas personales (PBs).
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {cardioPBs.map((pb, idx) => (
+                  <Card key={idx} className="border-gray-200 dark:border-gray-700 dark:bg-gray-900 shadow-2xs">
+                    <CardContent className="p-4 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-xs text-pink-600 dark:text-pink-400">{pb.discipline}</span>
+                        <span className="text-[10px] text-gray-400">{new Date(pb.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}</span>
+                      </div>
+                      <div className="flex items-baseline justify-between">
+                        <span className="text-xl font-black text-gray-900 dark:text-gray-100">{pb.distance}m</span>
+                        <span className="text-lg font-mono font-bold text-pink-600 dark:text-pink-400">
+                          ⏱️ {formatSecondsToTime(pb.bestTimeSeconds)}
+                        </span>
+                      </div>
+                      {pb.pace && (
+                        <p className="text-[11px] text-gray-500 font-mono">Ritmo: {pb.pace}</p>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ─── 3. DISTRIBUCIÓN POR MODALIDAD & RANKING FOR TIME ─── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Distribución de Modalidades */}
         <Card className="border-gray-200 dark:border-gray-700 dark:bg-gray-900 shadow-2xs">
@@ -128,7 +570,7 @@ export function ProgressCrossfitCardio({ crossfit, hyroxCardio }: ProgressCrossf
             <CardTitle className="text-sm font-bold text-gray-900 dark:text-gray-100 flex items-center justify-between">
               <span className="flex items-center gap-2">
                 <BarChart3 className="w-4 h-4 text-orange-600" />
-                Distribución por Modalidad de WOD
+                Distribución por Formato de WOD
               </span>
               <span className="text-xs font-normal text-gray-400">
                 {modalityBreakdown.reduce((acc, m) => acc + m.count, 0)} sesiones categorizadas
@@ -216,7 +658,7 @@ export function ProgressCrossfitCardio({ crossfit, hyroxCardio }: ProgressCrossf
                     </div>
 
                     <div className="font-mono text-xs font-black text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-2.5 py-1 rounded-lg border border-amber-200 dark:border-amber-800 shrink-0">
-                      ⏱️ {item.totalTimeMinutes} min
+                      ⏱️ {item.totalTimeSeconds ? formatSecondsToTime(item.totalTimeSeconds) : `${item.totalTimeMinutes} min`}
                     </div>
                   </div>
                 ))}
@@ -226,7 +668,7 @@ export function ProgressCrossfitCardio({ crossfit, hyroxCardio }: ProgressCrossf
         </Card>
       </div>
 
-      {/* ─── 3. SECCIÓN HISTORIAL DE WODS & SESIONES ─── */}
+      {/* ─── 4. SECCIÓN HISTORIAL DE WODS & SESIONES ─── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* CrossFit WODs */}
         <Card className="border-gray-200 dark:border-gray-700 dark:bg-gray-900 shadow-2xs">
@@ -290,6 +732,13 @@ export function ProgressCrossfitCardio({ crossfit, hyroxCardio }: ProgressCrossf
                             {formatModalitySummary(wod.modality, wod.modalityConfig)}
                           </span>
                         )}
+                        {wod.isRx !== undefined && (
+                          <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded ${
+                            wod.isRx ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300' : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+                          }`}>
+                            {wod.isRx ? 'Rx' : 'Scaled'}
+                          </span>
+                        )}
                       </div>
                       <div className="flex items-center gap-2 text-[11px] text-gray-400">
                         <span>{new Date(wod.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}</span>
@@ -300,7 +749,7 @@ export function ProgressCrossfitCardio({ crossfit, hyroxCardio }: ProgressCrossf
 
                     <div className="flex items-center gap-1.5 shrink-0 bg-white dark:bg-gray-900 px-2.5 py-1 rounded-lg border border-gray-200 dark:border-gray-700 font-mono text-xs font-bold text-orange-600 dark:text-orange-400">
                       <Timer className="w-3.5 h-3.5" />
-                      <span>{wod.totalTimeMinutes > 0 ? `${wod.totalTimeMinutes} min` : 'Completado'}</span>
+                      <span>{wod.totalTimeSeconds ? formatSecondsToTime(wod.totalTimeSeconds) : wod.totalTimeMinutes > 0 ? `${wod.totalTimeMinutes} min` : 'Completado'}</span>
                     </div>
                   </div>
                 ))}

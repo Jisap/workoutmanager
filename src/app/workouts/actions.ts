@@ -1363,6 +1363,24 @@ export async function getAdvancedProgressData(userId: string) {
     },
   };
 
+  // 4b. HALTEROFILIA / LEVANTAMIENTOS OLÍMPICOS (CrossFit)
+  const olympicData = {
+    snatch: {
+      name: 'Snatch (Arrancada)',
+      maxWeightReal: 0,
+      estimated1RM: 0,
+      totalSets: 0,
+      history: [] as { date: string; weight: number; reps: number; estimated1RM: number; workoutName: string }[],
+    },
+    cleanAndJerk: {
+      name: 'Clean & Jerk (Dos Tiempos)',
+      maxWeightReal: 0,
+      estimated1RM: 0,
+      totalSets: 0,
+      history: [] as { date: string; weight: number; reps: number; estimated1RM: number; workoutName: string }[],
+    },
+  };
+
   // 5. CROSSFIT & WODs
   const crossfitWodsList: {
     id: number;
@@ -1373,8 +1391,47 @@ export async function getAdvancedProgressData(userId: string) {
     totalTimeMinutes: number;
     totalTimeSeconds: number | null;
     exercisesCount: number;
+    isRx: boolean;
     notes: string | null;
   }[] = [];
+
+  // Benchmarks y WODs agrupados por nombre
+  const benchmarksMap: Record<
+    string,
+    {
+      name: string;
+      workoutType: string;
+      attempts: number;
+      bestTimeSeconds: number | null;
+      isRx: boolean;
+      history: {
+        date: string;
+        timeSeconds: number | null;
+        timeMinutes: number;
+        isRx: boolean;
+        notes: string | null;
+        workoutType: string;
+      }[];
+    }
+  > = {};
+
+  // Récords monostructurales (Remo, SkiErg, Running, Bike)
+  const cardioPBsMap: Record<
+    string,
+    {
+      discipline: string;
+      distance: number;
+      bestTimeSeconds: number;
+      pace: string;
+      date: string;
+      workoutName: string;
+    }
+  > = {};
+
+  let rxWodsCount = 0;
+  let scaledWodsCount = 0;
+  let wodsWithCapCount = 0;
+  let wodsFinishedUnderCapCount = 0;
 
   // 6. HYROX & CARDIO
   let totalCardioMinutes = 0;
@@ -1412,17 +1469,72 @@ export async function getAdvancedProgressData(userId: string) {
       }
     }
 
+    // Comprobar si las series del WOD fueron Rx
+    let wodIsRx = true;
+    for (const we of w.exercises) {
+      for (const s of we.sets) {
+        if (s.isRx === false) wodIsRx = false;
+      }
+    }
+
     if (isCrossfitOrFuncional) {
+      if (wodIsRx) rxWodsCount++;
+      else scaledWodsCount++;
+
+      // Comprobar time cap si existe en la configuración de la modalidad
+      const capMins = w.modalityConfig?.timeCapMinutes || (w.modalityConfig as any)?.timeCap;
+      if (capMins && typeof capMins === 'number' && capMins > 0) {
+        wodsWithCapCount++;
+        const totalSecs = w.totalTimeSeconds || (w.totalTimeSeconds ? w.totalTimeSeconds : 0);
+        if (totalSecs > 0 && totalSecs <= capMins * 60) {
+          wodsFinishedUnderCapCount++;
+        }
+      }
+
+      const totalMins = w.totalTimeSeconds ? Math.round(w.totalTimeSeconds / 60) : 0;
       crossfitWodsList.push({
         id: w.id,
         name: w.name,
         date: new Date(w.startTime).toISOString(),
         modality: w.modality || null,
         modalityConfig: w.modalityConfig || null,
-        totalTimeMinutes: w.totalTimeSeconds ? Math.round(w.totalTimeSeconds / 60) : 0,
+        totalTimeMinutes: totalMins,
         totalTimeSeconds: w.totalTimeSeconds || null,
         exercisesCount: w.exercises.length,
+        isRx: wodIsRx,
         notes: w.notes || null,
+      });
+
+      // Agrupar Benchmarks y WODs repetidos
+      const cleanName = w.name.trim();
+      const currentWorkoutType = w.type?.name || (isCrossfitOrFuncional ? 'CrossFit / Funcional' : 'WOD');
+      if (!benchmarksMap[cleanName]) {
+        benchmarksMap[cleanName] = {
+          name: cleanName,
+          workoutType: currentWorkoutType,
+          attempts: 0,
+          bestTimeSeconds: null,
+          isRx: wodIsRx,
+          history: [],
+        };
+      }
+      const bObj = benchmarksMap[cleanName];
+      bObj.attempts++;
+      if (
+        w.totalTimeSeconds &&
+        w.totalTimeSeconds > 0 &&
+        (bObj.bestTimeSeconds === null || w.totalTimeSeconds < bObj.bestTimeSeconds)
+      ) {
+        bObj.bestTimeSeconds = w.totalTimeSeconds;
+        bObj.isRx = wodIsRx;
+      }
+      bObj.history.push({
+        date: new Date(w.startTime).toISOString(),
+        timeSeconds: w.totalTimeSeconds || null,
+        timeMinutes: totalMins,
+        isRx: wodIsRx,
+        notes: w.notes || null,
+        workoutType: currentWorkoutType,
       });
     }
 
@@ -1478,9 +1590,74 @@ export async function getAdvancedProgressData(userId: string) {
         big3Category = 'deadlift';
       }
 
+      // Identificación para Halterofilia / Levantamiento Olímpico
+      let olympicCategory: 'snatch' | 'cleanAndJerk' | null = null;
+      if (
+        (exLower.includes('snatch') || exLower.includes('arrancada')) &&
+        !exLower.includes('mancuerna') &&
+        !exLower.includes('dumbbell') &&
+        !exLower.includes('kettlebell')
+      ) {
+        olympicCategory = 'snatch';
+      } else if (
+        (exLower.includes('clean & jerk') ||
+          exLower.includes('clean and jerk') ||
+          exLower.includes('dos tiempos') ||
+          exLower.includes('cargada y envión') ||
+          exLower.includes('power clean') ||
+          exLower.includes('squat clean') ||
+          exLower.includes('clean') ||
+          exLower.includes('jerk') ||
+          exLower.includes('push jerk') ||
+          exLower.includes('split jerk')) &&
+        !exLower.includes('mancuerna') &&
+        !exLower.includes('dumbbell') &&
+        !exLower.includes('kettlebell')
+      ) {
+        olympicCategory = 'cleanAndJerk';
+      }
+
+      // Identificación para Cardio / Ergómetros PBs
+      let cardioDiscipline: string | null = null;
+      if (exLower.includes('remo') || exLower.includes('row') || exLower.includes('rower')) cardioDiscipline = 'Remo';
+      else if (exLower.includes('skierg') || exLower.includes('ski erg') || exLower.includes('ski')) cardioDiscipline = 'SkiErg';
+      else if (exLower.includes('correr') || exLower.includes('carrera') || exLower.includes('run') || exLower.includes('running')) cardioDiscipline = 'Running';
+      else if (exLower.includes('bike') || exLower.includes('bicicleta') || exLower.includes('echo bike') || exLower.includes('assault bike')) cardioDiscipline = 'Bike';
+
       for (const s of we.sets) {
         const wVal = s.weight ? Number(s.weight) : 0;
         const rVal = s.repCount ? Number(s.repCount) : 0;
+        const distVal = s.distance ? Number(s.distance) : 0;
+        const durVal = s.durationSeconds ? Number(s.durationSeconds) : 0;
+
+        // PBs de Cardio
+        if (cardioDiscipline && distVal > 0 && durVal > 0) {
+          const pbKey = `${cardioDiscipline}_${distVal}`;
+          let paceStr = '';
+          if (cardioDiscipline === 'Remo' || cardioDiscipline === 'SkiErg') {
+            const pace500 = (durVal / distVal) * 500;
+            const pMin = Math.floor(pace500 / 60);
+            const pSec = Math.round(pace500 % 60);
+            paceStr = `${pMin}:${String(pSec).padStart(2, '0')} /500m`;
+          } else if (cardioDiscipline === 'Running') {
+            const paceKm = (durVal / distVal) * 1000;
+            const pMin = Math.floor(paceKm / 60);
+            const pSec = Math.round(paceKm % 60);
+            paceStr = `${pMin}:${String(pSec).padStart(2, '0')} /km`;
+          }
+
+          if (!cardioPBsMap[pbKey] || durVal < cardioPBsMap[pbKey].bestTimeSeconds) {
+            cardioPBsMap[pbKey] = {
+              discipline: cardioDiscipline,
+              distance: distVal,
+              bestTimeSeconds: durVal,
+              pace: paceStr,
+              date: new Date(w.startTime).toISOString(),
+              workoutName: w.name,
+            };
+          }
+        }
+
         if (rVal <= 0) continue;
 
         const vol = wVal * rVal;
@@ -1513,6 +1690,22 @@ export async function getAdvancedProgressData(userId: string) {
             target.estimated5RM = Math.round((est1RM / 1.15) * 10) / 10;
           }
 
+          target.history.push({
+            date: new Date(w.startTime).toISOString(),
+            weight: wVal,
+            reps: rVal,
+            estimated1RM: est1RM,
+            workoutName: w.name,
+          });
+        }
+
+        // Añadir a Levantamientos Olímpicos si aplica
+        if (olympicCategory && wVal > 0) {
+          const est1RM = rVal === 1 ? wVal : Math.round(wVal * (1 + rVal / 30) * 10) / 10;
+          const target = olympicData[olympicCategory];
+          target.totalSets += 1;
+          if (wVal > target.maxWeightReal) target.maxWeightReal = wVal;
+          if (est1RM > target.estimated1RM) target.estimated1RM = est1RM;
           target.history.push({
             date: new Date(w.startTime).toISOString(),
             weight: wVal,
@@ -1872,6 +2065,62 @@ export async function getAdvancedProgressData(userId: string) {
   const benchDailyHistory = getDailyBestHistory(big3Data.bench.history);
   const deadliftDailyHistory = getDailyBestHistory(big3Data.deadlift.history);
 
+
+  const snatchDailyHistory = getDailyBestHistory(olympicData.snatch.history);
+  const cleanAndJerkDailyHistory = getDailyBestHistory(olympicData.cleanAndJerk.history);
+
+  // Lista de Benchmarks oficiales de CrossFit (The Girls, Heroes, etc.)
+  const officialBenchmarks = new Set([
+    'fran', 'cindy', 'murph', 'grace', 'helen', 'isabel', 'diane', 'dt',
+    'annie', 'karen', 'fight gone bad', 'jackie', 'nancy', 'eva', 'kelly',
+    'lynne', 'mary', 'chelsea', 'amanda', 'angie', 'barbara', 'elizabeth',
+    'filthy fifty', 'the seven', 'kalsu', 'clovis', 'badger', 'nate',
+    'lumberjack 20', 'bull', 'joshie', 'jason', 'michael', 'daniel',
+    'tommy v', 'holbrook', 'gwen', 'hope', 'garrett', 'hansen', 'randy', 'loredo'
+  ]);
+
+  // Benchmarks formateados con deltas de mejora (solo oficiales o con 2+ intentos)
+  const benchmarksList = Object.values(benchmarksMap)
+    .filter((b) => {
+      const norm = b.name.toLowerCase().trim();
+      return officialBenchmarks.has(norm) || b.attempts >= 2;
+    })
+    .map((b) => {
+      const norm = b.name.toLowerCase().trim();
+      const isOfficial = officialBenchmarks.has(norm);
+      const sortedH = b.history.sort((x, y) => new Date(x.date).getTime() - new Date(y.date).getTime());
+      const firstTime = sortedH[0]?.timeSeconds;
+      const lastTime = sortedH[sortedH.length - 1]?.timeSeconds;
+      const deltaSeconds = firstTime && lastTime && sortedH.length > 1 ? firstTime - lastTime : null;
+      return {
+        name: b.name,
+        workoutType: b.workoutType || 'CrossFit',
+        attempts: b.attempts,
+        isOfficial,
+        bestTimeSeconds: b.bestTimeSeconds,
+        isRx: b.isRx,
+        deltaSeconds,
+        history: sortedH,
+      };
+    })
+    .sort((a, b) => (b.isOfficial ? 1 : 0) - (a.isOfficial ? 1 : 0) || b.attempts - a.attempts);
+
+  // Lista de PBs de cardio/ergómetros
+  const cardioPBsList = Object.values(cardioPBsMap).sort(
+    (a, b) => a.discipline.localeCompare(b.discipline) || a.distance - b.distance
+  );
+
+  const totalCrossfitCount = crossfitWodsList.length;
+  const rxPercentage =
+    rxWodsCount + scaledWodsCount > 0
+      ? Math.round((rxWodsCount / (rxWodsCount + scaledWodsCount)) * 100)
+      : 0;
+
+  const capSuccessRate =
+    wodsWithCapCount > 0
+      ? Math.round((wodsFinishedUnderCapCount / wodsWithCapCount) * 100)
+      : 0;
+
   return {
     general: {
       totalWorkouts: totalWorkoutsCount,
@@ -1908,8 +2157,26 @@ export async function getAdvancedProgressData(userId: string) {
       },
     },
     crossfit: {
-      totalWods: crossfitWodsList.length,
-      wods: crossfitWodsList.slice(-10).reverse(),
+      totalWods: totalCrossfitCount,
+      wods: crossfitWodsList.slice(-12).reverse(),
+      rxStats: {
+        rxWodsCount,
+        scaledWodsCount,
+        totalWods: totalCrossfitCount,
+        rxPercentage,
+      },
+      timeCapStats: {
+        wodsWithCap: wodsWithCapCount,
+        finishedUnderCap: wodsFinishedUnderCapCount,
+        capSuccessRate,
+      },
+      olympic: {
+        snatch: { ...olympicData.snatch, dailyHistory: snatchDailyHistory },
+        cleanAndJerk: { ...olympicData.cleanAndJerk, dailyHistory: cleanAndJerkDailyHistory },
+        totalOlympic: olympicData.snatch.estimated1RM + olympicData.cleanAndJerk.estimated1RM,
+      },
+      benchmarks: benchmarksList,
+      cardioPBs: cardioPBsList,
       modalityBreakdown: Object.entries(modalityCounts).map(([modality, count]) => ({
         modality,
         count,
@@ -1931,7 +2198,8 @@ export async function getAdvancedProgressData(userId: string) {
     hyroxCardio: {
       totalMinutes: totalCardioMinutes,
       totalSessions: totalCardioSessions,
-      sessions: hyroxSessionsList.slice(-10).reverse(),
+      sessions: hyroxSessionsList.slice(-12).reverse(),
+      cardioPBs: cardioPBsList,
       modalityBreakdown: Object.entries(modalityCounts).map(([modality, count]) => ({
         modality,
         count,
