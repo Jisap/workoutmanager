@@ -98,6 +98,8 @@ interface WorkoutLoggerClientProps {
   initialModality?: string | null;
   initialModalityConfig?: ModalityConfig | null;
   workoutId?: number | null;
+  // Nombres ya usados (para uniquificar en cliente, p. ej. al aplicar plantilla Hyrox)
+  existingWorkoutNames?: string[];
 }
 
 export function WorkoutLoggerClient({
@@ -112,6 +114,7 @@ export function WorkoutLoggerClient({
   initialModality = null,
   initialModalityConfig = null,
   workoutId = null,
+  existingWorkoutNames = [],
 }: WorkoutLoggerClientProps) {
   const router = useRouter();
 
@@ -358,6 +361,25 @@ export function WorkoutLoggerClient({
     });
   };
 
+  // Suma de tiempos de todos los tramos (para el total automático en Hyrox)
+  const segmentTotalSeconds = useMemo(() => {
+    let total = 0;
+    for (const ex of exercises) {
+      for (const s of ex.sets) {
+        if (s.durationSeconds) total += s.durationSeconds;
+      }
+    }
+    return total;
+  }, [exercises]);
+
+  // Al abrir el diálogo de finalizar en Hyrox, el total se calcula solo
+  // sumando los tiempos introducidos tramo a tramo (editable después si quieres)
+  useEffect(() => {
+    if (isFinishDialogOpen && isHyroxPage && segmentTotalSeconds > 0) {
+      setTotalTimeMinutes(String(Math.max(1, Math.round(segmentTotalSeconds / 60))));
+    }
+  }, [isFinishDialogOpen, isHyroxPage, segmentTotalSeconds]);
+
   // Ajustar número total de series desde la vista rápida
   const setSetsCount = (exerciseId: string, count: number) => {
     const targetCount = Math.max(1, Math.min(50, count));
@@ -470,11 +492,33 @@ export function WorkoutLoggerClient({
     setExercises((prev) => prev.filter((ex) => ex.id !== exerciseId));
   };
 
-  // Aplicar preset generado desde HyroxRaceBuilder
+  // Nombres ocupados (minúsculas) para uniquificar en cliente sin roundtrip
+  const takenNamesRef = useMemo(
+    () => new Set(existingWorkoutNames.map((n) => n.toLowerCase())),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
+  const makeUniqueClientName = (base: string): string => {
+    const clean = base.trim() || 'Entrenamiento';
+    if (!takenNamesRef.has(clean.toLowerCase())) {
+      takenNamesRef.add(clean.toLowerCase());
+      return clean;
+    }
+    let n = 2;
+    while (takenNamesRef.has(`${clean.toLowerCase()} (${n})`)) n++;
+    const unique = `${clean} (${n})`;
+    takenNamesRef.add(unique.toLowerCase());
+    return unique;
+  };
+
+  // Aplicar preset generado desde HyroxRaceBuilder.
+  // El título del preset sobrescribe el nombre: se uniquifica aquí porque la
+  // comprobación de page.tsx ya no aplica una vez cargada la página.
   const handleApplyHyroxPreset = (newTitle: string, generatedExercises: HyroxGeneratedExercise[]) => {
-    setTypeName(newTitle);
-    setTemplateName(newTitle);
-    setDirectTemplateName(newTitle);
+    const uniqueTitle = currentWorkoutId ? newTitle : makeUniqueClientName(newTitle);
+    setTypeName(uniqueTitle);
+    setTemplateName(uniqueTitle);
+    setDirectTemplateName(uniqueTitle);
     setExercises(generatedExercises);
   };
 
@@ -1663,13 +1707,30 @@ export function WorkoutLoggerClient({
             </div>
 
             <div className="space-y-2">
-              <Label>Tiempo total (minutos)</Label>
+              <div className="flex items-center justify-between gap-2">
+                <Label>Tiempo total (minutos)</Label>
+                {isHyroxPage && segmentTotalSeconds > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setTotalTimeMinutes(String(Math.max(1, Math.round(segmentTotalSeconds / 60))))}
+                    className="text-[11px] font-bold text-purple-700 dark:text-purple-300 hover:underline cursor-pointer"
+                    title="Recalcular sumando los tiempos de los tramos"
+                  >
+                    ⏱ Auto: {formatDurationInput(segmentTotalSeconds)} — recalcular
+                  </button>
+                )}
+              </div>
               <Input
                 type="number"
                 value={totalTimeMinutes}
                 onChange={(e) => setTotalTimeMinutes(e.target.value)}
                 className="tabular-nums"
               />
+              {isHyroxPage && segmentTotalSeconds > 0 && (
+                <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                  Calculado automáticamente desde la suma de tus tramos. Puedes ajustarlo manualmente si incluye transiciones u otros tiempos.
+                </p>
+              )}
             </div>
             <div className="space-y-2">
               <Label>Notas / Sensaciones</Label>

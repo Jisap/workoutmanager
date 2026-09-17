@@ -255,7 +255,8 @@ export function HyroxRaceBuilder({ availableExercises, onApplyPreset }: HyroxRac
 
     const divisionObj = DIVISION_OPTIONS.find((d) => d.id === selectedDivision);
     const presetObj = PRESET_OPTIONS[selectedPreset];
-    const title = `Hyrox ${presetObj.name.split('(')[0].trim()} · ${divisionObj?.label}`;
+    const todayStr = new Date().toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+    const title = `Hyrox ${presetObj.name.split('(')[0].trim()} · ${divisionObj?.label} · ${todayStr}`;
 
     onApplyPreset(title, generated);
     setIsApplied(true);

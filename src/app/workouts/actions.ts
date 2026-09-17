@@ -68,13 +68,27 @@ export async function saveWorkout(data: {
         .delete(workoutExercises)
         .where(eq(workoutExercises.workoutId, targetWorkoutId));
     } else {
-      // 1b. Crear nuevo registro de entrenamiento
+      // 1b. Crear nuevo registro de entrenamiento.
+      // Garantía de nombre único: si ya existe otro entreno con el mismo nombre,
+      // se sufija con (2), (3)... para que cada sesión sea identificable.
+      let finalName = data.name.trim() || 'Entrenamiento';
+      const sameName = await db
+        .select({ id: workouts.id, name: workouts.name })
+        .from(workouts)
+        .where(eq(workouts.userId, userId));
+      const taken = new Set(sameName.map((r) => r.name.toLowerCase()));
+      if (taken.has(finalName.toLowerCase())) {
+        let n = 2;
+        while (taken.has(`${finalName.toLowerCase()} (${n})`)) n++;
+        finalName = `${finalName} (${n})`;
+      }
+
       const [newWorkout] = await db
         .insert(workouts)
         .values({
           userId,
           typeId: data.typeId,
-          name: data.name,
+          name: finalName,
           modality: data.modality || null,
           modalityConfig: data.modalityConfig || null,
           totalTimeSeconds: data.totalTimeSeconds,
@@ -1516,6 +1530,7 @@ export async function getAdvancedProgressData(userId: string) {
       totalSets: number;
       lastDate: string | null;
       history: {
+        workoutId: number;
         date: string;
         timeSeconds: number | null;
         distance: number | null;
@@ -1690,6 +1705,7 @@ export async function getAdvancedProgressData(userId: string) {
   // Serie histórica de runs cronometrados (para el gráfico de evolución 1000m).
   // Se calcula en tiempo de lectura, así que los tiempos guardados aparecen sin migración.
   const hyroxRunsList: {
+    workoutId: number;
     date: string;
     timeSeconds: number;
     distance: number | null;
@@ -1957,6 +1973,7 @@ export async function getAdvancedProgressData(userId: string) {
           if (isRunning && durVal > 0) {
             totalHyroxRunSeconds += durVal;
             hyroxRunsList.push({
+              workoutId: w.id,
               date: new Date(w.startTime).toISOString(),
               timeSeconds: durVal,
               distance: distVal > 0 ? distVal : null,
@@ -2022,6 +2039,7 @@ export async function getAdvancedProgressData(userId: string) {
             }
           }
           st.history.push({
+            workoutId: w.id,
             date: new Date(w.startTime).toISOString(),
             timeSeconds: durVal > 0 ? durVal : null,
             distance: distVal > 0 ? distVal : null,

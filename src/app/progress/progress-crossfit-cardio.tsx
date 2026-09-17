@@ -86,6 +86,7 @@ interface HyroxStation {
   totalSets: number;
   lastDate: string | null;
   history: {
+    workoutId?: number;
     date: string;
     timeSeconds: number | null;
     distance: number | null;
@@ -172,6 +173,7 @@ interface ProgressCrossfitCardioProps {
     events?: HyroxEvent[];
     balance?: HyroxBalance;
     runs?: {
+      workoutId?: number;
       date: string;
       timeSeconds: number;
       distance: number | null;
@@ -299,19 +301,20 @@ export function ProgressCrossfitCardio({ crossfit, hyroxCardio }: ProgressCrossf
     return stationsWithTimes[0] || hyroxStations[0];
   }, [hyroxStations, stationsWithTimes, selectedStationId]);
 
-  // Serie diaria (mejor tiempo de cada día) ordenada cronológicamente
+  // Serie por sesión (mejor tiempo de cada entrenamiento) ordenada cronológicamente.
+  // Se agrupa por workout (no por día) para que dos Hyrox del mismo día sean 2 puntos.
   const stationTimeSeries = useMemo(() => {
     if (!activeStation) return [];
-    const dailyMin = new Map<string, { date: string; timeSeconds: number; workoutName: string }>();
+    const perWorkout = new Map<string, { date: string; timeSeconds: number; workoutName: string }>();
     for (const h of activeStation.history || []) {
       if (h.timeSeconds == null || h.timeSeconds <= 0) continue;
-      const day = h.date.split('T')[0];
-      const prev = dailyMin.get(day);
+      const key = h.workoutId != null ? `w${h.workoutId}` : `${h.date.split('T')[0]}|${h.workoutName}`;
+      const prev = perWorkout.get(key);
       if (!prev || h.timeSeconds < prev.timeSeconds) {
-        dailyMin.set(day, { date: h.date, timeSeconds: h.timeSeconds, workoutName: h.workoutName });
+        perWorkout.set(key, { date: h.date, timeSeconds: h.timeSeconds, workoutName: h.workoutName });
       }
     }
-    return Array.from(dailyMin.values()).sort(
+    return Array.from(perWorkout.values()).sort(
       (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
     );
   }, [activeStation]);
@@ -358,12 +361,15 @@ export function ProgressCrossfitCardio({ crossfit, hyroxCardio }: ProgressCrossf
       const y = padTop + ch - ((p.timeSeconds - lo) / range) * ch;
       return { x, y, ...p };
     });
-    const lineD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
+    // Con un solo registro no hay curva: no se dibuja línea ficticia (solo el punto)
+    const lineD = points.length > 1
+      ? points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ')
+      : '';
     const bottomY = padTop + ch;
     const areaD =
-      points.length === 1
-        ? `M ${padLeft} ${bottomY} L ${padLeft} ${points[0].y} L ${width - padRight} ${points[0].y} L ${width - padRight} ${bottomY} Z`
-        : `${lineD} L ${points[points.length - 1].x.toFixed(1)} ${bottomY} L ${points[0].x.toFixed(1)} ${bottomY} Z`;
+      points.length > 1
+        ? `${lineD} L ${points[points.length - 1].x.toFixed(1)} ${bottomY} L ${points[0].x.toFixed(1)} ${bottomY} Z`
+        : '';
     const yTicks = [0, 0.5, 1].map((r) => {
       const val = Math.round(hi - r * (hi - lo));
       const y = padTop + ch * r;
@@ -927,6 +933,47 @@ export function ProgressCrossfitCardio({ crossfit, hyroxCardio }: ProgressCrossf
               </CardContent>
             </Card>
 
+            {/* 1b. Sesiones a analizar (A/B): contexto de todas las comparativas de abajo */}
+            {sessionA && (
+              <div id="hyrox-session-bar" className="grid grid-cols-1 sm:grid-cols-2 gap-2 scroll-mt-4">
+                <label className="flex items-center gap-2 bg-purple-50/70 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800/60 rounded-xl px-3 py-2">
+                  <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-purple-600 text-white shrink-0">A</span>
+                  <span className="flex flex-col min-w-0 flex-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400 leading-none">Sesión analizada</span>
+                    <select
+                      value={sessionA.id}
+                      onChange={(e) => setSessionAId(Number(e.target.value))}
+                      className="w-full text-xs font-bold bg-transparent text-gray-900 dark:text-gray-100 focus:outline-none cursor-pointer [color-scheme:light] dark:[color-scheme:dark] [&>option]:bg-white [&>option]:text-gray-900 dark:[&>option]:bg-gray-900 dark:[&>option]:text-gray-100"
+                    >
+                      {hyroxSessionOptions.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {new Date(s.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })} · {s.name.slice(0, 32)}
+                        </option>
+                      ))}
+                    </select>
+                  </span>
+                </label>
+                <label className="flex items-center gap-2 bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2">
+                  <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-gray-500 text-white shrink-0">B</span>
+                  <span className="flex flex-col min-w-0 flex-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 leading-none">Comparar con</span>
+                    <select
+                      value={sessionBId}
+                      onChange={(e) => setSessionBId(e.target.value)}
+                      className="w-full text-xs font-bold bg-transparent text-gray-900 dark:text-gray-100 focus:outline-none cursor-pointer [color-scheme:light] dark:[color-scheme:dark] [&>option]:bg-white [&>option]:text-gray-900 dark:[&>option]:bg-gray-900 dark:[&>option]:text-gray-100"
+                    >
+                      <option value="none">Sin comparar (solo A)</option>
+                      {hyroxSessionOptions.filter((s) => s.id !== sessionA.id).map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {new Date(s.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })} · {s.name.slice(0, 32)}
+                        </option>
+                      ))}
+                    </select>
+                  </span>
+                </label>
+              </div>
+            )}
+
             {/* 2. Simuladores & Eventos Hyrox (Tiempos de Carrera) */}
             {hyroxEvents.length > 0 && (
               <div className="space-y-3">
@@ -987,7 +1034,7 @@ export function ProgressCrossfitCardio({ crossfit, hyroxCardio }: ProgressCrossf
                     <TrendingUp className="w-4 h-4 text-pink-600" />
                     Comparativa 1000m por Tramo
                   </h4>
-                  <p className="text-xs text-gray-400">Los 8 runs de la sesión A frente a los de la sesión B (usa los selectores del comparador)</p>
+                  <p className="text-xs text-gray-400">Los 8 runs de la sesión A frente a los de la sesión B (usa los selectores A/B de arriba)</p>
                 </div>
                 <Card className="border-gray-200 dark:border-gray-700 dark:bg-gray-900 shadow-2xs">
                   <CardHeader className="pb-3 border-b border-gray-100 dark:border-gray-800 bg-pink-50/40 dark:bg-pink-950/20">
@@ -1113,38 +1160,13 @@ export function ProgressCrossfitCardio({ crossfit, hyroxCardio }: ProgressCrossf
                   <p className="text-xs text-gray-400">Tiempos tramo a tramo de tu entrenamiento y comparativa con otra sesión (verde = más rápido)</p>
                 </div>
 
-                {/* Selectores A / B */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <label className="flex items-center gap-2 bg-purple-50/70 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800/60 rounded-xl px-3 py-2">
-                    <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-purple-600 text-white shrink-0">A</span>
-                    <select
-                      value={sessionA.id}
-                      onChange={(e) => setSessionAId(Number(e.target.value))}
-                      className="w-full text-xs font-bold bg-transparent text-gray-900 dark:text-gray-100 focus:outline-none cursor-pointer [color-scheme:light] dark:[color-scheme:dark] [&>option]:bg-white [&>option]:text-gray-900 dark:[&>option]:bg-gray-900 dark:[&>option]:text-gray-100"
-                    >
-                      {hyroxSessionOptions.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {new Date(s.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })} · {s.name.slice(0, 32)}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="flex items-center gap-2 bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2">
-                    <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-gray-500 text-white shrink-0">B</span>
-                    <select
-                      value={sessionBId}
-                      onChange={(e) => setSessionBId(e.target.value)}
-                      className="w-full text-xs font-bold bg-transparent text-gray-900 dark:text-gray-100 focus:outline-none cursor-pointer [color-scheme:light] dark:[color-scheme:dark] [&>option]:bg-white [&>option]:text-gray-900 dark:[&>option]:bg-gray-900 dark:[&>option]:text-gray-100"
-                    >
-                      <option value="none">Sin comparar (solo A)</option>
-                      {hyroxSessionOptions.filter((s) => s.id !== sessionA.id).map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {new Date(s.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })} · {s.name.slice(0, 32)}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
+                {/* Contexto: las sesiones se eligen arriba (los comparadores comparten A/B) */}
+                <a href="#hyrox-session-bar" className="flex items-center gap-2 text-[11px] font-semibold text-purple-700 dark:text-purple-300 bg-purple-50/60 dark:bg-purple-950/20 border border-purple-100 dark:border-purple-800/50 rounded-xl px-3 py-2 hover:bg-purple-100 dark:hover:bg-purple-950/40 transition-colors">
+                  <span className="font-extrabold">A · {sessionA.name.slice(0, 30)}</span>
+                  <span className="text-gray-400">vs</span>
+                  <span className="font-extrabold">{sessionB ? `B · ${sessionB.name.slice(0, 30)}` : 'sin comparar'}</span>
+                  <span className="ml-auto text-purple-500 underline underline-offset-2">cambiar ↑</span>
+                </a>
 
                 <Card className="border-gray-200 dark:border-gray-700 dark:bg-gray-900 shadow-2xs overflow-hidden">
                   <CardContent className="p-0">
@@ -1481,6 +1503,16 @@ export function ProgressCrossfitCardio({ crossfit, hyroxCardio }: ProgressCrossf
                       </div>
                     </div>
 
+                    {/* Con un solo registro no hay evolución: se muestra el punto y este aviso */}
+                    {stationTimeSeries.length === 1 && (
+                      <p className="text-[11px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 rounded-xl px-3 py-2">
+                        Solo hay 1 sesión con tiempo en esta estación ({formatSecondsToTime(stationTimeSeries[0].timeSeconds)}).
+                        {hyroxCardio.totalSessions > 1
+                          ? ` Tienes ${hyroxCardio.totalSessions} sesiones Hyrox/Cardio: abre las otras en Historial y comprueba que tengan tiempos ⏱ en sus tramos (cada sesión con tiempos suma un punto).`
+                          : ' Registra otro Hyrox con tiempos (o edítalos desde el historial) y aquí verás la curva de evolución.'}
+                      </p>
+                    )}
+
                     {/* Gráfico SVG */}
                     <div className="overflow-x-auto">
                       <svg viewBox={`0 0 ${stationSvg.width} ${stationSvg.height}`} className="w-full h-auto min-w-[500px]">
@@ -1512,19 +1544,17 @@ export function ProgressCrossfitCardio({ crossfit, hyroxCardio }: ProgressCrossf
                             </text>
                           </g>
                         ))}
-                        {stationChart.points.length > 0 && (
+                        {stationChart.points.length > 1 && (
                           <>
                             <path d={stationChart.areaD} fill="url(#hyroxStationGradient)" />
-                            {stationChart.points.length > 1 && (
-                              <path
-                                d={stationChart.lineD}
-                                fill="none"
-                                stroke="#9333ea"
-                                strokeWidth={2.5}
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              />
-                            )}
+                            <path
+                              d={stationChart.lineD}
+                              fill="none"
+                              stroke="#9333ea"
+                              strokeWidth={2.5}
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
                           </>
                         )}
                         {stationTimeSeries.map((p, i) => {
