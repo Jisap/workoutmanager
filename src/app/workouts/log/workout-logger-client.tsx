@@ -15,6 +15,7 @@ import { CreateExerciseDialog, type Category } from '@/components/workout/create
 import { type ModalityConfig } from '@/lib/db/schema';
 import { ModalityConfigPanel } from '@/components/workout/modality-config-panel';
 import { formatModalitySummary } from '@/lib/modality-utils';
+import { HyroxRaceBuilder, type HyroxGeneratedExercise } from '@/components/workout/hyrox-race-builder';
 
 export const MODALITY_OPTIONS = [
   { id: 'For Time', label: 'For Time', icon: Timer, desc: 'Completar todo el trabajo en el menor tiempo' },
@@ -28,14 +29,18 @@ export const MODALITY_OPTIONS = [
 ];
 
 // Tipos locales para el estado
-type LocalSet = {
+export type LocalSet = {
   id: string;
   repCount: number;
   weight: number | null;
+  distance?: number | null;
+  durationSeconds?: number | null;
+  rpe?: number | null;
+  isRx?: boolean;
   isCompleted: boolean;
 };
 
-type LocalExercise = {
+export type LocalExercise = {
   id: string;
   exerciseId: number;
   name: string;
@@ -287,6 +292,10 @@ export function WorkoutLoggerClient({
           id: crypto.randomUUID(),
           repCount: lastSet ? lastSet.repCount : 0,
           weight: lastSet ? lastSet.weight : null,
+          distance: lastSet ? lastSet.distance : null,
+          durationSeconds: lastSet ? lastSet.durationSeconds : null,
+          rpe: lastSet ? lastSet.rpe : null,
+          isRx: lastSet ? lastSet.isRx : true,
           isCompleted: false,
         }));
         return { ...ex, sets: [...ex.sets, ...added] };
@@ -294,8 +303,12 @@ export function WorkoutLoggerClient({
     );
   };
 
-  // Actualizar un campo (reps o peso) en todas las series del ejercicio
-  const updateAllSetsField = (exerciseId: string, field: 'repCount' | 'weight', value: number | null) => {
+  // Actualizar un campo (reps, peso, distancia) en todas las series del ejercicio
+  const updateAllSetsField = (
+    exerciseId: string,
+    field: 'repCount' | 'weight' | 'distance' | 'durationSeconds',
+    value: number | null
+  ) => {
     setExercises((prev) =>
       prev.map((ex) => {
         if (ex.id !== exerciseId) return ex;
@@ -344,6 +357,10 @@ export function WorkoutLoggerClient({
             id: crypto.randomUUID(),
             repCount: lastSet ? lastSet.repCount : 0,
             weight: lastSet ? lastSet.weight : null,
+            distance: lastSet ? lastSet.distance : null,
+            durationSeconds: lastSet ? lastSet.durationSeconds : null,
+            rpe: lastSet ? lastSet.rpe : null,
+            isRx: lastSet ? lastSet.isRx : true,
             isCompleted: false,
           };
           return { ...ex, sets: [...ex.sets, newSet] };
@@ -371,6 +388,14 @@ export function WorkoutLoggerClient({
     setExercises((prev) => prev.filter((ex) => ex.id !== exerciseId));
   };
 
+  // Aplicar preset generado desde HyroxRaceBuilder
+  const handleApplyHyroxPreset = (newTitle: string, generatedExercises: HyroxGeneratedExercise[]) => {
+    setTypeName(newTitle);
+    setTemplateName(newTitle);
+    setDirectTemplateName(newTitle);
+    setExercises(generatedExercises);
+  };
+
   const handleDirectSave = async () => {
     if (exercises.length === 0) {
       alert('Añade al menos un ejercicio antes de guardar');
@@ -392,10 +417,10 @@ export function WorkoutLoggerClient({
           sets: ex.sets.map((s) => ({
             repCount: s.repCount,
             weight: s.weight,
-            distance: null,
-            durationSeconds: null,
-            rpe: null,
-            isRx: true,
+            distance: s.distance ?? null,
+            durationSeconds: s.durationSeconds ?? null,
+            rpe: s.rpe ?? null,
+            isRx: s.isRx ?? true,
           })),
         })),
       };
@@ -430,10 +455,10 @@ export function WorkoutLoggerClient({
           sets: ex.sets.map((s) => ({
             repCount: s.repCount,
             weight: s.weight,
-            distance: null,
-            durationSeconds: null,
-            rpe: null,
-            isRx: true,
+            distance: s.distance ?? null,
+            durationSeconds: s.durationSeconds ?? null,
+            rpe: s.rpe ?? null,
+            isRx: s.isRx ?? true,
           })),
         })),
       };
@@ -750,6 +775,14 @@ export function WorkoutLoggerClient({
         </div>
       )}
 
+      {/* ─── GENERADOR OFICIAL HYROX (1-Click Presets & Divisiones) ─── */}
+      {(currentTypeNameLower.includes('hyrox') || typeName.toLowerCase().includes('hyrox')) && (
+        <HyroxRaceBuilder
+          availableExercises={availableExercisesList}
+          onApplyPreset={handleApplyHyroxPreset}
+        />
+      )}
+
       {/* Lista de Ejercicios */}
       <div className="space-y-4">
         <div className="grid grid-cols-1 gap-4 items-start">
@@ -759,6 +792,19 @@ export function WorkoutLoggerClient({
           const completedCount = ex.sets.filter((s) => s.isCompleted).length;
           const primaryReps = ex.sets[0]?.repCount ?? 0;
           const primaryWeight = ex.sets[0]?.weight;
+          const primaryDistance = ex.sets[0]?.distance;
+
+          const hasDistance =
+            ex.sets.some((s) => s.distance != null) ||
+            ex.name.toLowerCase().includes('run') ||
+            ex.name.toLowerCase().includes('skierg') ||
+            ex.name.toLowerCase().includes('ski erg') ||
+            ex.name.toLowerCase().includes('sled') ||
+            ex.name.toLowerCase().includes('trineo') ||
+            ex.name.toLowerCase().includes('carry') ||
+            ex.name.toLowerCase().includes('burpee broad') ||
+            ex.name.toLowerCase().includes('remo') ||
+            ex.name.toLowerCase().includes('row');
 
           return (
             <Card key={ex.id} className="w-full overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm transition-all">
@@ -784,6 +830,11 @@ export function WorkoutLoggerClient({
                     }}
                     className="flex-1 min-w-0 truncate"
                   />
+                  {hasDistance && primaryDistance != null && (
+                    <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-purple-100 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 shrink-0">
+                      {primaryDistance}m
+                    </span>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-1 shrink-0">
@@ -822,13 +873,13 @@ export function WorkoutLoggerClient({
 
               <CardContent className="p-0">
                 {!isExpanded ? (
-                  /* VISTA COMPACTA / RÁPIDA (CrossFit, WODs, Fuerza rápida) */
+                  /* VISTA COMPACTA / RÁPIDA (CrossFit, WODs, Hyrox, Fuerza rápida) */
                   <div className="p-3 bg-white dark:bg-gray-900 flex flex-wrap items-end justify-between gap-3">
-                    <div className="flex items-end gap-2 flex-1 min-w-[260px]">
+                    <div className="flex items-end gap-2 flex-1 min-w-[260px] flex-wrap sm:flex-nowrap">
                       {/* Series / Rondas */}
-                      <div className="flex flex-col flex-1 max-w-[100px]">
+                      <div className="flex flex-col min-w-[65px] max-w-[80px]">
                         <span className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">
-                          Series / Rondas
+                          Series
                         </span>
                         <Input
                           type="number"
@@ -843,10 +894,27 @@ export function WorkoutLoggerClient({
                         />
                       </div>
 
-                      <span className="text-gray-400 dark:text-gray-500 font-bold self-end pb-2">×</span>
+                      {/* Metros (m) si el ejercicio maneja distancia */}
+                      {(hasDistance || primaryDistance != null) && (
+                        <div className="flex flex-col flex-1 min-w-[75px]">
+                          <span className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">
+                            Metros (m)
+                          </span>
+                          <Input
+                            type="number"
+                            placeholder="0 m"
+                            value={primaryDistance ?? ''}
+                            onChange={(e) => {
+                              const val = e.target.value ? parseInt(e.target.value, 10) : null;
+                              updateAllSetsField(ex.id, 'distance', val);
+                            }}
+                            className="h-9 text-center font-bold text-sm tabular-nums bg-gray-50/50 dark:bg-gray-800/50 dark:text-gray-100 dark:border-gray-700"
+                          />
+                        </div>
+                      )}
 
                       {/* Reps */}
-                      <div className="flex flex-col flex-1 min-w-[70px]">
+                      <div className="flex flex-col flex-1 min-w-[65px]">
                         <span className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">
                           Reps
                         </span>
@@ -863,12 +931,10 @@ export function WorkoutLoggerClient({
                         />
                       </div>
 
-                      <span className="text-gray-400 dark:text-gray-500 font-bold self-end pb-2">@</span>
-
                       {/* Peso (Kg) */}
-                      <div className="flex flex-col flex-1 min-w-[75px]">
+                      <div className="flex flex-col flex-1 min-w-[70px]">
                         <span className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">
-                          Kg (opc.)
+                          Kg
                         </span>
                         <Input
                           type="number"
@@ -911,74 +977,158 @@ export function WorkoutLoggerClient({
                 ) : (
                   /* VISTA DETALLADA (Serie a Serie) */
                   <div>
-                    {/* Cabecera de columnas */}
-                    <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase border-b dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50">
-                      <div className="col-span-2 text-center">Serie</div>
-                      <div className="col-span-4 text-center">Kg</div>
-                      <div className="col-span-4 text-center">Reps</div>
-                      <div className="col-span-2 text-center">✓</div>
-                    </div>
-
-                    {/* Series individuales */}
-                    {ex.sets.map((set, setIndex) => (
-                      <div
-                        key={set.id}
-                        className={`grid grid-cols-12 gap-2 px-4 py-2 items-center border-b last:border-0 transition-colors ${
-                          set.isCompleted ? 'bg-green-50/50 dark:bg-green-900/10' : 'hover:bg-gray-50/30 dark:hover:bg-gray-800/50'
-                        }`}
-                      >
-                        <div className="col-span-2 flex items-center justify-center gap-1">
-                          <span className="font-semibold text-xs text-gray-600 dark:text-gray-400">{setIndex + 1}</span>
-                          {ex.sets.length > 1 && (
-                            <button
-                              type="button"
-                              onClick={() => removeSet(ex.id, set.id)}
-                              className="text-gray-300 hover:text-red-500 p-0.5 transition-colors cursor-pointer"
-                              title="Eliminar serie"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </button>
-                          )}
+                    {hasDistance || primaryDistance != null ? (
+                      <>
+                        <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase border-b dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50">
+                          <div className="col-span-2 text-center">Serie</div>
+                          <div className="col-span-3 text-center">Metros (m)</div>
+                          <div className="col-span-3 text-center">Kg</div>
+                          <div className="col-span-2 text-center">Reps</div>
+                          <div className="col-span-2 text-center">✓</div>
                         </div>
 
-                        <div className="col-span-4">
-                          <Input
-                            type="number"
-                            step="0.5"
-                            placeholder="0"
-                            className="text-center h-8 text-sm tabular-nums"
-                            value={set.weight ?? ''}
-                            onChange={(e) =>
-                              updateSet(ex.id, set.id, 'weight', e.target.value ? parseFloat(e.target.value) : null)
-                            }
-                          />
-                        </div>
-
-                        <div className="col-span-4">
-                          <Input
-                            type="number"
-                            placeholder="0"
-                            className="text-center h-8 text-sm tabular-nums"
-                            value={set.repCount || ''}
-                            onChange={(e) =>
-                              updateSet(ex.id, set.id, 'repCount', e.target.value ? parseInt(e.target.value, 10) : 0)
-                            }
-                          />
-                        </div>
-
-                        <div className="col-span-2 flex justify-center">
-                          <button
-                            type="button"
-                            onClick={() => updateSet(ex.id, set.id, 'isCompleted', !set.isCompleted)}
-                            className={`w-7 h-7 rounded-md flex items-center justify-center transition-colors cursor-pointer ${
-                              set.isCompleted ? 'bg-green-500 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                        {ex.sets.map((set, setIndex) => (
+                          <div
+                            key={set.id}
+                            className={`grid grid-cols-12 gap-2 px-4 py-2 items-center border-b last:border-0 transition-colors ${
+                              set.isCompleted ? 'bg-green-50/50 dark:bg-green-900/10' : 'hover:bg-gray-50/30 dark:hover:bg-gray-800/50'
                             }`}
                           >
-                            <Check className="w-3.5 h-3.5" />
-                          </button>
+                            <div className="col-span-2 flex items-center justify-center gap-1">
+                              <span className="font-semibold text-xs text-gray-600 dark:text-gray-400">{setIndex + 1}</span>
+                              {ex.sets.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => removeSet(ex.id, set.id)}
+                                  className="text-gray-300 hover:text-red-500 p-0.5 transition-colors cursor-pointer"
+                                  title="Eliminar serie"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              )}
+                            </div>
+
+                            <div className="col-span-3">
+                              <Input
+                                type="number"
+                                placeholder="0 m"
+                                className="text-center h-8 text-sm tabular-nums"
+                                value={set.distance ?? ''}
+                                onChange={(e) =>
+                                  updateSet(ex.id, set.id, 'distance', e.target.value ? parseInt(e.target.value, 10) : null)
+                                }
+                              />
+                            </div>
+
+                            <div className="col-span-3">
+                              <Input
+                                type="number"
+                                step="0.5"
+                                placeholder="0"
+                                className="text-center h-8 text-sm tabular-nums"
+                                value={set.weight ?? ''}
+                                onChange={(e) =>
+                                  updateSet(ex.id, set.id, 'weight', e.target.value ? parseFloat(e.target.value) : null)
+                                }
+                              />
+                            </div>
+
+                            <div className="col-span-2">
+                              <Input
+                                type="number"
+                                placeholder="0"
+                                className="text-center h-8 text-sm tabular-nums"
+                                value={set.repCount || ''}
+                                onChange={(e) =>
+                                  updateSet(ex.id, set.id, 'repCount', e.target.value ? parseInt(e.target.value, 10) : 0)
+                                }
+                              />
+                            </div>
+
+                            <div className="col-span-2 flex justify-center">
+                              <button
+                                type="button"
+                                onClick={() => updateSet(ex.id, set.id, 'isCompleted', !set.isCompleted)}
+                                className={`w-7 h-7 rounded-md flex items-center justify-center transition-colors cursor-pointer ${
+                                  set.isCompleted ? 'bg-green-500 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                                }`}
+                              >
+                                <Check className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </>
+                    ) : (
+                      <>
+                        <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase border-b dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50">
+                          <div className="col-span-2 text-center">Serie</div>
+                          <div className="col-span-4 text-center">Kg</div>
+                          <div className="col-span-4 text-center">Reps</div>
+                          <div className="col-span-2 text-center">✓</div>
                         </div>
-                      </div>
-                    ))}
+
+                        {ex.sets.map((set, setIndex) => (
+                          <div
+                            key={set.id}
+                            className={`grid grid-cols-12 gap-2 px-4 py-2 items-center border-b last:border-0 transition-colors ${
+                              set.isCompleted ? 'bg-green-50/50 dark:bg-green-900/10' : 'hover:bg-gray-50/30 dark:hover:bg-gray-800/50'
+                            }`}
+                          >
+                            <div className="col-span-2 flex items-center justify-center gap-1">
+                              <span className="font-semibold text-xs text-gray-600 dark:text-gray-400">{setIndex + 1}</span>
+                              {ex.sets.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => removeSet(ex.id, set.id)}
+                                  className="text-gray-300 hover:text-red-500 p-0.5 transition-colors cursor-pointer"
+                                  title="Eliminar serie"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              )}
+                            </div>
+
+                            <div className="col-span-4">
+                              <Input
+                                type="number"
+                                step="0.5"
+                                placeholder="0"
+                                className="text-center h-8 text-sm tabular-nums"
+                                value={set.weight ?? ''}
+                                onChange={(e) =>
+                                  updateSet(ex.id, set.id, 'weight', e.target.value ? parseFloat(e.target.value) : null)
+                                }
+                              />
+                            </div>
+
+                            <div className="col-span-4">
+                              <Input
+                                type="number"
+                                placeholder="0"
+                                className="text-center h-8 text-sm tabular-nums"
+                                value={set.repCount || ''}
+                                onChange={(e) =>
+                                  updateSet(ex.id, set.id, 'repCount', e.target.value ? parseInt(e.target.value, 10) : 0)
+                                }
+                              />
+                            </div>
+
+                            <div className="col-span-2 flex justify-center">
+                              <button
+                                type="button"
+                                onClick={() => updateSet(ex.id, set.id, 'isCompleted', !set.isCompleted)}
+                                className={`w-7 h-7 rounded-md flex items-center justify-center transition-colors cursor-pointer ${
+                                  set.isCompleted ? 'bg-green-500 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                                }`}
+                              >
+                                <Check className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </>
+                    )}
 
                     {/* Acciones de la vista detallada */}
                     <div className="flex items-center justify-between px-4 py-2.5 bg-gray-50/70 dark:bg-gray-800/50 border-t dark:border-gray-700">
