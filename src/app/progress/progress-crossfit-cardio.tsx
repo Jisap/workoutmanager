@@ -787,7 +787,30 @@ export function ProgressCrossfitCardio({ crossfit, hyroxCardio }: ProgressCrossf
                         {st.bestWeightKg && st.bestTimeSeconds && (
                           <p className="text-[11px] text-gray-500 font-medium">Carga: {st.bestWeightKg} kg</p>
                         )}
+                        {st.bestReps && st.bestTimeSeconds && (
+                          <p className="text-[11px] text-gray-500 font-medium">Reps: {st.bestReps}</p>
+                        )}
                       </div>
+
+                      {/* Últimos tiempos por estación */}
+                      {st.history.length > 0 && (
+                        <div className="pt-2 border-t border-gray-100 dark:border-gray-800 space-y-1 text-[11px] text-gray-500">
+                          <span className="text-[10px] font-bold text-gray-400 uppercase">Últimos tiempos:</span>
+                          {st.history.slice(-3).reverse().map((h, hIdx) => (
+                            <div key={hIdx} className="flex items-center justify-between gap-2">
+                              <span className="truncate">
+                                {new Date(h.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
+                                {h.workoutName ? ` · ${h.workoutName.slice(0, 18)}` : ''}
+                              </span>
+                              <span className="font-mono font-bold text-gray-700 dark:text-gray-300 shrink-0">
+                                {h.timeSeconds ? formatSecondsToTime(h.timeSeconds) : '—'}
+                                {h.weight ? ` @${h.weight}kg` : ''}
+                                {h.reps ? ` ×${h.reps}` : ''}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
 
                       <div className="pt-2 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between text-[11px] text-gray-400">
                         <span>{st.totalSets} {st.totalSets === 1 ? 'serie' : 'series'}</span>

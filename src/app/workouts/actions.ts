@@ -836,6 +836,7 @@ export async function getWorkoutHistory(userId: string, limit: number = 200) {
         totalReps += reps;
 
         return {
+          id: s.id,
           setNumber: sIdx + 1,
           weight: s.weight ? Number(s.weight) : null,
           repCount: s.repCount,
@@ -1072,6 +1073,56 @@ export async function updateWorkout(data: {
   revalidatePath('/workouts/new');
 
   return { success: true, workout: updated };
+}
+
+// Actualizar tiempos (y opcionalmente distancia) de series individuales.
+// Usado para corregir los 1000m de cada run / estación Hyrox tras finalizar el entrenamiento.
+export async function updateWorkoutSetTimes(data: {
+  workoutId: number;
+  updates: {
+    setId: number;
+    durationSeconds: number | null;
+    distance?: number | null;
+  }[];
+}) {
+  const { userId } = await auth();
+  if (!userId) throw new Error('No autorizado');
+
+  // Verificar pertenencia del workout
+  const [owned] = await db
+    .select({ id: workouts.id })
+    .from(workouts)
+    .where(and(eq(workouts.id, data.workoutId), eq(workouts.userId, userId)));
+  if (!owned) throw new Error('Entrenamiento no encontrado o no autorizado');
+
+  // Verificar que los sets pertenecen a este workout (vía workoutExercises)
+  const ownedSets = await db
+    .select({ setId: sets.id })
+    .from(sets)
+    .innerJoin(workoutExercises, eq(sets.workoutExerciseId, workoutExercises.id))
+    .where(eq(workoutExercises.workoutId, data.workoutId));
+  const ownedSetIds = new Set(ownedSets.map((r) => r.setId));
+
+  let updatedCount = 0;
+  for (const u of data.updates) {
+    if (!ownedSetIds.has(u.setId)) continue;
+    if (u.durationSeconds != null && (isNaN(u.durationSeconds) || u.durationSeconds < 0)) continue;
+    if (u.durationSeconds != null && u.durationSeconds > 5 * 3600) continue; // cordura: máx 5h por tramo
+    await db
+      .update(sets)
+      .set({
+        durationSeconds: u.durationSeconds,
+        ...(u.distance !== undefined ? { distance: u.distance } : {}),
+      })
+      .where(eq(sets.id, u.setId));
+    updatedCount++;
+  }
+
+  revalidatePath('/workouts');
+  revalidatePath('/dashboard');
+  revalidatePath('/progress');
+
+  return { success: true, updatedCount };
 }
 
 export async function updateWorkoutTemplate(data: {

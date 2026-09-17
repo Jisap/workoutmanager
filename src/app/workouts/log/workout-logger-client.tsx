@@ -28,6 +28,34 @@ export const MODALITY_OPTIONS = [
   { id: 'Ladder', label: 'Ladder / Escalera', icon: TrendingUp, desc: 'Escalada progresiva de repeticiones' },
 ];
 
+// Helpers para Tiempo (mm:ss <-> segundos) — usado en Hyrox/Cardio para los 1000m y estaciones
+export function formatDurationInput(totalSeconds: number | null | undefined): string {
+  if (totalSeconds == null || isNaN(totalSeconds) || totalSeconds < 0) return '';
+  const m = Math.floor(totalSeconds / 60);
+  const s = Math.round(totalSeconds % 60);
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+export function parseDurationInput(value: string): number | null {
+  const v = value.trim();
+  if (!v) return null;
+  // Formatos aceptados: "4:30", "04:30", "270" (segundos), "4.5" (minutos decimales)
+  if (v.includes(':')) {
+    const parts = v.split(':').map((p) => p.trim());
+    if (parts.length !== 2) return null;
+    const m = parseInt(parts[0], 10);
+    const s = parseInt(parts[1], 10);
+    if (isNaN(m) || isNaN(s) || m < 0 || s < 0 || s >= 60) return null;
+    return m * 60 + s;
+  }
+  const num = parseFloat(v.replace(',', '.'));
+  if (isNaN(num) || num < 0) return null;
+  // Si es un número grande (>= 30) lo interpretamos como segundos, si no como minutos decimales
+  // Ej: "270" -> 270s (4:30) · "4.5" -> 4.5min = 270s
+  if (num >= 30) return Math.round(num);
+  return Math.round(num * 60);
+}
+
 // Tipos locales para el estado
 export type LocalSet = {
   id: string;
@@ -260,6 +288,15 @@ export function WorkoutLoggerClient({
     }
   };
 
+  // Vista unificada Hyrox: una sola tabla de carrera (Tiempo + ✓) en lugar de
+  // 16 tarjetas genéricas con Series/Metros/Reps/Kg redundantes.
+  const [hyroxUnified, setHyroxUnified] = useState(true);
+  const [hyroxShowCargas, setHyroxShowCargas] = useState(false);
+  // Generador plegable: si ya hay tramos cargados (editar/reanudar) empieza colapsado
+  const [showHyroxBuilder, setShowHyroxBuilder] = useState(
+    () => (initialExercisesState?.length ?? 0) === 0
+  );
+
   // Estado para expandir/colapsar desglose individual por ejercicio
   const [expandedExercises, setExpandedExercises] = useState<Record<string, boolean>>({});
 
@@ -274,6 +311,51 @@ export function WorkoutLoggerClient({
       nextState[ex.id] = !allExpanded;
     });
     setExpandedExercises(nextState);
+  };
+
+  // Detección de carrera Hyrox (para vista unificada: una tabla en vez de 16 tarjetas)
+  const isHyroxPage =
+    typeName.toLowerCase().includes('hyrox') ||
+    currentTypeNameLower.includes('hyrox');
+  const isHyroxRaceLike = isHyroxPage && exercises.length >= 1;
+  const useHyroxUnified = isHyroxRaceLike && hyroxUnified;
+
+  const hyroxProgress = useMemo(() => {
+    if (!isHyroxRaceLike) return { done: 0, total: 0, totalSeconds: 0 };
+    let done = 0;
+    let totalSeconds = 0;
+    for (const ex of exercises) {
+      for (const s of ex.sets) {
+        if (s.isCompleted) done++;
+        if (s.durationSeconds) totalSeconds += s.durationSeconds;
+      }
+    }
+    const total = exercises.reduce((acc, ex) => acc + ex.sets.length, 0);
+    return { done, total, totalSeconds };
+  }, [exercises, isHyroxRaceLike]);
+
+  const cleanHyroxName = (name: string) => name.replace(/^\d+\.\s*/, '').trim();
+  const isRunRow = (name: string) => {
+    const n = name.toLowerCase();
+    return n.includes('run') || n.includes('correr') || n.includes('carrera') || n.includes('running');
+  };
+  const hyroxMetaLabel = (ex: LocalExercise) => {
+    const s = ex.sets[0];
+    if (!s) return '';
+    const parts: string[] = [];
+    if (s.distance) parts.push(`${s.distance}m`);
+    if (s.repCount) parts.push(`${s.repCount} reps`);
+    if (s.weight) parts.push(`@${s.weight}kg`);
+    return parts.join(' · ');
+  };
+  const toggleAllHyroxCompleted = () => {
+    setExercises((prev) => {
+      const allDone = prev.every((ex) => ex.sets.every((s) => s.isCompleted));
+      return prev.map((ex) => ({
+        ...ex,
+        sets: ex.sets.map((s) => ({ ...s, isCompleted: !allDone })),
+      }));
+    });
   };
 
   // Ajustar número total de series desde la vista rápida
@@ -633,7 +715,7 @@ export function WorkoutLoggerClient({
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          {exercises.length > 0 && (
+          {exercises.length > 0 && !useHyroxUnified && (
             <Button
               type="button"
               variant="outline"
@@ -775,16 +857,185 @@ export function WorkoutLoggerClient({
         </div>
       )}
 
-      {/* ─── GENERADOR OFICIAL HYROX (1-Click Presets & Divisiones) ─── */}
+      {/* ─── GENERADOR OFICIAL HYROX (plegable para no duplicar la vista de carrera) ─── */}
       {(currentTypeNameLower.includes('hyrox') || typeName.toLowerCase().includes('hyrox')) && (
-        <HyroxRaceBuilder
-          availableExercises={availableExercisesList}
-          onApplyPreset={handleApplyHyroxPreset}
-        />
+        <div className="space-y-2">
+          {exercises.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowHyroxBuilder((v) => !v)}
+              className="w-full flex items-center justify-between px-4 py-2.5 rounded-2xl border border-purple-200 dark:border-purple-800/60 bg-purple-50/60 dark:bg-purple-950/20 text-xs font-bold text-purple-900 dark:text-purple-200 hover:bg-purple-100 dark:hover:bg-purple-950/40 transition-colors cursor-pointer"
+            >
+              <span className="flex items-center gap-2">
+                <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+                {showHyroxBuilder ? 'Ocultar generador de carrera Hyrox' : `Generador Hyrox (${exercises.length} tramos cargados)`}
+              </span>
+              <span className="text-purple-500">{showHyroxBuilder ? '▲' : '▼'}</span>
+            </button>
+          )}
+          {(showHyroxBuilder || exercises.length === 0) && (
+            <HyroxRaceBuilder
+              availableExercises={availableExercisesList}
+              onApplyPreset={(title, generated) => {
+                handleApplyHyroxPreset(title, generated);
+                setShowHyroxBuilder(false);
+                setHyroxUnified(true);
+              }}
+            />
+          )}
+        </div>
       )}
 
-      {/* Lista de Ejercicios */}
+      {/* Lista de Ejercicios — en Hyrox se unifica en una sola tabla de carrera */}
       <div className="space-y-4">
+        {useHyroxUnified && (
+          <Card className="w-full overflow-hidden border border-purple-200 dark:border-purple-800/60 shadow-sm">
+            <CardHeader className="bg-purple-50/80 dark:bg-purple-950/30 py-3 px-4 flex flex-row items-center justify-between gap-2 border-b border-purple-100 dark:border-purple-800/40">
+              <div className="min-w-0">
+                <p className="text-xs font-extrabold text-purple-900 dark:text-purple-200 uppercase tracking-wider">
+                  Carrera Hyrox · {exercises.length} tramos
+                </p>
+                <p className="text-[11px] text-purple-700/70 dark:text-purple-300/70 font-medium tabular-nums">
+                  {hyroxProgress.done}/{hyroxProgress.total} completados
+                  {hyroxProgress.totalSeconds > 0 ? ` · ⏱ ${formatDurationInput(hyroxProgress.totalSeconds)} acumulado` : ''}
+                </p>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setHyroxShowCargas((v) => !v)}
+                  className="h-8 px-2.5 rounded-lg text-[11px] font-bold text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/40 border border-purple-200 dark:border-purple-800 transition-colors cursor-pointer"
+                  title="Mostrar/ocultar distancia, carga y reps (fijos por división)"
+                >
+                  {hyroxShowCargas ? 'Ocultar cargas' : 'Editar cargas'}
+                </button>
+                <button
+                  type="button"
+                  onClick={toggleAllHyroxCompleted}
+                  className="h-8 px-2.5 rounded-lg text-[11px] font-bold text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 border border-gray-200 dark:border-gray-700 transition-colors cursor-pointer"
+                >
+                  {hyroxProgress.done === hyroxProgress.total && hyroxProgress.total > 0 ? 'Desmarcar' : 'Todo hecho'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setHyroxUnified(false)}
+                  className="h-8 px-2.5 rounded-lg text-[11px] font-medium text-gray-500 dark:text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors cursor-pointer"
+                  title="Volver a las tarjetas por ejercicio"
+                >
+                  Vista tarjetas
+                </button>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="hidden sm:grid grid-cols-12 gap-2 px-4 py-2 text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider border-b dark:border-gray-700 bg-gray-50/60 dark:bg-gray-800/50">
+                <div className="col-span-1 text-center">#</div>
+                <div className="col-span-5">Tramo / estación</div>
+                <div className="col-span-3 text-center">Tiempo (m:ss)</div>
+                <div className="col-span-2 text-center">Meta</div>
+                <div className="col-span-1 text-center">✓</div>
+              </div>
+              <div className="divide-y divide-gray-100 dark:divide-gray-800">
+                {exercises.map((ex, exIndex) => {
+                  const set = ex.sets[0];
+                  const done = ex.sets.length > 0 && ex.sets.every((s) => s.isCompleted);
+                  const run = isRunRow(ex.name);
+                  return (
+                    <div
+                      key={ex.id}
+                      className={`grid grid-cols-12 gap-2 px-3 sm:px-4 py-2 items-center transition-colors ${
+                        done ? 'bg-green-50/60 dark:bg-green-900/10' : 'hover:bg-purple-50/40 dark:hover:bg-purple-950/10'
+                      }`}
+                    >
+                      <div className="col-span-2 sm:col-span-1 flex items-center justify-center">
+                        <span className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-[11px] shrink-0 ${
+                          done ? 'bg-green-500 text-white' : run ? 'bg-pink-100 dark:bg-pink-950/50 text-pink-700 dark:text-pink-300' : 'bg-purple-100 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300'
+                        }`}>
+                          {exIndex + 1}
+                        </span>
+                      </div>
+                      <div className="col-span-10 sm:col-span-5 min-w-0">
+                        <p className="font-bold text-xs text-gray-900 dark:text-gray-100 truncate">
+                          {run ? '🏃 ' : '🏋️ '}{cleanHyroxName(ex.name)}
+                        </p>
+                        <p className="text-[10px] text-gray-500 dark:text-gray-400 font-mono truncate">
+                          {hyroxMetaLabel(ex) || '—'}
+                        </p>
+                        {hyroxShowCargas && set && (
+                          <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                            <label className="text-[10px] text-gray-400 font-semibold">Dist(m)</label>
+                            <input
+                              type="number"
+                              value={set.distance ?? ''}
+                              onChange={(e) => updateSet(ex.id, set.id, 'distance', e.target.value ? parseInt(e.target.value, 10) : null)}
+                              className="w-16 h-7 text-center text-xs tabular-nums rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                            />
+                            <label className="text-[10px] text-gray-400 font-semibold">Kg</label>
+                            <input
+                              type="number"
+                              step="0.5"
+                              value={set.weight ?? ''}
+                              onChange={(e) => updateSet(ex.id, set.id, 'weight', e.target.value ? parseFloat(e.target.value) : null)}
+                              className="w-16 h-7 text-center text-xs tabular-nums rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                            />
+                            <label className="text-[10px] text-gray-400 font-semibold">Reps</label>
+                            <input
+                              type="number"
+                              value={set.repCount || ''}
+                              onChange={(e) => updateSet(ex.id, set.id, 'repCount', e.target.value ? parseInt(e.target.value, 10) : 0)}
+                              className="w-14 h-7 text-center text-xs tabular-nums rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                            />
+                          </div>
+                        )}
+                      </div>
+                      <div className="col-span-8 sm:col-span-3 col-start-3 sm:col-start-auto">
+                        <Input
+                          type="text"
+                          inputMode="numeric"
+                          placeholder="m:ss"
+                          value={formatDurationInput(set?.durationSeconds)}
+                          onChange={(e) => {
+                            if (!set) return;
+                            if (e.target.value.trim() === '') {
+                              updateSet(ex.id, set.id, 'durationSeconds', null);
+                            } else {
+                              const val = parseDurationInput(e.target.value);
+                              if (val !== null) updateSet(ex.id, set.id, 'durationSeconds', val);
+                            }
+                          }}
+                          className="text-center h-9 text-sm tabular-nums font-mono font-bold border-purple-200 bg-purple-50/50 dark:bg-purple-950/20"
+                        />
+                      </div>
+                      <div className="col-span-2 text-center text-[10px] font-mono font-bold text-gray-500 dark:text-gray-400 tabular-nums">
+                        {hyroxMetaLabel(ex) || '—'}
+                      </div>
+                      <div className="col-span-2 sm:col-span-1 flex items-center justify-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => toggleAllSetsCompleted(ex.id)}
+                          className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors cursor-pointer ${
+                            done ? 'bg-green-500 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                          }`}
+                          title={done ? 'Desmarcar tramo' : 'Marcar tramo hecho'}
+                        >
+                          <Check className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removeExercise(ex.id)}
+                          className="w-8 h-8 rounded-lg hidden sm:flex items-center justify-center text-gray-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors cursor-pointer"
+                          title="Eliminar tramo"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+        {!useHyroxUnified && (
         <div className="grid grid-cols-1 gap-4 items-start">
         {exercises.map((ex, exIndex) => {
           const isExpanded = !!expandedExercises[ex.id];
@@ -793,6 +1044,7 @@ export function WorkoutLoggerClient({
           const primaryReps = ex.sets[0]?.repCount ?? 0;
           const primaryWeight = ex.sets[0]?.weight;
           const primaryDistance = ex.sets[0]?.distance;
+          const primaryDuration = ex.sets[0]?.durationSeconds ?? null;
 
           const hasDistance =
             ex.sets.some((s) => s.distance != null) ||
@@ -805,6 +1057,16 @@ export function WorkoutLoggerClient({
             ex.name.toLowerCase().includes('burpee broad') ||
             ex.name.toLowerCase().includes('remo') ||
             ex.name.toLowerCase().includes('row');
+
+          // En Hyrox mostramos siempre el campo Tiempo (1000m runs + estaciones),
+          // en el resto solo cuando hay distancia
+          const isHyroxContext =
+            typeName.toLowerCase().includes('hyrox') ||
+            currentTypeNameLower.includes('hyrox');
+          const showTimeField =
+            hasDistance ||
+            isHyroxContext ||
+            ex.sets.some((s) => s.durationSeconds != null);
 
           return (
             <Card key={ex.id} className="w-full overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm transition-all">
@@ -913,6 +1175,29 @@ export function WorkoutLoggerClient({
                         </div>
                       )}
 
+                      {/* Tiempo (m:ss) para Hyrox/Cardio — ej. 1000m runs y estaciones */}
+                      {showTimeField && (
+                        <div className="flex flex-col flex-1 min-w-[80px]">
+                          <span className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">
+                            Tiempo (m:ss)
+                          </span>
+                          <Input
+                            type="text"
+                            inputMode="numeric"
+                            placeholder="4:30"
+                            value={formatDurationInput(primaryDuration)}
+                            onChange={(e) => {
+                              const val = parseDurationInput(e.target.value);
+                              // Permitir borrado (cadena vacía -> null); si el formato es inválido no actualizamos
+                              if (e.target.value.trim() === '' || val !== null) {
+                                updateAllSetsField(ex.id, 'durationSeconds', val);
+                              }
+                            }}
+                            className="h-9 text-center font-bold text-sm tabular-nums font-mono bg-purple-50/50 dark:bg-purple-950/20 dark:text-gray-100 dark:border-gray-700 border-purple-200"
+                          />
+                        </div>
+                      )}
+
                       {/* Reps */}
                       <div className="flex flex-col flex-1 min-w-[65px]">
                         <span className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">
@@ -980,9 +1265,10 @@ export function WorkoutLoggerClient({
                     {hasDistance || primaryDistance != null ? (
                       <>
                         <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase border-b dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50">
-                          <div className="col-span-2 text-center">Serie</div>
-                          <div className="col-span-3 text-center">Metros (m)</div>
-                          <div className="col-span-3 text-center">Kg</div>
+                          <div className="col-span-1 text-center">Serie</div>
+                          <div className="col-span-2 text-center">Metros</div>
+                          <div className="col-span-3 text-center">Tiempo (m:ss)</div>
+                          <div className="col-span-2 text-center">Kg</div>
                           <div className="col-span-2 text-center">Reps</div>
                           <div className="col-span-2 text-center">✓</div>
                         </div>
@@ -994,7 +1280,7 @@ export function WorkoutLoggerClient({
                               set.isCompleted ? 'bg-green-50/50 dark:bg-green-900/10' : 'hover:bg-gray-50/30 dark:hover:bg-gray-800/50'
                             }`}
                           >
-                            <div className="col-span-2 flex items-center justify-center gap-1">
+                            <div className="col-span-1 flex items-center justify-center gap-1">
                               <span className="font-semibold text-xs text-gray-600 dark:text-gray-400">{setIndex + 1}</span>
                               {ex.sets.length > 1 && (
                                 <button
@@ -1008,11 +1294,11 @@ export function WorkoutLoggerClient({
                               )}
                             </div>
 
-                            <div className="col-span-3">
+                            <div className="col-span-2">
                               <Input
                                 type="number"
                                 placeholder="0 m"
-                                className="text-center h-8 text-sm tabular-nums"
+                                className="text-center h-8 text-sm tabular-nums px-1"
                                 value={set.distance ?? ''}
                                 onChange={(e) =>
                                   updateSet(ex.id, set.id, 'distance', e.target.value ? parseInt(e.target.value, 10) : null)
@@ -1022,10 +1308,28 @@ export function WorkoutLoggerClient({
 
                             <div className="col-span-3">
                               <Input
+                                type="text"
+                                inputMode="numeric"
+                                placeholder="4:30"
+                                className="text-center h-8 text-sm tabular-nums font-mono px-1 border-purple-200 bg-purple-50/50 dark:bg-purple-950/20"
+                                value={formatDurationInput(set.durationSeconds)}
+                                onChange={(e) => {
+                                  if (e.target.value.trim() === '') {
+                                    updateSet(ex.id, set.id, 'durationSeconds', null);
+                                  } else {
+                                    const val = parseDurationInput(e.target.value);
+                                    if (val !== null) updateSet(ex.id, set.id, 'durationSeconds', val);
+                                  }
+                                }}
+                              />
+                            </div>
+
+                            <div className="col-span-2">
+                              <Input
                                 type="number"
                                 step="0.5"
                                 placeholder="0"
-                                className="text-center h-8 text-sm tabular-nums"
+                                className="text-center h-8 text-sm tabular-nums px-1"
                                 value={set.weight ?? ''}
                                 onChange={(e) =>
                                   updateSet(ex.id, set.id, 'weight', e.target.value ? parseFloat(e.target.value) : null)
@@ -1037,11 +1341,99 @@ export function WorkoutLoggerClient({
                               <Input
                                 type="number"
                                 placeholder="0"
-                                className="text-center h-8 text-sm tabular-nums"
+                                className="text-center h-8 text-sm tabular-nums px-1"
                                 value={set.repCount || ''}
                                 onChange={(e) =>
                                   updateSet(ex.id, set.id, 'repCount', e.target.value ? parseInt(e.target.value, 10) : 0)
                                 }
+                              />
+                            </div>
+
+                            <div className="col-span-2 flex justify-center">
+                              <button
+                                type="button"
+                                onClick={() => updateSet(ex.id, set.id, 'isCompleted', !set.isCompleted)}
+                                className={`w-7 h-7 rounded-md flex items-center justify-center transition-colors cursor-pointer ${
+                                  set.isCompleted ? 'bg-green-500 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                                }`}
+                              >
+                                <Check className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </>
+                    ) : showTimeField ? (
+                      <>
+                        <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase border-b dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50">
+                          <div className="col-span-1 text-center">Serie</div>
+                          <div className="col-span-2 text-center">Kg</div>
+                          <div className="col-span-2 text-center">Reps</div>
+                          <div className="col-span-5 text-center">Tiempo (m:ss)</div>
+                          <div className="col-span-2 text-center">✓</div>
+                        </div>
+
+                        {ex.sets.map((set, setIndex) => (
+                          <div
+                            key={set.id}
+                            className={`grid grid-cols-12 gap-2 px-4 py-2 items-center border-b last:border-0 transition-colors ${
+                              set.isCompleted ? 'bg-green-50/50 dark:bg-green-900/10' : 'hover:bg-gray-50/30 dark:hover:bg-gray-800/50'
+                            }`}
+                          >
+                            <div className="col-span-1 flex items-center justify-center gap-1">
+                              <span className="font-semibold text-xs text-gray-600 dark:text-gray-400">{setIndex + 1}</span>
+                              {ex.sets.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => removeSet(ex.id, set.id)}
+                                  className="text-gray-300 hover:text-red-500 p-0.5 transition-colors cursor-pointer"
+                                  title="Eliminar serie"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              )}
+                            </div>
+
+                            <div className="col-span-2">
+                              <Input
+                                type="number"
+                                step="0.5"
+                                placeholder="0"
+                                className="text-center h-8 text-sm tabular-nums px-1"
+                                value={set.weight ?? ''}
+                                onChange={(e) =>
+                                  updateSet(ex.id, set.id, 'weight', e.target.value ? parseFloat(e.target.value) : null)
+                                }
+                              />
+                            </div>
+
+                            <div className="col-span-2">
+                              <Input
+                                type="number"
+                                placeholder="0"
+                                className="text-center h-8 text-sm tabular-nums px-1"
+                                value={set.repCount || ''}
+                                onChange={(e) =>
+                                  updateSet(ex.id, set.id, 'repCount', e.target.value ? parseInt(e.target.value, 10) : 0)
+                                }
+                              />
+                            </div>
+
+                            <div className="col-span-5">
+                              <Input
+                                type="text"
+                                inputMode="numeric"
+                                placeholder="4:30"
+                                className="text-center h-8 text-sm tabular-nums font-mono px-1 border-purple-200 bg-purple-50/50 dark:bg-purple-950/20"
+                                value={formatDurationInput(set.durationSeconds)}
+                                onChange={(e) => {
+                                  if (e.target.value.trim() === '') {
+                                    updateSet(ex.id, set.id, 'durationSeconds', null);
+                                  } else {
+                                    const val = parseDurationInput(e.target.value);
+                                    if (val !== null) updateSet(ex.id, set.id, 'durationSeconds', val);
+                                  }
+                                }}
                               />
                             </div>
 
@@ -1158,6 +1550,17 @@ export function WorkoutLoggerClient({
           );
         })}
         </div>
+        )}
+
+        {isHyroxRaceLike && !useHyroxUnified && (
+          <button
+            type="button"
+            onClick={() => setHyroxUnified(true)}
+            className="w-full px-4 py-2.5 rounded-2xl border border-purple-200 dark:border-purple-800/60 bg-purple-600 text-white text-xs font-bold hover:bg-purple-700 transition-colors cursor-pointer"
+          >
+            Volver a vista unificada de carrera (recomendada)
+          </button>
+        )}
 
         <Button
           type="button"

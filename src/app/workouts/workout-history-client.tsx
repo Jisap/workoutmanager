@@ -37,7 +37,7 @@ import {
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { deleteWorkout, deleteWorkoutTemplate, saveAsTemplate, updateWorkout, updateWorkoutTemplate } from './actions';
+import { deleteWorkout, deleteWorkoutTemplate, saveAsTemplate, updateWorkout, updateWorkoutTemplate, updateWorkoutSetTimes } from './actions';
 import { type ModalityConfig } from '@/lib/db/schema';
 import { formatModalitySummary } from '@/lib/modality-utils';
 
@@ -63,9 +63,12 @@ export interface WorkoutHistoryItem {
     totalReps?: number;
     repsSummary?: string;
     sets?: {
+      id?: number;
       setNumber: number;
       weight: number | null;
       repCount: number | null;
+      distance?: number | null;
+      durationSeconds?: number | null;
       formatted?: string;
     }[];
   }[];
@@ -139,6 +142,196 @@ function groupByMonth(items: WorkoutHistoryItem[]): Map<string, WorkoutHistoryIt
   return map;
 }
 
+function formatMMSS(totalSeconds: number | null | undefined): string {
+  if (totalSeconds == null || isNaN(totalSeconds) || totalSeconds < 0) return '—';
+  const m = Math.floor(totalSeconds / 60);
+  const s = Math.round(totalSeconds % 60);
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+function parseMMSS(value: string): number | null {
+  const v = value.trim();
+  if (!v) return null;
+  if (v.includes(':')) {
+    const parts = v.split(':').map((p) => p.trim());
+    if (parts.length !== 2) return null;
+    const m = parseInt(parts[0], 10);
+    const s = parseInt(parts[1], 10);
+    if (isNaN(m) || isNaN(s) || m < 0 || s < 0 || s >= 60) return null;
+    return m * 60 + s;
+  }
+  const num = parseFloat(v.replace(',', '.'));
+  if (isNaN(num) || num < 0) return null;
+  if (num >= 30) return Math.round(num);
+  return Math.round(num * 60);
+}
+
+function isRunExerciseName(name: string): boolean {
+  const n = name.toLowerCase();
+  return (
+    n.includes('run') ||
+    n.includes('correr') ||
+    n.includes('carrera') ||
+    n.includes('running') ||
+    n.includes('1000m')
+  );
+}
+
+// Vista UNIFICADA Hyrox en el historial: una sola lista de estaciones con su tiempo
+// editable inline (sustituye a "inputs arriba + tarjetas debajo", que duplicaba lo mismo).
+function HyroxRunTimesEditor({
+  workout,
+  onSaved,
+}: {
+  workout: WorkoutHistoryItem;
+  onSaved: (updates: { setId: number; durationSeconds: number | null }[]) => void;
+}) {
+  const runRows = useMemo(() => {
+    const rows: {
+      exName: string;
+      setId: number;
+      setNumber: number;
+      distance: number | null;
+      durationSeconds: number | null;
+      repCount: number | null;
+      weight: number | null;
+      isRun: boolean;
+    }[] = [];
+    // En Hyrox TODAS las estaciones llevan tiempo: incluimos cada set del workout,
+    // no solo los runs. Así Wall Balls, Farmer Carry, etc. también son editables.
+    workout.exercisesSummary.forEach((ex) => {
+      const isRun = isRunExerciseName(ex.name);
+      (ex.sets || []).forEach((s) => {
+        if (s.id == null) return;
+        rows.push({
+          exName: ex.name,
+          setId: s.id,
+          setNumber: s.setNumber,
+          distance: s.distance ?? null,
+          durationSeconds: s.durationSeconds ?? null,
+          repCount: s.repCount ?? null,
+          weight: s.weight ?? null,
+          isRun,
+        });
+      });
+    });
+    return rows;
+  }, [workout]);
+
+  const [drafts, setDrafts] = useState<Record<number, string>>({});
+  const [isSaving, setIsSaving] = useState(false);
+  const [savedTick, setSavedTick] = useState(false);
+
+  useEffect(() => {
+    const init: Record<number, string> = {};
+    runRows.forEach((r) => {
+      init[r.setId] = r.durationSeconds != null ? formatMMSS(r.durationSeconds) : '';
+    });
+    setDrafts(init);
+  }, [runRows]);
+
+  if (runRows.length === 0) return null;
+
+  const handleSave = async () => {
+    const updates: { setId: number; durationSeconds: number | null }[] = [];
+    for (const r of runRows) {
+      const raw = (drafts[r.setId] ?? '').trim();
+      if (raw === '' && r.durationSeconds == null) continue;
+      if (raw === '') {
+        if (r.durationSeconds !== null) updates.push({ setId: r.setId, durationSeconds: null });
+        continue;
+      }
+      const parsed = parseMMSS(raw);
+      if (parsed === null) {
+        alert(`Formato inválido en "${r.exName}" (usa m:ss, ej. 4:30)`);
+        return;
+      }
+      if (parsed !== r.durationSeconds) updates.push({ setId: r.setId, durationSeconds: parsed });
+    }
+    if (updates.length === 0) return;
+    setIsSaving(true);
+    try {
+      const res = await updateWorkoutSetTimes({ workoutId: workout.id, updates });
+      if (res.success) {
+        onSaved(updates);
+        setSavedTick(true);
+        setTimeout(() => setSavedTick(false), 2500);
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Error al guardar los tiempos');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className="p-3.5 bg-purple-50/70 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800/60 rounded-2xl space-y-3">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <span className="text-xs font-bold text-purple-900 dark:text-purple-200 flex items-center gap-1.5">
+          <Clock className="w-3.5 h-3.5 text-purple-600" />
+          Tiempos por estación (editable)
+        </span>
+        <span className="text-[11px] text-purple-700/70 dark:text-purple-300/70 font-medium">Formato m:ss · ej. 4:30</span>
+      </div>
+      <div className="space-y-1.5 max-h-72 overflow-y-auto pr-0.5">
+        {runRows.map((r, idx) => (
+          <div key={r.setId} className="flex items-center gap-2 bg-white dark:bg-gray-900 border border-purple-100 dark:border-purple-900/40 rounded-xl px-2.5 py-1.5">
+            <span className="w-5 h-5 rounded-full flex items-center justify-center font-bold text-[10px] shrink-0 bg-purple-100 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300">
+              {idx + 1}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] font-bold text-gray-800 dark:text-gray-200 truncate">
+                {r.isRun ? '🏃 ' : '🏋️ '}{r.exName}
+              </p>
+              <p className="text-[10px] text-gray-500 dark:text-gray-400 font-mono truncate">
+                {r.distance ? `${r.distance}m · ` : ''}
+                {(r.repCount ?? 0) > 0 ? `${r.repCount} reps · ` : ''}
+                {r.weight ? `@ ${r.weight}kg` : 'tiempo'}
+              </p>
+            </div>
+            <input
+              type="text"
+              inputMode="numeric"
+              placeholder="m:ss"
+              value={drafts[r.setId] ?? ''}
+              onChange={(e) => setDrafts((prev) => ({ ...prev, [r.setId]: e.target.value }))}
+              className="w-20 shrink-0 text-center text-xs font-mono font-bold px-2 py-1 rounded-lg border border-purple-200 dark:border-purple-800 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500/30 focus:border-purple-500"
+            />
+          </div>
+        ))}
+      </div>
+      <Button
+        type="button"
+        size="sm"
+        onClick={handleSave}
+        disabled={isSaving}
+        className="w-full bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl cursor-pointer"
+      >
+        {isSaving ? (
+          <>
+            <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />
+            Guardando tiempos...
+          </>
+        ) : savedTick ? (
+          <>
+            <Check className="w-3.5 h-3.5 mr-1" />
+            ¡Tiempos actualizados!
+          </>
+        ) : (
+          <>
+            <Save className="w-3.5 h-3.5 mr-1" />
+            Guardar tiempos
+          </>
+        )}
+      </Button>
+      <p className="text-[11px] text-purple-700/70 dark:text-purple-300/60">
+        Al guardar se recalculan tus PBs, el balance Running vs Estaciones y las estaciones Hyrox en Progreso.
+      </p>
+    </div>
+  );
+}
+
 // ---------- Detail Modal (para Historial) ----------
 function WorkoutDetailModal({
   workout,
@@ -147,6 +340,7 @@ function WorkoutDetailModal({
   onConvertToTemplate,
   onDelete,
   onEdit,
+  onTimesSaved,
 }: {
   workout: WorkoutHistoryItem;
   onClose: () => void;
@@ -154,9 +348,13 @@ function WorkoutDetailModal({
   onConvertToTemplate: () => void;
   onDelete: () => void;
   onEdit: () => void;
+  onTimesSaved?: (updates: { setId: number; durationSeconds: number | null }[]) => void;
 }) {
   const style = getTypeStyle(workout.typeName);
   const TypeIcon = style.icon;
+  const isHyroxWorkout =
+    workout.typeName.toLowerCase().includes('hyrox') ||
+    workout.name.toLowerCase().includes('hyrox');
 
   return (
     <div
@@ -252,7 +450,12 @@ function WorkoutDetailModal({
             </div>
           )}
 
-          {/* Exercises */}
+          {/* Hyrox: UNA sola lista unificada (estación + meta + tiempo editable).
+              Sustituye al anterior "inputs arriba + tarjetas debajo" que duplicaba cada estación. */}
+          {isHyroxWorkout && onTimesSaved ? (
+            <HyroxRunTimesEditor workout={workout} onSaved={onTimesSaved} />
+          ) : (
+          /* Exercises (no-Hyrox: vista de tarjetas habitual) */
           <div className="space-y-2">
             <span className="text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider block">
               Ejercicios & Repeticiones ({workout.exercisesSummary.length})
@@ -272,7 +475,7 @@ function WorkoutDetailModal({
                     </span>
                   </div>
 
-                  {/* Series individuales con sus reps */}
+                  {/* Series individuales con reps, distancia y tiempo */}
                   <div className="flex flex-wrap gap-1.5 pt-0.5">
                     {ex.sets && ex.sets.length > 0 ? (
                       ex.sets.map((s, sIdx) => (
@@ -281,6 +484,12 @@ function WorkoutDetailModal({
                           className="px-2 py-0.5 text-[11px] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md font-mono text-gray-800 dark:text-gray-200 shadow-2xs"
                         >
                           <strong className="text-gray-400 dark:text-gray-500 mr-1 text-[10px]">S{s.setNumber}:</strong>
+                          {(s.distance ?? 0) > 0 && (
+                            <span className="font-bold text-purple-700 dark:text-purple-300 mr-1">{s.distance}m</span>
+                          )}
+                          {s.durationSeconds != null && (
+                            <span className="font-bold text-emerald-700 dark:text-emerald-300 mr-1">⏱ {formatMMSS(s.durationSeconds)}</span>
+                          )}
                           <span className="font-bold text-blue-700 dark:text-blue-400">{s.repCount ?? 0} reps</span>
                           {s.weight ? <span className="text-gray-600 dark:text-gray-400"> @ {s.weight}kg</span> : ''}
                         </span>
@@ -295,6 +504,7 @@ function WorkoutDetailModal({
               ))}
             </div>
           </div>
+          )}
         </div>
 
         {/* Footer */}
@@ -2228,6 +2438,24 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
               name: selectedWorkout.name,
             })
           }
+          onTimesSaved={(updates) => {
+            const updateMap = new Map(updates.map((u) => [u.setId, u.durationSeconds]));
+            const patchWorkout = (w: WorkoutHistoryItem): WorkoutHistoryItem => ({
+              ...w,
+              exercisesSummary: w.exercisesSummary.map((ex) => ({
+                ...ex,
+                sets: (ex.sets || []).map((s) =>
+                  s.id != null && updateMap.has(s.id)
+                    ? { ...s, durationSeconds: updateMap.get(s.id) ?? null }
+                    : s
+                ),
+              })),
+            });
+            setWorkouts((prev) =>
+              prev.map((w) => (w.id === selectedWorkout.id ? patchWorkout(w) : w))
+            );
+            setSelectedWorkout((prev) => (prev ? patchWorkout(prev) : prev));
+          }}
         />
       )}
 

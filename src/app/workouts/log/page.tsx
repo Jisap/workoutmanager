@@ -127,6 +127,10 @@ export default async function WorkoutLogPage({
           id: crypto.randomUUID(),
           repCount: s.repCount || 0,
           weight: s.weight,
+          distance: s.distance ?? null,
+          durationSeconds: s.durationSeconds ?? null,
+          rpe: s.rpe ?? null,
+          isRx: s.isRx ?? true,
           isCompleted: false,
         })),
       }));
