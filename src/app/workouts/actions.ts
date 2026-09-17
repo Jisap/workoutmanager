@@ -1567,6 +1567,257 @@ export async function getAdvancedProgressData(userId: string) {
     core: { volume: coreVol, percentage: Math.round((coreVol / pplTotal) * 100) },
   };
 
+  // 3b. ESTADÍSTICAS AVANZADAS DE MUSCULACIÓN
+  const isMusculacionWorkout = (w: (typeof chronologicalWorkouts)[0]) =>
+    w.type?.name?.toLowerCase().includes('musculación') ||
+    w.type?.name?.toLowerCase().includes('musculacion');
+
+  // Helper: obtener semana (lunes) de una fecha
+  const getWeekKey = (date: Date): string => {
+    const d = new Date(date);
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+    const monday = new Date(d.setDate(diff));
+    return `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`;
+  };
+
+  // Helper: obtener nombre del mes para label de semana
+  const getWeekLabel = (weekKey: string): string => {
+    const [y, m, d] = weekKey.split('-').map(Number);
+    const monday = new Date(y, m - 1, d);
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+    const monthNames = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+    if (monday.getMonth() === sunday.getMonth()) {
+      return `${monday.getDate()}-${sunday.getDate()} ${monthNames[monday.getMonth()]}`;
+    }
+    return `${monday.getDate()} ${monthNames[monday.getMonth()]}-${sunday.getDate()} ${monthNames[sunday.getMonth()]}`;
+  };
+
+  // Helper: mapear nombre de ejercicio a grupo muscular
+  const mapExerciseToGroup = (catName: string): string => {
+    if (catName.includes('Pecho')) return 'Pecho';
+    if (catName.includes('Espalda')) return 'Espalda';
+    if (catName.includes('Pierna')) return 'Piernas';
+    if (catName.includes('Gluteo') || catName.includes('Glúteo')) return 'Gluteos';
+    if (catName.includes('Hombro')) return 'Hombros';
+    if (catName.includes('Brazo') || catName.includes('Bíceps') || catName.includes('Tríceps')) return 'Brazos';
+    if (catName.includes('Core') || catName.includes('Abdomen')) return 'Core';
+    return 'Otros';
+  };
+
+  // Estructuras de datos para métricas avanzadas
+  const weeklyVolumeByGroup: Record<string, Record<string, number>> = {}; // weekKey -> groupName -> volume
+  const weeklyFrequencyByGroup: Record<string, Record<string, number>> = {}; // weekKey -> groupName -> sessionCount
+  const repZoneCounts = { fuerza: 0, hipertrofia: 0, resistencia: 0 };
+  let totalIntensityWeighted = 0;
+  let intensityVolumeSum = 0;
+  let totalIntensitySets = 0;
+  let totalWeightSum = 0;
+  let totalRepsForWeighted = 0;
+  let setsWithRpe = 0;
+  let rpeSum = 0;
+  let nearFailureSets = 0; // RPE >= 8
+  let totalMusculacionSessionVolume = 0;
+  let totalMusculacionSessionMinutes = 0;
+  let musculacionOnlySets = 0;
+  const asymmetryData: Record<string, { dumbbell: { volume: number; sets: number }; barbell: { volume: number; sets: number } }> = {};
+
+  // Listas de semana ordenadas
+  const allWeekKeys = new Set<string>();
+
+  for (const w of chronologicalWorkouts) {
+    if (!isMusculacionWorkout(w)) continue;
+
+    const weekKey = getWeekKey(new Date(w.startTime));
+    allWeekKeys.add(weekKey);
+
+    if (!weeklyVolumeByGroup[weekKey]) weeklyVolumeByGroup[weekKey] = {};
+    if (!weeklyFrequencyByGroup[weekKey]) weeklyFrequencyByGroup[weekKey] = {};
+
+    const groupsTrainedThisSession = new Set<string>();
+    let sessionVolume = 0;
+
+    for (const we of w.exercises) {
+      const catName = we.exercise.category?.name || categoryNameMap.get(we.exercise.categoryId || 0) || 'Otros';
+      const groupName = mapExerciseToGroup(catName);
+      const exLower = we.exercise.name.toLowerCase();
+
+      // Detectar si es mancuerna o barra
+      const isDumbbell = exLower.includes('mancuerna') || exLower.includes('dumbbell');
+      const isBarbell = exLower.includes('barra') || exLower.includes('barbell') ||
+        (!isDumbbell && (
+          exLower.includes('press de banca') || exLower.includes('bench press') ||
+          exLower.includes('sentadilla') || exLower.includes('squat') ||
+          exLower.includes('peso muerto') || exLower.includes('deadlift') ||
+          exLower.includes('remo con barra') || exLower.includes('press militar')
+        ));
+
+      if (!asymmetryData[groupName]) {
+        asymmetryData[groupName] = { dumbbell: { volume: 0, sets: 0 }, barbell: { volume: 0, sets: 0 } };
+      }
+
+      for (const s of we.sets) {
+        const wVal = s.weight ? Number(s.weight) : 0;
+        const rVal = s.repCount ? Number(s.repCount) : 0;
+        if (rVal <= 0) continue;
+
+        const vol = wVal * rVal;
+        sessionVolume += vol;
+        musculacionOnlySets++;
+
+        // Volumen semanal por grupo
+        weeklyVolumeByGroup[weekKey][groupName] = (weeklyVolumeByGroup[weekKey][groupName] || 0) + vol;
+        groupsTrainedThisSession.add(groupName);
+
+        // Zonas de repeticiones
+        if (rVal < 6) repZoneCounts.fuerza++;
+        else if (rVal <= 12) repZoneCounts.hipertrofia++;
+        else repZoneCounts.resistencia++;
+
+        // Intensidad relativa (% 1RM estimado en la serie)
+        if (wVal > 0 && rVal > 0) {
+          const est1RM = rVal === 1 ? wVal : Math.round(wVal * (1 + rVal / 30) * 10) / 10;
+          const intensityPct = (wVal / est1RM) * 100;
+          totalIntensityWeighted += intensityPct * vol;
+          intensityVolumeSum += vol;
+          totalIntensitySets++;
+          totalWeightSum += wVal * rVal;
+          totalRepsForWeighted += rVal;
+        }
+
+        // RPE / RIR
+        if (s.rpe && s.rpe > 0) {
+          setsWithRpe++;
+          rpeSum += s.rpe;
+          if (s.rpe >= 8) nearFailureSets++;
+        }
+
+        // Asimetrías
+        if (isDumbbell) {
+          asymmetryData[groupName].dumbbell.volume += vol;
+          asymmetryData[groupName].dumbbell.sets++;
+        } else if (isBarbell) {
+          asymmetryData[groupName].barbell.volume += vol;
+          asymmetryData[groupName].barbell.sets++;
+        }
+      }
+    }
+
+    // Frecuencia semanal por grupo
+    for (const g of groupsTrainedThisSession) {
+      weeklyFrequencyByGroup[weekKey][g] = (weeklyFrequencyByGroup[weekKey][g] || 0) + 1;
+    }
+
+    // Densidad
+    totalMusculacionSessionVolume += sessionVolume;
+    if (w.totalTimeSeconds && w.totalTimeSeconds > 0) {
+      totalMusculacionSessionMinutes += w.totalTimeSeconds / 60;
+    }
+  }
+
+  // Ordenar semanas cronológicamente y tomar las últimas 12
+  const sortedWeekKeys = Array.from(allWeekKeys).sort().slice(-12);
+  const groupNames = ['Pecho', 'Espalda', 'Piernas', 'Gluteos', 'Hombros', 'Brazos', 'Core'];
+
+  const weeklyVolumeTimeline = sortedWeekKeys.map((wk) => ({
+    week: wk,
+    label: getWeekLabel(wk),
+    ...Object.fromEntries(groupNames.map((g) => [g, weeklyVolumeByGroup[wk]?.[g] || 0])),
+  }));
+
+  const weeklyFrequencyTimeline = sortedWeekKeys.map((wk) => ({
+    week: wk,
+    label: getWeekLabel(wk),
+    ...Object.fromEntries(groupNames.map((g) => [g, weeklyFrequencyByGroup[wk]?.[g] || 0])),
+  }));
+
+  // Frecuencia semanal media por grupo
+  const groupFrequencyAvg: Record<string, number> = {};
+  for (const g of groupNames) {
+    const totalSessions = sortedWeekKeys.reduce((acc, wk) => acc + (weeklyFrequencyByGroup[wk]?.[g] || 0), 0);
+    groupFrequencyAvg[g] = sortedWeekKeys.length > 0 ? Math.round((totalSessions / sortedWeekKeys.length) * 10) / 10 : 0;
+  }
+
+  // Totales de zonas de reps
+  const totalRepSets = repZoneCounts.fuerza + repZoneCounts.hipertrofia + repZoneCounts.resistencia;
+  const repZones = {
+    fuerza: { count: repZoneCounts.fuerza, percentage: totalRepSets > 0 ? Math.round((repZoneCounts.fuerza / totalRepSets) * 100) : 0 },
+    hipertrofia: { count: repZoneCounts.hipertrofia, percentage: totalRepSets > 0 ? Math.round((repZoneCounts.hipertrofia / totalRepSets) * 100) : 0 },
+    resistencia: { count: repZoneCounts.resistencia, percentage: totalRepSets > 0 ? Math.round((repZoneCounts.resistencia / totalRepSets) * 100) : 0 },
+  };
+
+  // Intensidad relativa media ponderada por volumen (sin duplicar porcentaje)
+  const avgRelativeIntensity = intensityVolumeSum > 0 ? Math.round(totalIntensityWeighted / intensityVolumeSum) : 0;
+  const avgWeightedWeight = totalRepsForWeighted > 0 ? Math.round((totalWeightSum / totalRepsForWeighted) * 10) / 10 : 0;
+
+  // RPE / RIR
+  const avgRpe: number | null = setsWithRpe > 0 ? Math.round((rpeSum / setsWithRpe) * 10) / 10 : null;
+  const avgRir: number | null = setsWithRpe > 0 ? Math.max(0, Math.round((10 - rpeSum / setsWithRpe) * 10) / 10) : null;
+  const nearFailurePct = setsWithRpe > 0 ? Math.round((nearFailureSets / setsWithRpe) * 100) : 0;
+
+  // Densidad (volumen por minuto de sesión)
+  const density = totalMusculacionSessionMinutes > 0
+    ? Math.round(totalMusculacionSessionVolume / totalMusculacionSessionMinutes)
+    : 0;
+
+  // Detección de deload/meseta (comparar últimas 4 semanas)
+  const last4Weeks = sortedWeekKeys.slice(-4);
+  let deloadAlert: { type: 'deload' | 'plateau' | 'fatigue' | null; message: string } = { type: null, message: '' };
+  if (last4Weeks.length >= 3) {
+    const weekVolumes = last4Weeks.map((wk) => {
+      const vol = Object.values(weeklyVolumeByGroup[wk] || {}).reduce((a, b) => a + b, 0);
+      return vol;
+    });
+    const recentAvg = (weekVolumes[weekVolumes.length - 1] + weekVolumes[weekVolumes.length - 2]) / 2;
+    const olderAvg = (weekVolumes[0] + (weekVolumes[1] || weekVolumes[0])) / 2;
+    const volumeChange = olderAvg > 0 ? ((recentAvg - olderAvg) / olderAvg) * 100 : 0;
+
+    if (volumeChange < -30) {
+      deloadAlert = { type: 'deload', message: `Volumen reducido ${Math.abs(Math.round(volumeChange))}% en las últimas semanas — posible semana de deload.` };
+    } else if (volumeChange > 30 && avgRpe !== null && avgRpe >= 8) {
+      deloadAlert = { type: 'fatigue', message: `Volumen subió ${Math.round(volumeChange)}% con RPE medio ${avgRpe} — posible acumulación de fatiga.` };
+    } else if (Math.abs(volumeChange) < 10 && last4Weeks.length >= 4) {
+      deloadAlert = { type: 'plateau', message: `Volumen estable (~${Math.round(volumeChange)}%) en 4 semanas — considera periodizar para evitar meseta.` };
+    }
+  }
+
+  // Asimetrías (grupos con trabajo de mancuerna o barra)
+  const asymmetryList = Object.entries(asymmetryData)
+    .filter(([, data]) => data.dumbbell.sets > 0 && data.barbell.sets > 0)
+    .map(([group, data]) => {
+      const totalVol = data.dumbbell.volume + data.barbell.volume;
+      const dumbbellPct = totalVol > 0 ? Math.round((data.dumbbell.volume / totalVol) * 100) : 0;
+      const barbellPct = totalVol > 0 ? 100 - dumbbellPct : 0;
+      return {
+        group,
+        dumbbellVolume: data.dumbbell.volume,
+        dumbbellSets: data.dumbbell.sets,
+        barbellVolume: data.barbell.volume,
+        barbellSets: data.barbell.sets,
+        dumbbellPct,
+        barbellPct,
+        ratio: data.barbell.volume > 0 ? Math.round((data.dumbbell.volume / data.barbell.volume) * 100) : 100,
+      };
+    });
+
+  const musculacionAvanzado = {
+    weeklyVolumeTimeline,
+    weeklyFrequencyTimeline,
+    groupFrequencyAvg,
+    repZones,
+    avgRelativeIntensity,
+    avgWeightedWeight,
+    avgRpe,
+    avgRir,
+    nearFailureSets,
+    nearFailurePct,
+    hasRpeData: setsWithRpe > 0,
+    density,
+    deloadAlert,
+    asymmetryList,
+  };
+
   // SBD Total
   const sbdTotal =
     big3Data.squat.estimated1RM +
@@ -1594,6 +1845,7 @@ export async function getAdvancedProgressData(userId: string) {
       totalSets: totalMusculacionSets,
       muscleGroups: muscleGroupsList,
       pushPullLegsBalance,
+      avanzado: musculacionAvanzado,
     },
     powerlifting: {
       squat: big3Data.squat,
