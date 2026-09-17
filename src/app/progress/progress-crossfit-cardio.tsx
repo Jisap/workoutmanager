@@ -171,6 +171,12 @@ interface ProgressCrossfitCardioProps {
     stations?: HyroxStation[];
     events?: HyroxEvent[];
     balance?: HyroxBalance;
+    runs?: {
+      date: string;
+      timeSeconds: number;
+      distance: number | null;
+      workoutName: string;
+    }[];
     sessions: {
       id: number;
       name: string;
@@ -180,6 +186,14 @@ interface ProgressCrossfitCardioProps {
       totalTimeMinutes: number;
       totalTimeSeconds?: number | null;
       notes: string | null;
+      segments?: {
+        name: string;
+        orderIndex: number;
+        distance: number | null;
+        durationSeconds: number | null;
+        weight: number | null;
+        reps: number | null;
+      }[];
     }[];
     modalityBreakdown?: {
       modality: string;
@@ -200,6 +214,11 @@ export function ProgressCrossfitCardio({ crossfit, hyroxCardio }: ProgressCrossf
   const [selectedHyroxModalityFilter, setSelectedHyroxModalityFilter] = useState<string>('all');
   const [activeTab, setActiveTab] = useState<'benchmarks' | 'olympic' | 'hyrox' | 'cardioPbs'>('benchmarks');
   const [benchmarkCategory, setBenchmarkCategory] = useState<'all' | 'official' | 'custom'>('all');
+  const [selectedStationId, setSelectedStationId] = useState<string | null>(null);
+  const [stationHoverIndex, setStationHoverIndex] = useState<number | null>(null);
+  // Comparador de sesiones: A = sesión analizada, B = referencia (o 'none')
+  const [sessionAId, setSessionAId] = useState<number | null>(null);
+  const [sessionBId, setSessionBId] = useState<string>('none');
 
   const modalityBreakdown = crossfit.modalityBreakdown || [];
   const hyroxModalityBreakdown = hyroxCardio.modalityBreakdown || [];
@@ -263,6 +282,234 @@ export function ProgressCrossfitCardio({ crossfit, hyroxCardio }: ProgressCrossf
   // benchmarks/olympic -> stats CrossFit · hyrox -> solo stats Hyrox · cardioPbs -> sin historiales
   const showCrossfitSections = activeTab === 'benchmarks' || activeTab === 'olympic';
   const showHyroxSections = activeTab === 'hyrox';
+
+  // ─── Gráficos de tiempos por estación Hyrox ───
+  // Estaciones con al menos 1 tiempo registrado (orden oficial)
+  const stationsWithTimes = useMemo(
+    () => hyroxStations.filter((st) => (st.history || []).some((h) => h.timeSeconds != null && h.timeSeconds > 0)),
+    [hyroxStations]
+  );
+  const activeStation = useMemo(() => {
+    if (hyroxStations.length === 0) return null;
+    if (selectedStationId) {
+      const found = hyroxStations.find((st) => st.id === selectedStationId);
+      if (found) return found;
+    }
+    // Por defecto: primera estación con tiempos, si no la primera estación
+    return stationsWithTimes[0] || hyroxStations[0];
+  }, [hyroxStations, stationsWithTimes, selectedStationId]);
+
+  // Serie diaria (mejor tiempo de cada día) ordenada cronológicamente
+  const stationTimeSeries = useMemo(() => {
+    if (!activeStation) return [];
+    const dailyMin = new Map<string, { date: string; timeSeconds: number; workoutName: string }>();
+    for (const h of activeStation.history || []) {
+      if (h.timeSeconds == null || h.timeSeconds <= 0) continue;
+      const day = h.date.split('T')[0];
+      const prev = dailyMin.get(day);
+      if (!prev || h.timeSeconds < prev.timeSeconds) {
+        dailyMin.set(day, { date: h.date, timeSeconds: h.timeSeconds, workoutName: h.workoutName });
+      }
+    }
+    return Array.from(dailyMin.values()).sort(
+      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+    );
+  }, [activeStation]);
+
+  const stationTimeStats = useMemo(() => {
+    if (stationTimeSeries.length === 0) return null;
+    const times = stationTimeSeries.map((p) => p.timeSeconds);
+    const best = Math.min(...times);
+    const worst = Math.max(...times);
+    const first = times[0];
+    const latest = times[times.length - 1];
+    return {
+      best,
+      worst,
+      first,
+      latest,
+      improvement: first - latest, // >0 = mejora (menos segundos)
+      improvementPct: first > 0 ? Math.round(((first - latest) / first) * 100) : 0,
+      count: stationTimeSeries.length,
+    };
+  }, [stationTimeSeries]);
+
+  // Geometría del gráfico SVG de tiempos (mismo patrón que powerlifting)
+  const stationSvg = { width: 720, height: 240, padLeft: 62, padRight: 24, padTop: 20, padBottom: 40 };
+  const stationChart = useMemo(() => {
+    const { width, height, padLeft, padRight, padTop, padBottom } = stationSvg;
+    const cw = width - padLeft - padRight;
+    const ch = height - padTop - padBottom;
+    if (stationTimeSeries.length === 0 || !stationTimeStats) {
+      return { points: [], lineD: '', areaD: '', yTicks: [], cw, ch };
+    }
+    const min = stationTimeStats.best;
+    const max = stationTimeStats.worst;
+    const span = Math.max(1, max - min);
+    // Margen visual del 15% por arriba/abajo para que la curva respire
+    const lo = Math.max(0, min - span * 0.25);
+    const hi = max + span * 0.25;
+    const range = Math.max(1, hi - lo);
+    const points = stationTimeSeries.map((p, i) => {
+      const x =
+        stationTimeSeries.length === 1
+          ? padLeft + cw / 2
+          : padLeft + (i / Math.max(1, stationTimeSeries.length - 1)) * cw;
+      const y = padTop + ch - ((p.timeSeconds - lo) / range) * ch;
+      return { x, y, ...p };
+    });
+    const lineD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
+    const bottomY = padTop + ch;
+    const areaD =
+      points.length === 1
+        ? `M ${padLeft} ${bottomY} L ${padLeft} ${points[0].y} L ${width - padRight} ${points[0].y} L ${width - padRight} ${bottomY} Z`
+        : `${lineD} L ${points[points.length - 1].x.toFixed(1)} ${bottomY} L ${points[0].x.toFixed(1)} ${bottomY} Z`;
+    const yTicks = [0, 0.5, 1].map((r) => {
+      const val = Math.round(hi - r * (hi - lo));
+      const y = padTop + ch * r;
+      return { val, y };
+    });
+    return { points, lineD, areaD, yTicks, cw, ch };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stationTimeSeries, stationTimeStats]);
+
+  // ─── Comparador de sesiones Hyrox (estilo ROXFIT/RoxOpt: splits A vs B con deltas) ───
+  const hyroxSessionOptions = useMemo(() => hyroxCardio.sessions || [], [hyroxCardio.sessions]);
+  const sessionA = useMemo(() => {
+    if (hyroxSessionOptions.length === 0) return null;
+    if (sessionAId != null) {
+      const found = hyroxSessionOptions.find((s) => s.id === sessionAId);
+      if (found) return found;
+    }
+    return hyroxSessionOptions[0]; // más reciente
+  }, [hyroxSessionOptions, sessionAId]);
+  const sessionB = useMemo(() => {
+    if (sessionBId === 'none') return null;
+    return hyroxSessionOptions.find((s) => s.id === Number(sessionBId)) || null;
+  }, [hyroxSessionOptions, sessionBId]);
+
+  const isRunSegment = (name: string) => {
+    const n = name.toLowerCase();
+    return n.includes('run') || n.includes('correr') || n.includes('carrera') || n.includes('running');
+  };
+  const cleanSegmentName = (name: string) => name.replace(/^\d+\.\s*/, '').trim();
+
+  interface CompareRow {
+    idx: number;
+    name: string;
+    meta: string;
+    isRun: boolean;
+    timeA: number | null;
+    timeB: number | null;
+    delta: number | null; // A − B: negativo (verde) = A más rápida
+  }
+  const compareRows: CompareRow[] = useMemo(() => {
+    if (!sessionA) return [];
+    const segsA = sessionA.segments || [];
+    const segsB = sessionB?.segments || [];
+    const len = Math.max(segsA.length, segsB.length);
+    const rows: CompareRow[] = [];
+    for (let i = 0; i < len; i++) {
+      const a = segsA[i];
+      const b = segsB[i];
+      const name = cleanSegmentName(a?.name || b?.name || `Tramo ${i + 1}`);
+      const metaParts: string[] = [];
+      const dist = a?.distance ?? b?.distance;
+      const reps = a?.reps ?? b?.reps;
+      const weight = a?.weight ?? b?.weight;
+      if (dist) metaParts.push(`${dist}m`);
+      if (reps) metaParts.push(`${reps} reps`);
+      if (weight) metaParts.push(`@${weight}kg`);
+      const timeA = a?.durationSeconds ?? null;
+      const timeB = b?.durationSeconds ?? null;
+      rows.push({
+        idx: i,
+        name,
+        meta: metaParts.join(' · ') || '—',
+        isRun: isRunSegment(a?.name || b?.name || ''),
+        timeA: timeA != null && timeA > 0 ? timeA : null,
+        timeB: timeB != null && timeB > 0 ? timeB : null,
+        delta: timeA != null && timeA > 0 && timeB != null && timeB > 0 ? timeA - timeB : null,
+      });
+    }
+    return rows;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionA, sessionB]);
+
+  const compareTotals = useMemo(() => {
+    let runA = 0, stA = 0, runB = 0, stB = 0;
+    let hasA = false, hasB = false;
+    for (const r of compareRows) {
+      if (r.timeA != null) {
+        hasA = true;
+        if (r.isRun) runA += r.timeA; else stA += r.timeA;
+      }
+      if (r.timeB != null) {
+        hasB = true;
+        if (r.isRun) runB += r.timeB; else stB += r.timeB;
+      }
+    }
+    return {
+      runA, stA, totalA: runA + stA, hasA,
+      runB, stB, totalB: runB + stB, hasB,
+      deltaTotal: hasA && hasB ? runA + stA - (runB + stB) : null,
+    };
+  }, [compareRows]);
+
+  const maxAbsDelta = useMemo(() => {
+    let m = 1;
+    for (const r of compareRows) {
+      if (r.delta != null && Math.abs(r.delta) > m) m = Math.abs(r.delta);
+    }
+    return m;
+  }, [compareRows]);
+
+  const formatDelta = (d: number) => `${d > 0 ? '+' : '−'}${Math.abs(d)}s`;
+
+  // ─── Comparativa 1000m por tramo: los 8 runs de A frente a los de B ───
+  interface RunCompareRow {
+    idx: number;
+    timeA: number | null;
+    timeB: number | null;
+    delta: number | null; // A − B
+  }
+  const runCompareRows: RunCompareRow[] = useMemo(() => {
+    const runsA = (sessionA?.segments || []).filter((s) => isRunSegment(s.name));
+    const runsB = (sessionB?.segments || []).filter((s) => isRunSegment(s.name));
+    const len = Math.max(runsA.length, runsB.length);
+    const rows: RunCompareRow[] = [];
+    for (let i = 0; i < len; i++) {
+      const tA = runsA[i]?.durationSeconds ?? null;
+      const tB = runsB[i]?.durationSeconds ?? null;
+      const vA = tA != null && tA > 0 ? tA : null;
+      const vB = tB != null && tB > 0 ? tB : null;
+      rows.push({ idx: i, timeA: vA, timeB: vB, delta: vA != null && vB != null ? vA - vB : null });
+    }
+    return rows;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionA, sessionB]);
+
+  const runCompareStats = useMemo(() => {
+    let max = 1;
+    let sumA = 0, nA = 0, sumB = 0, nB = 0;
+    for (const r of runCompareRows) {
+      if (r.timeA != null) {
+        if (r.timeA > max) max = r.timeA;
+        sumA += r.timeA; nA++;
+      }
+      if (r.timeB != null) {
+        if (r.timeB > max) max = r.timeB;
+        sumB += r.timeB; nB++;
+      }
+    }
+    const avgA = nA > 0 ? sumA / nA : null;
+    const avgB = nB > 0 ? sumB / nB : null;
+    return {
+      max, avgA, avgB,
+      avgDelta: avgA != null && avgB != null ? Math.round(avgA - avgB) : null,
+      hasData: nA > 0,
+    };
+  }, [runCompareRows]);
 
   return (
     <div className="space-y-6">
@@ -732,6 +979,329 @@ export function ProgressCrossfitCardio({ crossfit, hyroxCardio }: ProgressCrossf
               </div>
             )}
 
+            {/* 2b. Comparativa 1000m por tramo: los 8 runs de A frente a los de B */}
+            {sessionA && runCompareStats.hasData && (
+              <div className="space-y-3">
+                <div>
+                  <h4 className="text-sm font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                    <TrendingUp className="w-4 h-4 text-pink-600" />
+                    Comparativa 1000m por Tramo
+                  </h4>
+                  <p className="text-xs text-gray-400">Los 8 runs de la sesión A frente a los de la sesión B (usa los selectores del comparador)</p>
+                </div>
+                <Card className="border-gray-200 dark:border-gray-700 dark:bg-gray-900 shadow-2xs">
+                  <CardHeader className="pb-3 border-b border-gray-100 dark:border-gray-800 bg-pink-50/40 dark:bg-pink-950/20">
+                    <CardTitle className="text-sm font-bold text-gray-900 dark:text-gray-100 flex items-center justify-between flex-wrap gap-2">
+                      <span className="flex items-center gap-2">
+                        <Timer className="w-4 h-4 text-pink-600" />
+                        <span className="text-purple-700 dark:text-purple-300">A · {sessionA.name.slice(0, 28)}</span>
+                        {sessionB && <span className="text-gray-400 font-semibold">vs B · {sessionB.name.slice(0, 28)}</span>}
+                      </span>
+                      {runCompareStats.avgDelta != null ? (
+                        <span className={`text-xs font-bold px-2.5 py-1 rounded-lg ${
+                          runCompareStats.avgDelta < 0
+                            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300'
+                            : runCompareStats.avgDelta > 0
+                            ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300'
+                            : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+                        }`}>
+                          Media A {runCompareStats.avgDelta < 0 ? `${runCompareStats.avgDelta}s` : runCompareStats.avgDelta > 0 ? `+${runCompareStats.avgDelta}s` : 'igual'} vs B
+                        </span>
+                      ) : (
+                        <span className="text-[11px] font-semibold text-gray-400">Elige una sesión B en el comparador para ver deltas</span>
+                      )}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-4 sm:p-5 space-y-4">
+                    <div className="grid grid-cols-2 gap-2 sm:gap-3 text-center">
+                      <div className="p-3 rounded-xl bg-pink-50/70 dark:bg-pink-950/20 border border-pink-100 dark:border-pink-800/50">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-pink-600 dark:text-pink-400">Media / 1km (A)</p>
+                        <p className="text-lg sm:text-xl font-black text-pink-700 dark:text-pink-300 font-mono tabular-nums">
+                          {runCompareStats.avgA != null ? formatSecondsToTime(Math.round(runCompareStats.avgA)) : '—'}
+                        </p>
+                      </div>
+                      <div className="p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-800">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Media / 1km (B)</p>
+                        <p className="text-lg sm:text-xl font-black text-gray-900 dark:text-gray-100 font-mono tabular-nums">
+                          {runCompareStats.avgB != null ? formatSecondsToTime(Math.round(runCompareStats.avgB)) : '—'}
+                        </p>
+                      </div>
+                    </div>
+                    {/* Leyenda */}
+                    <div className="flex items-center gap-4 text-[11px] font-bold">
+                      <span className="flex items-center gap-1.5 text-pink-700 dark:text-pink-300">
+                        <span className="w-3 h-3 rounded-sm bg-pink-500 inline-block" /> A
+                      </span>
+                      {sessionB && (
+                        <span className="flex items-center gap-1.5 text-gray-500 dark:text-gray-400">
+                          <span className="w-3 h-3 rounded-sm bg-gray-400 inline-block" /> B
+                        </span>
+                      )}
+                    </div>
+                    {/* Barras pareadas por run */}
+                    <div className="space-y-2.5">
+                      {runCompareRows.map((r) => (
+                        <div key={r.idx} className="space-y-1">
+                          <div className="flex items-center justify-between text-[11px]">
+                            <span className="font-bold text-gray-700 dark:text-gray-300">Run {r.idx + 1}</span>
+                            {r.delta != null ? (
+                              <span className={`font-mono font-black px-1.5 py-0.5 rounded-md tabular-nums ${
+                                r.delta < 0
+                                  ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300'
+                                  : r.delta > 0
+                                  ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300'
+                                  : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'
+                              }`}>
+                                {r.delta === 0 ? '=' : formatDelta(r.delta)}
+                              </span>
+                            ) : (
+                              <span className="font-mono text-[11px] font-bold text-pink-700 dark:text-pink-300 tabular-nums">
+                                {r.timeA != null ? formatSecondsToTime(r.timeA) : '—'}
+                              </span>
+                            )}
+                          </div>
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] font-extrabold text-pink-600 w-3">A</span>
+                              <div className="flex-1 h-5 rounded-md bg-pink-100 dark:bg-pink-950/30 overflow-hidden">
+                                {r.timeA != null && (
+                                  <div
+                                    className="h-full rounded-md bg-linear-to-r from-pink-500 to-rose-500 flex items-center justify-end pr-1.5"
+                                    style={{ width: `${Math.max(6, (r.timeA / runCompareStats.max) * 100)}%` }}
+                                  >
+                                    <span className="text-[10px] font-mono font-black text-white tabular-nums">
+                                      {formatSecondsToTime(r.timeA)}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                            {sessionB && (
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-extrabold text-gray-400 w-3">B</span>
+                                <div className="flex-1 h-5 rounded-md bg-gray-100 dark:bg-gray-800 overflow-hidden">
+                                  {r.timeB != null && (
+                                    <div
+                                      className="h-full rounded-md bg-gray-400 dark:bg-gray-500 flex items-center justify-end pr-1.5"
+                                      style={{ width: `${Math.max(6, (r.timeB / runCompareStats.max) * 100)}%` }}
+                                    >
+                                      <span className="text-[10px] font-mono font-black text-white tabular-nums">
+                                        {formatSecondsToTime(r.timeB)}
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
+            {/* 2c. Splits de la sesión + comparador A vs B (estilo ROXFIT/RoxOpt) */}
+            {sessionA && (
+              <div className="space-y-3">
+                <div>
+                  <h4 className="text-sm font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                    <Layers className="w-4 h-4 text-purple-600" />
+                    Splits por Sesión y Comparador
+                  </h4>
+                  <p className="text-xs text-gray-400">Tiempos tramo a tramo de tu entrenamiento y comparativa con otra sesión (verde = más rápido)</p>
+                </div>
+
+                {/* Selectores A / B */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <label className="flex items-center gap-2 bg-purple-50/70 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800/60 rounded-xl px-3 py-2">
+                    <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-purple-600 text-white shrink-0">A</span>
+                    <select
+                      value={sessionA.id}
+                      onChange={(e) => setSessionAId(Number(e.target.value))}
+                      className="w-full text-xs font-bold bg-transparent text-gray-900 dark:text-gray-100 focus:outline-none cursor-pointer [color-scheme:light] dark:[color-scheme:dark] [&>option]:bg-white [&>option]:text-gray-900 dark:[&>option]:bg-gray-900 dark:[&>option]:text-gray-100"
+                    >
+                      {hyroxSessionOptions.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {new Date(s.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })} · {s.name.slice(0, 32)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="flex items-center gap-2 bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2">
+                    <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-gray-500 text-white shrink-0">B</span>
+                    <select
+                      value={sessionBId}
+                      onChange={(e) => setSessionBId(e.target.value)}
+                      className="w-full text-xs font-bold bg-transparent text-gray-900 dark:text-gray-100 focus:outline-none cursor-pointer [color-scheme:light] dark:[color-scheme:dark] [&>option]:bg-white [&>option]:text-gray-900 dark:[&>option]:bg-gray-900 dark:[&>option]:text-gray-100"
+                    >
+                      <option value="none">Sin comparar (solo A)</option>
+                      {hyroxSessionOptions.filter((s) => s.id !== sessionA.id).map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {new Date(s.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })} · {s.name.slice(0, 32)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+
+                <Card className="border-gray-200 dark:border-gray-700 dark:bg-gray-900 shadow-2xs overflow-hidden">
+                  <CardContent className="p-0">
+                    {/* Cabecera */}
+                    <div className="grid grid-cols-12 gap-2 px-4 py-2 text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider border-b dark:border-gray-700 bg-gray-50/60 dark:bg-gray-800/50">
+                      <div className="col-span-1 text-center">#</div>
+                      <div className="col-span-5">Tramo</div>
+                      <div className="col-span-2 text-center text-purple-700 dark:text-purple-300">A · {formatSecondsToTime(compareTotals.totalA)}</div>
+                      {sessionB ? (
+                        <>
+                          <div className="col-span-2 text-center">B · {formatSecondsToTime(compareTotals.totalB)}</div>
+                          <div className="col-span-2 text-center">Δ</div>
+                        </>
+                      ) : (
+                        <div className="col-span-4 text-center">% del total</div>
+                      )}
+                    </div>
+                    <div className="divide-y divide-gray-100 dark:divide-gray-800 max-h-96 overflow-y-auto">
+                      {compareRows.map((r) => (
+                        <div key={r.idx} className="grid grid-cols-12 gap-2 px-4 py-2 items-center hover:bg-purple-50/40 dark:hover:bg-purple-950/10">
+                          <div className="col-span-1 flex justify-center">
+                            <span className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-[11px] ${
+                              r.isRun
+                                ? 'bg-pink-100 dark:bg-pink-950/50 text-pink-700 dark:text-pink-300'
+                                : 'bg-purple-100 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300'
+                            }`}>
+                              {r.idx + 1}
+                            </span>
+                          </div>
+                          <div className="col-span-5 min-w-0">
+                            <p className="font-bold text-xs text-gray-900 dark:text-gray-100 truncate">
+                              {r.isRun ? '🏃 ' : '🏋️ '}{r.name}
+                            </p>
+                            <p className="text-[10px] text-gray-400 font-mono truncate">{r.meta}</p>
+                          </div>
+                          <div className="col-span-2 text-center font-mono text-xs font-black text-purple-700 dark:text-purple-300 tabular-nums">
+                            {r.timeA != null ? formatSecondsToTime(r.timeA) : '—'}
+                          </div>
+                          {sessionB ? (
+                            <>
+                              <div className="col-span-2 text-center font-mono text-xs font-bold text-gray-500 dark:text-gray-400 tabular-nums">
+                                {r.timeB != null ? formatSecondsToTime(r.timeB) : '—'}
+                              </div>
+                              <div className="col-span-2 text-center">
+                                {r.delta != null ? (
+                                  <span className={`inline-block font-mono text-[11px] font-black px-1.5 py-0.5 rounded-md tabular-nums ${
+                                    r.delta < 0
+                                      ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300'
+                                      : r.delta > 0
+                                      ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300'
+                                      : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'
+                                  }`}>
+                                    {r.delta === 0 ? '=' : formatDelta(r.delta)}
+                                  </span>
+                                ) : (
+                                  <span className="text-gray-300">—</span>
+                                )}
+                              </div>
+                            </>
+                          ) : (
+                            <div className="col-span-4 flex items-center gap-2">
+                              <div className="flex-1 h-2 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
+                                <div
+                                  className={`h-full rounded-full ${r.isRun ? 'bg-pink-500' : 'bg-purple-500'}`}
+                                  style={{ width: `${compareTotals.totalA > 0 && r.timeA != null ? Math.max(3, (r.timeA / compareTotals.totalA) * 100) : 0}%` }}
+                                />
+                              </div>
+                              <span className="text-[10px] font-mono font-bold text-gray-500 tabular-nums w-9 text-right">
+                                {compareTotals.totalA > 0 && r.timeA != null ? `${Math.round((r.timeA / compareTotals.totalA) * 100)}%` : '—'}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    {/* Totales Run / Estaciones / Sesión */}
+                    <div className="border-t dark:border-gray-700 bg-gray-50/70 dark:bg-gray-800/50 px-4 py-3 grid grid-cols-3 gap-2 text-center">
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-pink-600 dark:text-pink-400">🏃 Runs</p>
+                        <p className="text-sm font-black font-mono tabular-nums text-gray-900 dark:text-gray-100">
+                          {formatSecondsToTime(compareTotals.runA)}
+                        </p>
+                        {sessionB && compareTotals.hasB && (
+                          <p className={`text-[11px] font-mono font-bold tabular-nums ${compareTotals.runA - compareTotals.runB < 0 ? 'text-emerald-600' : compareTotals.runA - compareTotals.runB > 0 ? 'text-rose-600' : 'text-gray-400'}`}>
+                            Δ {formatDelta(compareTotals.runA - compareTotals.runB)}
+                          </p>
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400">🏋️ Estaciones</p>
+                        <p className="text-sm font-black font-mono tabular-nums text-gray-900 dark:text-gray-100">
+                          {formatSecondsToTime(compareTotals.stA)}
+                        </p>
+                        {sessionB && compareTotals.hasB && (
+                          <p className={`text-[11px] font-mono font-bold tabular-nums ${compareTotals.stA - compareTotals.stB < 0 ? 'text-emerald-600' : compareTotals.stA - compareTotals.stB > 0 ? 'text-rose-600' : 'text-gray-400'}`}>
+                            Δ {formatDelta(compareTotals.stA - compareTotals.stB)}
+                          </p>
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Total tramos</p>
+                        <p className="text-sm font-black font-mono tabular-nums text-gray-900 dark:text-gray-100">
+                          {formatSecondsToTime(compareTotals.totalA)}
+                        </p>
+                        {sessionB && compareTotals.deltaTotal != null && (
+                          <p className={`text-[11px] font-mono font-bold tabular-nums ${compareTotals.deltaTotal < 0 ? 'text-emerald-600' : compareTotals.deltaTotal > 0 ? 'text-rose-600' : 'text-gray-400'}`}>
+                            Δ {formatDelta(compareTotals.deltaTotal)}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Gráfico de deltas por tramo (solo comparando) */}
+                {sessionB && compareRows.some((r) => r.delta != null) && (
+                  <Card className="border-gray-200 dark:border-gray-700 dark:bg-gray-900 shadow-2xs">
+                    <CardContent className="p-4 space-y-2">
+                      <p className="text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        Diferencia por tramo (A − B · izquierda verde = A más rápida)
+                      </p>
+                      <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
+                        {compareRows.map((r) =>
+                          r.delta == null ? null : (
+                            <div key={r.idx} className="flex items-center gap-2">
+                              <span className="text-[10px] font-bold text-gray-500 w-28 truncate shrink-0">{r.idx + 1}. {r.name}</span>
+                              <div className="flex-1 h-5 relative bg-gray-100 dark:bg-gray-800 rounded-md overflow-hidden flex">
+                                <div className="flex-1 flex justify-end items-center border-r border-gray-300 dark:border-gray-600">
+                                  {r.delta < 0 && (
+                                    <div
+                                      className="h-full bg-emerald-500 rounded-l-md"
+                                      style={{ width: `${Math.max(2, (Math.abs(r.delta) / maxAbsDelta) * 50)}%` }}
+                                    />
+                                  )}
+                                </div>
+                                <div className="flex-1 flex justify-start items-center">
+                                  {r.delta > 0 && (
+                                    <div
+                                      className="h-full bg-rose-500 rounded-r-md"
+                                      style={{ width: `${Math.max(2, (Math.abs(r.delta) / maxAbsDelta) * 50)}%` }}
+                                    />
+                                  )}
+                                </div>
+                              </div>
+                              <span className={`text-[10px] font-mono font-black w-12 text-right tabular-nums ${r.delta < 0 ? 'text-emerald-600' : r.delta > 0 ? 'text-rose-600' : 'text-gray-400'}`}>
+                                {r.delta === 0 ? '=' : formatDelta(r.delta)}
+                              </span>
+                            </div>
+                          )
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            )}
+
             {/* 3. Las 8 Estaciones Oficiales de Hyrox */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
@@ -820,6 +1390,243 @@ export function ProgressCrossfitCardio({ crossfit, hyroxCardio }: ProgressCrossf
                   </Card>
                 ))}
               </div>
+            </div>
+
+            {/* 4. Evolución de tiempos por estación (gráfico) */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div>
+                  <h4 className="text-sm font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                    <TrendingUp className="w-4 h-4 text-purple-600" />
+                    Evolución de Tiempos por Estación
+                  </h4>
+                  <p className="text-xs text-gray-400">Selecciona una estación para ver su curva de tiempos (abajo = más rápido)</p>
+                </div>
+              </div>
+
+              {/* Selector de estación */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+                {hyroxStations.map((st) => {
+                  const isActive = activeStation?.id === st.id;
+                  const hasTimes = (st.history || []).some((h) => h.timeSeconds != null && h.timeSeconds > 0);
+                  return (
+                    <button
+                      key={st.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedStationId(st.id);
+                        setStationHoverIndex(null);
+                      }}
+                      className={`px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition-all cursor-pointer whitespace-nowrap border ${
+                        isActive
+                          ? 'bg-purple-600 text-white border-purple-700 shadow-xs'
+                          : hasTimes
+                          ? 'bg-purple-50 dark:bg-purple-950/30 text-purple-800 dark:text-purple-300 border-purple-200 dark:border-purple-800 hover:bg-purple-100'
+                          : 'bg-gray-100 dark:bg-gray-800 text-gray-400 border-gray-200 dark:border-gray-700 hover:bg-gray-200'
+                      }`}
+                      title={hasTimes ? `${st.name}: ${st.history.filter((h) => h.timeSeconds).length} tiempos` : `${st.name}: sin tiempos todavía`}
+                    >
+                      {st.name}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {activeStation && stationTimeStats && stationTimeSeries.length > 0 ? (
+                <Card className="border-gray-200 dark:border-gray-700 dark:bg-gray-900 shadow-2xs">
+                  <CardHeader className="pb-3 border-b border-gray-100 dark:border-gray-800 bg-purple-50/40 dark:bg-purple-950/20">
+                    <CardTitle className="text-sm font-bold text-gray-900 dark:text-gray-100 flex items-center justify-between flex-wrap gap-2">
+                      <span className="flex items-center gap-2">
+                        <Timer className="w-4 h-4 text-purple-600" />
+                        {activeStation.name}
+                        <span className="text-[11px] font-semibold text-purple-600 dark:text-purple-400">
+                          {activeStation.officialStandard}
+                        </span>
+                      </span>
+                      <span className={`text-xs font-bold px-2.5 py-1 rounded-lg ${
+                        stationTimeStats.improvement > 0
+                          ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300'
+                          : stationTimeStats.improvement < 0
+                          ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300'
+                          : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+                      }`}>
+                        {stationTimeStats.improvement > 0
+                          ? `−${stationTimeStats.improvement}s (−${stationTimeStats.improvementPct}%) de mejora`
+                          : stationTimeStats.improvement < 0
+                          ? `+${Math.abs(stationTimeStats.improvement)}s vs inicio`
+                          : 'Sin variación'}
+                      </span>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-4 sm:p-5 space-y-4">
+                    {/* KPIs de la estación */}
+                    <div className="grid grid-cols-3 gap-2 sm:gap-3 text-center">
+                      <div className="p-3 rounded-xl bg-purple-50/70 dark:bg-purple-950/20 border border-purple-100 dark:border-purple-800/50">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400">Mejor</p>
+                        <p className="text-lg sm:text-xl font-black text-purple-700 dark:text-purple-300 font-mono tabular-nums">
+                          {formatSecondsToTime(stationTimeStats.best)}
+                        </p>
+                      </div>
+                      <div className="p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-800">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Último</p>
+                        <p className="text-lg sm:text-xl font-black text-gray-900 dark:text-gray-100 font-mono tabular-nums">
+                          {formatSecondsToTime(stationTimeStats.latest)}
+                        </p>
+                      </div>
+                      <div className="p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-800">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Registros</p>
+                        <p className="text-lg sm:text-xl font-black text-gray-900 dark:text-gray-100 tabular-nums">
+                          {stationTimeStats.count}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Gráfico SVG */}
+                    <div className="overflow-x-auto">
+                      <svg viewBox={`0 0 ${stationSvg.width} ${stationSvg.height}`} className="w-full h-auto min-w-[500px]">
+                        <defs>
+                          <linearGradient id="hyroxStationGradient" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#a855f7" stopOpacity="0.25" />
+                            <stop offset="100%" stopColor="#a855f7" stopOpacity="0.0" />
+                          </linearGradient>
+                        </defs>
+                        {stationChart.yTicks.map((t, i) => (
+                          <g key={i}>
+                            <line
+                              x1={stationSvg.padLeft}
+                              y1={t.y}
+                              x2={stationSvg.width - stationSvg.padRight}
+                              y2={t.y}
+                              stroke="currentColor"
+                              className="text-gray-200 dark:text-gray-800"
+                              strokeWidth={1}
+                              strokeDasharray={i === 2 ? '0' : '4,4'}
+                            />
+                            <text
+                              x={stationSvg.padLeft - 10}
+                              y={t.y + 3.5}
+                              textAnchor="end"
+                              className="fill-gray-400 dark:fill-gray-500 font-mono text-[10px]"
+                            >
+                              {formatSecondsToTime(t.val)}
+                            </text>
+                          </g>
+                        ))}
+                        {stationChart.points.length > 0 && (
+                          <>
+                            <path d={stationChart.areaD} fill="url(#hyroxStationGradient)" />
+                            {stationChart.points.length > 1 && (
+                              <path
+                                d={stationChart.lineD}
+                                fill="none"
+                                stroke="#9333ea"
+                                strokeWidth={2.5}
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              />
+                            )}
+                          </>
+                        )}
+                        {stationTimeSeries.map((p, i) => {
+                          const pt = stationChart.points[i];
+                          if (!pt) return null;
+                          const show =
+                            stationTimeSeries.length <= 6 ||
+                            i === 0 ||
+                            i === stationTimeSeries.length - 1 ||
+                            i % Math.ceil(stationTimeSeries.length / 5) === 0;
+                          return show ? (
+                            <text
+                              key={i}
+                              x={pt.x}
+                              y={stationSvg.height - 12}
+                              textAnchor="middle"
+                              className="fill-gray-400 dark:fill-gray-500 text-[9px] font-medium"
+                            >
+                              {new Date(p.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
+                            </text>
+                          ) : null;
+                        })}
+                        {stationChart.points.map((pt, i) => {
+                          const isBest = pt.timeSeconds === stationTimeStats.best;
+                          const isHovered = stationHoverIndex === i;
+                          const isLast = i === stationChart.points.length - 1 && stationHoverIndex === null;
+                          return (
+                            <g
+                              key={i}
+                              className="cursor-pointer"
+                              onMouseEnter={() => setStationHoverIndex(i)}
+                              onMouseLeave={() => setStationHoverIndex(null)}
+                            >
+                              <circle cx={pt.x} cy={pt.y} r="18" fill="transparent" />
+                              {(isHovered || isLast) && (
+                                <circle cx={pt.x} cy={pt.y} r="8" fill="#a855f7" opacity="0.3" />
+                              )}
+                              <circle
+                                cx={pt.x}
+                                cy={pt.y}
+                                r={isHovered ? 5 : isBest ? 4.5 : 3.5}
+                                fill={isBest ? '#f59e0b' : '#9333ea'}
+                                stroke="white"
+                                strokeWidth={2}
+                              />
+                            </g>
+                          );
+                        })}
+                      </svg>
+                      {(() => {
+                        const idx = stationHoverIndex ?? stationChart.points.length - 1;
+                        const pt = stationChart.points[idx];
+                        if (!pt) return null;
+                        return (
+                          <div className="bg-gray-900 text-white dark:bg-gray-800 border border-gray-700 rounded-xl p-2.5 text-xs mt-2 max-w-xs">
+                            <p className="font-bold font-mono text-sm">{formatSecondsToTime(pt.timeSeconds)}</p>
+                            <p className="text-[11px] text-gray-300 truncate">{pt.workoutName || activeStation.name}</p>
+                            <p className="text-[10px] text-gray-400">
+                              {new Date(pt.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })}
+                              {pt.timeSeconds === stationTimeStats.best ? ' · 🏆 récord' : ''}
+                            </p>
+                          </div>
+                        );
+                      })()}
+                    </div>
+
+                    {/* Historial completo de la estación */}
+                    <div className="space-y-1.5">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                        Historial ({stationTimeSeries.length})
+                      </span>
+                      <div className="space-y-1 max-h-40 overflow-y-auto pr-1">
+                        {stationTimeSeries.slice().reverse().map((p, i) => (
+                          <div key={i} className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400 px-2 py-1 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/60">
+                            <span className="text-[11px]">
+                              {new Date(p.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })}
+                              {p.workoutName ? ` · ${p.workoutName.slice(0, 24)}` : ''}
+                            </span>
+                            <span className={`font-mono text-[11px] font-bold tabular-nums ${p.timeSeconds === stationTimeStats.best ? 'text-amber-600 dark:text-amber-400' : 'text-gray-900 dark:text-gray-200'}`}>
+                              {formatSecondsToTime(p.timeSeconds)}
+                              {p.timeSeconds === stationTimeStats.best ? ' 🏆' : ''}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : (
+                <Card className="border-dashed bg-gray-50/50 dark:bg-gray-800/30">
+                  <CardContent className="py-8 text-center text-xs text-gray-500 space-y-1">
+                    <p className="font-semibold text-gray-700 dark:text-gray-300">
+                      {activeStation
+                        ? `Sin tiempos registrados en ${activeStation.name} todavía.`
+                        : 'Sin estaciones con tiempos todavía.'}
+                    </p>
+                    <p className="text-[11px] text-gray-400">
+                      Registra el tiempo (m:ss) de cada tramo al finalizar el Hyrox o desde el historial y aquí verás su curva de progresión.
+                    </p>
+                  </CardContent>
+                </Card>
+              )}
             </div>
           </div>
         )}

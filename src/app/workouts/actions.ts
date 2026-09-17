@@ -1671,12 +1671,30 @@ export async function getAdvancedProgressData(userId: string) {
     totalTimeMinutes: number;
     totalTimeSeconds: number | null;
     notes: string | null;
+    // Splits de la sesión en orden de carrera (para la vista "esta sesión" y el comparador A vs B)
+    segments: {
+      name: string;
+      orderIndex: number;
+      distance: number | null;
+      durationSeconds: number | null;
+      weight: number | null;
+      reps: number | null;
+    }[];
   }[] = [];
 
   // Conteo de modalidades separado: CrossFit/Funcional vs Hyrox/Cardio
   // (antes se mezclaban ambos en un único objeto y la distribución salía combinada)
   const crossfitModalityCounts: Record<string, number> = {};
   const hyroxModalityCounts: Record<string, number> = {};
+
+  // Serie histórica de runs cronometrados (para el gráfico de evolución 1000m).
+  // Se calcula en tiempo de lectura, así que los tiempos guardados aparecen sin migración.
+  const hyroxRunsList: {
+    date: string;
+    timeSeconds: number;
+    distance: number | null;
+    workoutName: string;
+  }[] = [];
 
   // Procesar entrenamientos en orden cronológico (del más antiguo al más reciente) para las gráficas
   const chronologicalWorkouts = [...allWorkouts].reverse();
@@ -1771,7 +1789,10 @@ export async function getAdvancedProgressData(userId: string) {
     if (isHyroxOrCardio) {
       totalCardioSessions++;
       const mins = w.totalTimeSeconds ? Math.round(w.totalTimeSeconds / 60) : 0;
-      totalCardioMinutes += mins;
+      // Splits ordenados por orden de carrera para la vista por sesión y comparador
+      const orderedExercises = [...w.exercises].sort(
+        (a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0)
+      );
       hyroxSessionsList.push({
         id: w.id,
         name: w.name,
@@ -1781,6 +1802,16 @@ export async function getAdvancedProgressData(userId: string) {
         totalTimeMinutes: mins,
         totalTimeSeconds: w.totalTimeSeconds || null,
         notes: w.notes || null,
+        segments: orderedExercises.flatMap((we) =>
+          (we.sets || []).map((s: any) => ({
+            name: we.exercise?.name || 'Tramo',
+            orderIndex: we.orderIndex ?? 0,
+            distance: s.distance ?? null,
+            durationSeconds: s.durationSeconds ?? null,
+            weight: s.weight ? Number(s.weight) : null,
+            reps: s.repCount ?? null,
+          }))
+        ),
       });
     }
 
@@ -1881,31 +1912,37 @@ export async function getAdvancedProgressData(userId: string) {
         olympicCategory = 'cleanAndJerk';
       }
 
+      // Nombre normalizado (minúsculas + sin tildes) para que "Balón medicinal",
+      // "tracción", etc. se reconozcan igual que sus variantes sin acento.
+      const exNorm = exLower.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
       // Identificación para Cardio / Ergómetros PBs
       let cardioDiscipline: string | null = null;
-      const isRunning = exLower.includes('correr') || exLower.includes('carrera') || exLower.includes('run') || exLower.includes('running');
-      if (exLower.includes('remo') || exLower.includes('row') || exLower.includes('rower')) cardioDiscipline = 'Remo';
-      else if (exLower.includes('skierg') || exLower.includes('ski erg') || (exLower.includes('ski') && !exLower.includes('skin'))) cardioDiscipline = 'SkiErg';
+      const isRunning = exNorm.includes('correr') || exNorm.includes('carrera') || exNorm.includes('run') || exNorm.includes('running');
+      if (exNorm.includes('remo') || exNorm.includes('row') || exNorm.includes('rower')) cardioDiscipline = 'Remo';
+      else if (exNorm.includes('skierg') || exNorm.includes('ski erg') || (exNorm.includes('ski') && !exNorm.includes('skin'))) cardioDiscipline = 'SkiErg';
       else if (isRunning) cardioDiscipline = 'Running';
-      else if (exLower.includes('bike') || exLower.includes('bicicleta') || exLower.includes('echo bike') || exLower.includes('assault bike')) cardioDiscipline = 'Bike';
+      else if (exNorm.includes('bike') || exNorm.includes('bicicleta') || exNorm.includes('echo bike') || exNorm.includes('assault bike')) cardioDiscipline = 'Bike';
 
       // Identificación para las 8 Estaciones oficiales de Hyrox
+      // (usa el nombre normalizado para ser insensible a tildes y mayúsculas)
+      const inHyroxContext = isHyroxOrCardio || isHyroxWorkout;
       let hyroxStationKey: HyroxStationKey | null = null;
-      if (exLower.includes('skierg') || exLower.includes('ski erg') || (exLower.includes('ski') && !exLower.includes('skin'))) {
+      if (exNorm.includes('skierg') || exNorm.includes('ski erg') || (exNorm.includes('ski') && !exNorm.includes('skin'))) {
         hyroxStationKey = 'skierg';
-      } else if (exLower.includes('sled push') || exLower.includes('empuje de trineo') || exLower.includes('trineo empuje') || (exLower.includes('trineo') && exLower.includes('empuj'))) {
+      } else if (exNorm.includes('sled push') || exNorm.includes('empuje de trineo') || exNorm.includes('trineo empuje') || (exNorm.includes('trineo') && exNorm.includes('empuj'))) {
         hyroxStationKey = 'sledPush';
-      } else if (exLower.includes('sled pull') || exLower.includes('arrastre de trineo') || exLower.includes('trineo traccion') || exLower.includes('trineo tracción') || (exLower.includes('trineo') && exLower.includes('jalar'))) {
+      } else if (exNorm.includes('sled pull') || exNorm.includes('arrastre de trineo') || exNorm.includes('trineo traccion') || (exNorm.includes('trineo') && exNorm.includes('jalar'))) {
         hyroxStationKey = 'sledPull';
-      } else if (exLower.includes('burpee broad jump') || (exLower.includes('burpee') && exLower.includes('salto')) || exLower.includes('burpee broad') || exLower.includes('burpees broad')) {
+      } else if (exNorm.includes('burpee broad jump') || (exNorm.includes('burpee') && exNorm.includes('salto')) || exNorm.includes('burpee broad') || exNorm.includes('burpees broad') || (inHyroxContext && exNorm.includes('burpee'))) {
         hyroxStationKey = 'burpeeBroadJump';
-      } else if (exLower.includes('remo') || exLower.includes('row') || exLower.includes('rower') || exLower.includes('rowing')) {
+      } else if (exNorm.includes('remo') || exNorm.includes('row') || exNorm.includes('rower') || exNorm.includes('rowing')) {
         hyroxStationKey = 'rowing';
-      } else if (exLower.includes('farmers carry') || exLower.includes('farmer carry') || exLower.includes('paseo del granjero') || exLower.includes('farmers walk')) {
+      } else if (exNorm.includes('farmers carry') || exNorm.includes('farmer carry') || exNorm.includes('paseo del granjero') || exNorm.includes('farmers walk') || exNorm.includes('granjero') || (inHyroxContext && exNorm.includes('carry'))) {
         hyroxStationKey = 'farmersCarry';
-      } else if (exLower.includes('sandbag lunges') || exLower.includes('zancadas saco') || exLower.includes('lunges saco') || exLower.includes('sandbag lunge') || (exLower.includes('zancadas') && exLower.includes('saco'))) {
+      } else if (exNorm.includes('sandbag lunges') || exNorm.includes('zancadas saco') || exNorm.includes('lunges saco') || exNorm.includes('sandbag lunge') || (exNorm.includes('zancadas') && exNorm.includes('saco')) || (inHyroxContext && (exNorm.includes('zancada') || exNorm.includes('lunge')))) {
         hyroxStationKey = 'sandbagLunges';
-      } else if (exLower.includes('wall ball') || exLower.includes('wall balls') || exLower.includes('balon medicinal') || exLower.includes('balón medicinal')) {
+      } else if (exNorm.includes('wall ball') || exNorm.includes('wallball') || exNorm.includes('balon medicinal')) {
         hyroxStationKey = 'wallBalls';
       }
 
@@ -1919,6 +1956,12 @@ export async function getAdvancedProgressData(userId: string) {
         if (isHyroxOrCardio || isHyroxWorkout) {
           if (isRunning && durVal > 0) {
             totalHyroxRunSeconds += durVal;
+            hyroxRunsList.push({
+              date: new Date(w.startTime).toISOString(),
+              timeSeconds: durVal,
+              distance: distVal > 0 ? distVal : null,
+              workoutName: w.name,
+            });
           } else if (hyroxStationKey && durVal > 0) {
             totalHyroxStationsSeconds += durVal;
           }
@@ -2560,6 +2603,7 @@ export async function getAdvancedProgressData(userId: string) {
       stations: Object.values(hyroxStationsMap),
       events: hyroxEventsList,
       balance: hyroxBalance,
+      runs: hyroxRunsList,
       modalityBreakdown: Object.entries(hyroxModalityCounts).map(([modality, count]) => ({
         modality,
         count,
