@@ -184,6 +184,7 @@ interface ProgressCrossfitCardioProps {
     modalityBreakdown?: {
       modality: string;
       count: number;
+      percentage?: number;
     }[];
   };
 }
@@ -196,10 +197,12 @@ function formatSecondsToTime(seconds: number): string {
 
 export function ProgressCrossfitCardio({ crossfit, hyroxCardio }: ProgressCrossfitCardioProps) {
   const [selectedModalityFilter, setSelectedModalityFilter] = useState<string>('all');
+  const [selectedHyroxModalityFilter, setSelectedHyroxModalityFilter] = useState<string>('all');
   const [activeTab, setActiveTab] = useState<'benchmarks' | 'olympic' | 'hyrox' | 'cardioPbs'>('benchmarks');
   const [benchmarkCategory, setBenchmarkCategory] = useState<'all' | 'official' | 'custom'>('all');
 
   const modalityBreakdown = crossfit.modalityBreakdown || [];
+  const hyroxModalityBreakdown = hyroxCardio.modalityBreakdown || [];
   const fastestForTime = crossfit.fastestForTime || [];
   const rxStats = crossfit.rxStats || { rxWodsCount: 0, scaledWodsCount: 0, totalWods: 0, rxPercentage: 0 };
   const olympic = crossfit.olympic;
@@ -226,19 +229,40 @@ export function ProgressCrossfitCardio({ crossfit, hyroxCardio }: ProgressCrossf
     return benchmarks;
   }, [benchmarks, benchmarkCategory]);
 
-  // Filtrado de WODs por modalidad
+  // Filtrado de WODs por modalidad (solo CrossFit)
   const filteredWods = useMemo(() => {
     if (selectedModalityFilter === 'all') return crossfit.wods;
     return crossfit.wods.filter((w) => w.modality === selectedModalityFilter);
   }, [crossfit.wods, selectedModalityFilter]);
 
-  // Lista única de modalidades registradas para los botones de filtro
-  const allUsedModalities = useMemo(() => {
+  // Filtrado de sesiones Hyrox por modalidad (solo Hyrox/Cardio)
+  const filteredHyroxSessions = useMemo(() => {
+    if (selectedHyroxModalityFilter === 'all') return hyroxCardio.sessions;
+    return hyroxCardio.sessions.filter((s) => s.modality === selectedHyroxModalityFilter);
+  }, [hyroxCardio.sessions, selectedHyroxModalityFilter]);
+
+  // Modalidades separadas por disciplina para no mezclar badges/filtros
+  const crossfitUsedModalities = useMemo(() => {
     const set = new Set<string>();
     for (const w of crossfit.wods) if (w.modality) set.add(w.modality);
+    return Array.from(set).sort();
+  }, [crossfit.wods]);
+
+  const hyroxUsedModalities = useMemo(() => {
+    const set = new Set<string>();
     for (const s of hyroxCardio.sessions) if (s.modality) set.add(s.modality);
     return Array.from(set).sort();
-  }, [crossfit.wods, hyroxCardio.sessions]);
+  }, [hyroxCardio.sessions]);
+
+  // Total combinado solo para la tarjeta resumen "Modalidades Únicas"
+  const allUsedModalities = useMemo(() => {
+    return Array.from(new Set([...crossfitUsedModalities, ...hyroxUsedModalities])).sort();
+  }, [crossfitUsedModalities, hyroxUsedModalities]);
+
+  // Las secciones inferiores son específicas de cada pestaña:
+  // benchmarks/olympic -> stats CrossFit · hyrox -> solo stats Hyrox · cardioPbs -> sin historiales
+  const showCrossfitSections = activeTab === 'benchmarks' || activeTab === 'olympic';
+  const showHyroxSections = activeTab === 'hyrox';
 
   return (
     <div className="space-y-6">
@@ -813,7 +837,8 @@ export function ProgressCrossfitCardio({ crossfit, hyroxCardio }: ProgressCrossf
         )}
       </div>
 
-      {/* ─── 3. DISTRIBUCIÓN POR MODALIDAD & RANKING FOR TIME ─── */}
+      {/* ─── 3. DISTRIBUCIÓN CROSSFIT (solo benchmarks / halterofilia) ─── */}
+      {showCrossfitSections && (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Distribución de Modalidades */}
         <Card className="border-gray-200 dark:border-gray-700 dark:bg-gray-900 shadow-2xs">
@@ -918,9 +943,57 @@ export function ProgressCrossfitCardio({ crossfit, hyroxCardio }: ProgressCrossf
           </CardContent>
         </Card>
       </div>
+      )}
 
-      {/* ─── 4. SECCIÓN HISTORIAL DE WODS & SESIONES ─── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* ─── 3b. DISTRIBUCIÓN HYROX (solo pestaña Hyrox & estaciones) ─── */}
+      {showHyroxSections && (
+        <Card className="border-gray-200 dark:border-gray-700 dark:bg-gray-900 shadow-2xs">
+          <CardHeader className="pb-3 border-b border-gray-100 dark:border-gray-800 bg-purple-50/40 dark:bg-purple-950/20">
+            <CardTitle className="text-sm font-bold text-gray-900 dark:text-gray-100 flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <BarChart3 className="w-4 h-4 text-purple-600" />
+                Distribución por Formato Hyrox / Cardio
+              </span>
+              <span className="text-xs font-normal text-gray-400">
+                {hyroxModalityBreakdown.reduce((acc, m) => acc + m.count, 0)} sesiones categorizadas
+              </span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-4 sm:p-5 space-y-4">
+            {hyroxModalityBreakdown.length === 0 ? (
+              <p className="text-xs text-gray-500 text-center py-6">
+                Aún no has registrado modalidades en sesiones Hyrox / Cardio.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {hyroxModalityBreakdown.map((item) => (
+                  <div key={item.modality} className="space-y-1.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-bold text-gray-800 dark:text-gray-200 flex items-center gap-1.5">
+                        <Flame className="w-3.5 h-3.5 text-purple-500" />
+                        {item.modality}
+                      </span>
+                      <span className="text-gray-500 dark:text-gray-400 font-mono font-semibold">
+                        {item.count} {item.count === 1 ? 'sesión' : 'sesiones'} ({item.percentage ?? 0}%)
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-100 dark:bg-gray-800 rounded-full h-2 overflow-hidden">
+                      <div
+                        className="bg-linear-to-r from-purple-500 to-pink-500 h-2 rounded-full transition-all duration-500"
+                        style={{ width: `${Math.max(4, item.percentage ?? 0)}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ─── 4. HISTORIALES SEPARADOS POR DISCIPLINA ─── */}
+      {showCrossfitSections && (
+      <div className="grid grid-cols-1 gap-6">
         {/* CrossFit WODs */}
         <Card className="border-gray-200 dark:border-gray-700 dark:bg-gray-900 shadow-2xs">
           <CardHeader className="pb-3 border-b border-gray-100 dark:border-gray-800 bg-orange-50/40 dark:bg-orange-950/20">
@@ -930,8 +1003,8 @@ export function ProgressCrossfitCardio({ crossfit, hyroxCardio }: ProgressCrossf
                 Historial de WODs & Sesiones CrossFit
               </CardTitle>
 
-              {/* Filtro rápido por modalidad */}
-              {allUsedModalities.length > 0 && (
+              {/* Filtro rápido por modalidad (solo CrossFit) */}
+              {crossfitUsedModalities.length > 0 && (
                 <div className="flex items-center gap-1 overflow-x-auto pb-0.5">
                   <button
                     type="button"
@@ -944,7 +1017,7 @@ export function ProgressCrossfitCardio({ crossfit, hyroxCardio }: ProgressCrossf
                   >
                     Todos
                   </button>
-                  {allUsedModalities.map((m) => (
+                  {crossfitUsedModalities.map((m) => (
                     <button
                       key={m}
                       type="button"
@@ -1009,22 +1082,58 @@ export function ProgressCrossfitCardio({ crossfit, hyroxCardio }: ProgressCrossf
           </CardContent>
         </Card>
 
-        {/* Hyrox & Endurance */}
+      </div>
+      )}
+
+      {/* ─── 4b. HISTORIAL HYROX (solo pestaña Hyrox & estaciones) ─── */}
+      {showHyroxSections && (
+      <div className="grid grid-cols-1 gap-6">
         <Card className="border-gray-200 dark:border-gray-700 dark:bg-gray-900 shadow-2xs">
           <CardHeader className="pb-3 border-b border-gray-100 dark:border-gray-800 bg-pink-50/40 dark:bg-pink-950/20">
-            <CardTitle className="text-sm font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-              <Heart className="w-4 h-4 text-pink-600" />
-              Sesiones Hyrox & Cardio / Endurance
-            </CardTitle>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <CardTitle className="text-sm font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                <Heart className="w-4 h-4 text-pink-600" />
+                Sesiones Hyrox & Cardio / Endurance
+              </CardTitle>
+              {hyroxUsedModalities.length > 0 && (
+                <div className="flex items-center gap-1 overflow-x-auto pb-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedHyroxModalityFilter('all')}
+                    className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all cursor-pointer whitespace-nowrap ${
+                      selectedHyroxModalityFilter === 'all'
+                        ? 'bg-pink-600 text-white shadow-2xs'
+                        : 'bg-gray-100 dark:bg-gray-800 text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-700'
+                    }`}
+                  >
+                    Todos
+                  </button>
+                  {hyroxUsedModalities.map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setSelectedHyroxModalityFilter(m)}
+                      className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all cursor-pointer whitespace-nowrap ${
+                        selectedHyroxModalityFilter === m
+                          ? 'bg-pink-600 text-white shadow-2xs'
+                          : 'bg-pink-50 dark:bg-pink-950/30 text-pink-700 dark:text-pink-300 border border-pink-200 dark:border-pink-800/40 hover:bg-pink-100'
+                      }`}
+                    >
+                      {m}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </CardHeader>
           <CardContent className="p-4 sm:p-5 space-y-3">
-            {hyroxCardio.sessions.length === 0 ? (
+            {filteredHyroxSessions.length === 0 ? (
               <p className="text-xs text-gray-500 text-center py-6">
-                No hay sesiones de Hyrox o Cardio registradas todavía.
+                No hay sesiones de Hyrox o Cardio {selectedHyroxModalityFilter !== 'all' ? `con modalidad ${selectedHyroxModalityFilter}` : ''} registradas todavía.
               </p>
             ) : (
               <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
-                {hyroxCardio.sessions.map((sess) => (
+                {filteredHyroxSessions.map((sess) => (
                   <div
                     key={sess.id}
                     className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-800 flex items-center justify-between gap-2"
@@ -1055,6 +1164,7 @@ export function ProgressCrossfitCardio({ crossfit, hyroxCardio }: ProgressCrossf
           </CardContent>
         </Card>
       </div>
+      )}
     </div>
   );
 }

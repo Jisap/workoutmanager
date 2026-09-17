@@ -1622,8 +1622,10 @@ export async function getAdvancedProgressData(userId: string) {
     notes: string | null;
   }[] = [];
 
-  // Conteo de modalidades para CrossFit, Hyrox, Funcional y Cardio
-  const modalityCounts: Record<string, number> = {};
+  // Conteo de modalidades separado: CrossFit/Funcional vs Hyrox/Cardio
+  // (antes se mezclaban ambos en un único objeto y la distribución salía combinada)
+  const crossfitModalityCounts: Record<string, number> = {};
+  const hyroxModalityCounts: Record<string, number> = {};
 
   // Procesar entrenamientos en orden cronológico (del más antiguo al más reciente) para las gráficas
   const chronologicalWorkouts = [...allWorkouts].reverse();
@@ -1639,10 +1641,11 @@ export async function getAdvancedProgressData(userId: string) {
       w.type?.name?.toLowerCase().includes('endurance') ||
       w.name?.toLowerCase().includes('hyrox');
 
-    if (isCrossfitOrFuncional || isHyroxOrCardio) {
-      if (w.modality) {
-        modalityCounts[w.modality] = (modalityCounts[w.modality] || 0) + 1;
-      }
+    if (isCrossfitOrFuncional && w.modality) {
+      crossfitModalityCounts[w.modality] = (crossfitModalityCounts[w.modality] || 0) + 1;
+    }
+    if (isHyroxOrCardio && w.modality) {
+      hyroxModalityCounts[w.modality] = (hyroxModalityCounts[w.modality] || 0) + 1;
     }
 
     // Comprobar si las series del WOD fueron Rx
@@ -2480,12 +2483,12 @@ export async function getAdvancedProgressData(userId: string) {
       },
       benchmarks: benchmarksList,
       cardioPBs: cardioPBsList,
-      modalityBreakdown: Object.entries(modalityCounts).map(([modality, count]) => ({
+      modalityBreakdown: Object.entries(crossfitModalityCounts).map(([modality, count]) => ({
         modality,
         count,
         percentage:
-          crossfitWodsList.length + hyroxSessionsList.length > 0
-            ? Math.round((count / (crossfitWodsList.length + hyroxSessionsList.length)) * 100)
+          crossfitWodsList.length > 0
+            ? Math.round((count / crossfitWodsList.length) * 100)
             : 0,
       })),
       fastestForTime: crossfitWodsList
@@ -2506,9 +2509,13 @@ export async function getAdvancedProgressData(userId: string) {
       stations: Object.values(hyroxStationsMap),
       events: hyroxEventsList,
       balance: hyroxBalance,
-      modalityBreakdown: Object.entries(modalityCounts).map(([modality, count]) => ({
+      modalityBreakdown: Object.entries(hyroxModalityCounts).map(([modality, count]) => ({
         modality,
         count,
+        percentage:
+          hyroxSessionsList.length > 0
+            ? Math.round((count / hyroxSessionsList.length) * 100)
+            : 0,
       })),
     },
   };
