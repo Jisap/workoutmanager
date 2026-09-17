@@ -1,7 +1,7 @@
 'use server';
 
 import { db } from '@/lib/db';
-import { workoutTemplates, templateExercises, workouts, workoutExercises, sets, exercises, exerciseCategories } from '@/lib/db/schema';
+import { workoutTemplates, templateExercises, workouts, workoutExercises, sets, exercises, exerciseCategories, type ModalityConfig } from '@/lib/db/schema';
 import { auth } from '@clerk/nextjs/server';
 import { eq, or, isNull, desc, asc, and, sql } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
@@ -10,6 +10,8 @@ export async function saveWorkout(data: {
   workoutId?: number | null;
   typeId: number;
   name: string;
+  modality?: string | null;
+  modalityConfig?: ModalityConfig | null;
   totalTimeSeconds: number;
   notes: string;
   exercises: {
@@ -47,6 +49,8 @@ export async function saveWorkout(data: {
         .set({
           typeId: data.typeId,
           name: data.name,
+          modality: data.modality !== undefined ? data.modality : undefined,
+          modalityConfig: data.modalityConfig !== undefined ? data.modalityConfig : undefined,
           totalTimeSeconds: data.totalTimeSeconds,
           notes: data.notes,
           startTime:
@@ -71,6 +75,8 @@ export async function saveWorkout(data: {
           userId,
           typeId: data.typeId,
           name: data.name,
+          modality: data.modality || null,
+          modalityConfig: data.modalityConfig || null,
           totalTimeSeconds: data.totalTimeSeconds,
           notes: data.notes,
           startTime: new Date(Date.now() - data.totalTimeSeconds * 1000), // Calculamos start time hacia atrás
@@ -295,6 +301,8 @@ export async function saveAsTemplate(data: {
   workoutId: number;
   name: string;
   description?: string;
+  modality?: string | null;
+  modalityConfig?: ModalityConfig | null;
 }) {
   const { userId } = await auth();
   if (!userId) throw new Error('No autorizado');
@@ -323,6 +331,8 @@ export async function saveAsTemplate(data: {
       userId,
       name: data.name,
       description: data.description || null,
+      modality: data.modality !== undefined ? data.modality : (workout.modality || null),
+      modalityConfig: data.modalityConfig !== undefined ? data.modalityConfig : (workout.modalityConfig || null),
       typeId: workout.typeId,
       sourceWorkoutId: workout.id,
     })
@@ -414,6 +424,8 @@ export async function createDirectTemplate(data: {
   name: string;
   description?: string;
   typeId: number;
+  modality?: string | null;
+  modalityConfig?: ModalityConfig | null;
   exercises: {
     exerciseId: number;
     orderIndex: number;
@@ -431,6 +443,8 @@ export async function createDirectTemplate(data: {
       userId,
       name: data.name,
       description: data.description || null,
+      modality: data.modality || null,
+      modalityConfig: data.modalityConfig || null,
       typeId: data.typeId,
     })
     .returning();
@@ -749,6 +763,8 @@ export async function getConsistencyData(userId: string) {
       id: w.id,
       name: w.name,
       notes: w.notes,
+      modality: w.modality || null,
+      modalityConfig: w.modalityConfig || null,
       startTime: w.startTime,
       totalTimeSeconds: w.totalTimeSeconds,
       typeId: w.typeId,
@@ -868,6 +884,8 @@ export async function getWorkoutHistory(userId: string, limit: number = 200) {
       name: w.name,
       typeName: w.type?.name || 'General',
       typeId: w.typeId,
+      modality: w.modality || null,
+      modalityConfig: w.modalityConfig || null,
       templateId: w.templateId ?? null,
       savedAsTemplate: savedWorkoutIds.has(w.id),
       startTime: w.startTime,
@@ -1015,6 +1033,8 @@ export async function getUserTemplates(userId: string) {
       name: t.name,
       typeName: t.type?.name || 'General',
       typeId: t.typeId || 1,
+      modality: t.modality || null,
+      modalityConfig: t.modalityConfig || null,
       createdAt: t.createdAt,
       description: t.description || null,
       exercisesCount: formattedExercises.length,
@@ -1348,7 +1368,10 @@ export async function getAdvancedProgressData(userId: string) {
     id: number;
     name: string;
     date: string;
+    modality: string | null;
+    modalityConfig: ModalityConfig | null;
     totalTimeMinutes: number;
+    totalTimeSeconds: number | null;
     exercisesCount: number;
     notes: string | null;
   }[] = [];
@@ -1360,9 +1383,15 @@ export async function getAdvancedProgressData(userId: string) {
     id: number;
     name: string;
     date: string;
+    modality: string | null;
+    modalityConfig: ModalityConfig | null;
     totalTimeMinutes: number;
+    totalTimeSeconds: number | null;
     notes: string | null;
   }[] = [];
+
+  // Conteo de modalidades para CrossFit, Hyrox, Funcional y Cardio
+  const modalityCounts: Record<string, number> = {};
 
   // Procesar entrenamientos en orden cronológico (del más antiguo al más reciente) para las gráficas
   const chronologicalWorkouts = [...allWorkouts].reverse();
@@ -1377,12 +1406,21 @@ export async function getAdvancedProgressData(userId: string) {
       w.type?.name?.toLowerCase().includes('running') ||
       w.type?.name?.toLowerCase().includes('endurance');
 
+    if (isCrossfitOrFuncional || isHyroxOrCardio) {
+      if (w.modality) {
+        modalityCounts[w.modality] = (modalityCounts[w.modality] || 0) + 1;
+      }
+    }
+
     if (isCrossfitOrFuncional) {
       crossfitWodsList.push({
         id: w.id,
         name: w.name,
         date: new Date(w.startTime).toISOString(),
+        modality: w.modality || null,
+        modalityConfig: w.modalityConfig || null,
         totalTimeMinutes: w.totalTimeSeconds ? Math.round(w.totalTimeSeconds / 60) : 0,
+        totalTimeSeconds: w.totalTimeSeconds || null,
         exercisesCount: w.exercises.length,
         notes: w.notes || null,
       });
@@ -1396,7 +1434,10 @@ export async function getAdvancedProgressData(userId: string) {
         id: w.id,
         name: w.name,
         date: new Date(w.startTime).toISOString(),
+        modality: w.modality || null,
+        modalityConfig: w.modalityConfig || null,
         totalTimeMinutes: mins,
+        totalTimeSeconds: w.totalTimeSeconds || null,
         notes: w.notes || null,
       });
     }
@@ -1564,11 +1605,32 @@ export async function getAdvancedProgressData(userId: string) {
     crossfit: {
       totalWods: crossfitWodsList.length,
       wods: crossfitWodsList.slice(-10).reverse(),
+      modalityBreakdown: Object.entries(modalityCounts).map(([modality, count]) => ({
+        modality,
+        count,
+        percentage:
+          crossfitWodsList.length + hyroxSessionsList.length > 0
+            ? Math.round((count / (crossfitWodsList.length + hyroxSessionsList.length)) * 100)
+            : 0,
+      })),
+      fastestForTime: crossfitWodsList
+        .filter(
+          (w) =>
+            (w.modality?.toLowerCase().includes('time') || w.modality?.toLowerCase().includes('afap')) &&
+            w.totalTimeSeconds &&
+            w.totalTimeSeconds > 0
+        )
+        .sort((a, b) => (a.totalTimeSeconds || 0) - (b.totalTimeSeconds || 0))
+        .slice(0, 5),
     },
     hyroxCardio: {
       totalMinutes: totalCardioMinutes,
       totalSessions: totalCardioSessions,
       sessions: hyroxSessionsList.slice(-10).reverse(),
+      modalityBreakdown: Object.entries(modalityCounts).map(([modality, count]) => ({
+        modality,
+        count,
+      })),
     },
   };
 }

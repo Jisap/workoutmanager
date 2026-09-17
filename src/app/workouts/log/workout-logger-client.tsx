@@ -9,9 +9,23 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { ExerciseCombobox, type ExerciseOption } from '@/components/workout/exercise-combobox';
-import { Plus, Trash2, Clock, Check, ChevronDown, ChevronUp, Pencil, RotateCcw, Bookmark, Sparkles, Loader2, Play, Save } from 'lucide-react';
+import { Plus, Trash2, Clock, Check, ChevronDown, ChevronUp, Pencil, RotateCcw, Bookmark, Sparkles, Loader2, Play, Save, Flame, Timer, Activity, TrendingUp, Layers, Zap } from 'lucide-react';
 import { saveWorkout, saveAsTemplate as saveAsTemplateAction, createDirectTemplate } from '../actions';
 import { CreateExerciseDialog, type Category } from '@/components/workout/create-exercise-dialog';
+import { type ModalityConfig } from '@/lib/db/schema';
+import { ModalityConfigPanel } from '@/components/workout/modality-config-panel';
+import { formatModalitySummary } from '@/lib/modality-utils';
+
+export const MODALITY_OPTIONS = [
+  { id: 'For Time', label: 'For Time', icon: Timer, desc: 'Completar todo el trabajo en el menor tiempo' },
+  { id: 'AMRAP', label: 'AMRAP', icon: Flame, desc: 'Máximas rondas / reps en tiempo límite' },
+  { id: 'EMOM', label: 'EMOM', icon: Clock, desc: 'Cada minuto al minuto' },
+  { id: 'AFAP', label: 'AFAP', icon: Zap, desc: 'A máxima velocidad posible' },
+  { id: 'TABATA', label: 'TABATA', icon: Activity, desc: '8 rondas: 20s trabajo / 10s descanso' },
+  { id: 'HIIT', label: 'HIIT / Intervalos', icon: RotateCcw, desc: 'Entrenamiento interválico de alta intensidad' },
+  { id: 'Chipper', label: 'Chipper', icon: Layers, desc: 'Secuencia larga a completar una vez' },
+  { id: 'Ladder', label: 'Ladder / Escalera', icon: TrendingUp, desc: 'Escalada progresiva de repeticiones' },
+];
 
 // Tipos locales para el estado
 type LocalSet = {
@@ -48,6 +62,8 @@ interface WorkoutLoggerClientProps {
   initialExercisesState?: any[];
   initialName?: string;
   initialNotes?: string;
+  initialModality?: string | null;
+  initialModalityConfig?: ModalityConfig | null;
   workoutId?: number | null;
 }
 
@@ -60,12 +76,85 @@ export function WorkoutLoggerClient({
   initialExercisesState = [],
   initialName = 'Entrenamiento Libre',
   initialNotes = '',
+  initialModality = null,
+  initialModalityConfig = null,
   workoutId = null,
 }: WorkoutLoggerClientProps) {
   const router = useRouter();
 
+  // Comprobar si el tipo de entrenamiento actual requiere modalidad (CrossFit, Hyrox, Funcional, Cardio...)
+  const currentSelectedType = workoutTypes.find((t) => t.id.toString() === typeId) || null;
+  const currentTypeNameLower = (currentSelectedType?.name || initialName || '').toLowerCase();
+  const requiresModality =
+    currentTypeNameLower.includes('crossfit') ||
+    currentTypeNameLower.includes('hyrox') ||
+    currentTypeNameLower.includes('funcional') ||
+    currentTypeNameLower.includes('cardio') ||
+    currentTypeNameLower.includes('running') ||
+    currentTypeNameLower.includes('endurance') ||
+    currentTypeNameLower.includes('wod');
+
   const [availableExercisesList, setAvailableExercisesList] = useState<AvailableExercise[]>(availableExercises);
   const [typeName, setTypeName] = useState(initialName);
+  const [modality, setModality] = useState<string | null>(
+    initialModality || (requiresModality ? 'For Time' : null)
+  );
+  const [modalityConfig, setModalityConfig] = useState<ModalityConfig>(() => {
+    if (initialModalityConfig) return initialModalityConfig;
+    return {
+      timeCapMinutes: 20,
+      intervalMinutes: 1,
+      totalMinutes: 12,
+      workSeconds: 20,
+      restSeconds: 10,
+      rounds: 8,
+      sets: 1,
+      restBetweenSetsSeconds: 60,
+      repScheme: '21-15-9',
+    };
+  });
+
+  const handleSelectModality = (newModality: string) => {
+    setModality(newModality);
+    setModalityConfig((prev) => {
+      switch (newModality) {
+        case 'AMRAP':
+          return { ...prev, timeCapMinutes: prev.timeCapMinutes || 15 };
+        case 'For Time':
+        case 'AFAP':
+        case 'Chipper':
+          return { ...prev, timeCapMinutes: prev.timeCapMinutes || 20 };
+        case 'EMOM':
+          return { ...prev, intervalMinutes: prev.intervalMinutes || 1, totalMinutes: prev.totalMinutes || 12 };
+        case 'TABATA':
+          return {
+            ...prev,
+            workSeconds: prev.workSeconds ?? 20,
+            restSeconds: prev.restSeconds ?? 10,
+            rounds: prev.rounds ?? 8,
+            sets: prev.sets ?? 1,
+          };
+        case 'HIIT':
+          return {
+            ...prev,
+            workSeconds: prev.workSeconds ?? 40,
+            restSeconds: prev.restSeconds ?? 20,
+            rounds: prev.rounds ?? 5,
+            sets: prev.sets ?? 3,
+            restBetweenSetsSeconds: prev.restBetweenSetsSeconds ?? 60,
+          };
+        case 'Ladder':
+          return {
+            ...prev,
+            repScheme: prev.repScheme || '21-15-9',
+            timeCapMinutes: prev.timeCapMinutes || 15,
+          };
+        default:
+          return prev;
+      }
+    });
+  };
+
   const [isEditingName, setIsEditingName] = useState(false);
   const [exercises, setExercises] = useState<LocalExercise[]>([]);
   const [isFinishDialogOpen, setIsFinishDialogOpen] = useState(false);
@@ -293,6 +382,8 @@ export function WorkoutLoggerClient({
         workoutId: currentWorkoutId,
         typeId: parseInt(typeId || '1', 10),
         name: typeName,
+        modality: requiresModality ? modality : null,
+        modalityConfig: requiresModality && modality ? modalityConfig : null,
         totalTimeSeconds: 0, // 0 = Guardado sin finalizar / En progreso
         notes,
         exercises: exercises.map((ex, index) => ({
@@ -329,6 +420,8 @@ export function WorkoutLoggerClient({
         workoutId: currentWorkoutId,
         typeId: parseInt(typeId || '1', 10),
         name: typeName,
+        modality: requiresModality ? modality : null,
+        modalityConfig: requiresModality && modality ? modalityConfig : null,
         totalTimeSeconds: (parseInt(totalTimeMinutes, 10) || 0) * 60,
         notes,
         exercises: exercises.map((ex, index) => ({
@@ -351,6 +444,8 @@ export function WorkoutLoggerClient({
         await saveAsTemplateAction({
           workoutId: result.workoutId,
           name: templateName,
+          modality: requiresModality ? modality : null,
+          modalityConfig: requiresModality && modality ? modalityConfig : null,
         });
       }
 
@@ -407,6 +502,8 @@ export function WorkoutLoggerClient({
         name: directTemplateName.trim(),
         description: directTemplateDescription.trim() || undefined,
         typeId: directTemplateTypeId,
+        modality: requiresModality ? modality : null,
+        modalityConfig: requiresModality && modality ? modalityConfig : null,
         exercises: templateExercisesPayload,
       });
 
@@ -483,6 +580,12 @@ export function WorkoutLoggerClient({
                 ? 'Configura los ejercicios y cargas objetivo de la plantilla'
                 : 'Registra tus series y repeticiones'}
             </p>
+            {requiresModality && modality && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-orange-100 dark:bg-orange-950/40 text-orange-800 dark:text-orange-300 border border-orange-200 dark:border-orange-800">
+                <Flame className="w-2.5 h-2.5" />
+                {formatModalitySummary(modality, modalityConfig)}
+              </span>
+            )}
             {currentWorkoutId && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
                 <Save className="w-2.5 h-2.5" />
@@ -583,6 +686,57 @@ export function WorkoutLoggerClient({
           )}
         </div>
       </div>
+
+      {/* ─── SELECTOR DE MODALIDAD (CrossFit, Hyrox, Funcional, Cardio) ─── */}
+      {requiresModality && (
+        <div className="space-y-3">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl border border-orange-200/80 dark:border-orange-900/40 p-3.5 sm:p-4 shadow-xs space-y-2.5">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-orange-500 animate-pulse" />
+                <h3 className="text-xs font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">
+                  Modalidad de la Sesión / WOD
+                </h3>
+              </div>
+              <span className="text-[11px] text-gray-400 font-medium">
+                Selecciona el formato para las métricas y rankings
+              </span>
+            </div>
+
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
+              {MODALITY_OPTIONS.map((m) => {
+                const Icon = m.icon;
+                const isSelected = modality === m.id;
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => handleSelectModality(m.id)}
+                    title={m.desc}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 border ${
+                      isSelected
+                        ? 'bg-orange-500 text-white border-orange-600 shadow-xs'
+                        : 'bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:bg-orange-50 dark:hover:bg-orange-950/20 hover:text-orange-600'
+                    }`}
+                  >
+                    <Icon className="w-3.5 h-3.5" />
+                    <span>{m.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Panel de Inputs y Tiempos de Ejecución Personalizados */}
+          {modality && (
+            <ModalityConfigPanel
+              modality={modality}
+              config={modalityConfig}
+              onChange={setModalityConfig}
+            />
+          )}
+        </div>
+      )}
 
       {/* Banner de Modo Planificación */}
       {mode === 'new-template' && (

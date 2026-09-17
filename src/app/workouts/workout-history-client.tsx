@@ -38,6 +38,8 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { deleteWorkout, deleteWorkoutTemplate, saveAsTemplate, updateWorkout, updateWorkoutTemplate } from './actions';
+import { type ModalityConfig } from '@/lib/db/schema';
+import { formatModalitySummary } from '@/lib/modality-utils';
 
 // ---------- Types ----------
 export interface WorkoutHistoryItem {
@@ -52,6 +54,8 @@ export interface WorkoutHistoryItem {
   notes: string | null;
   totalVolume: number;
   totalSets: number;
+  modality?: string | null;
+  modalityConfig?: ModalityConfig | null;
   exercisesSummary: {
     name: string;
     setsCount: number;
@@ -72,6 +76,8 @@ export interface UserTemplateItem {
   name: string;
   typeName: string;
   typeId: number;
+  modality?: string | null;
+  modalityConfig?: ModalityConfig | null;
   createdAt: Date | string;
   description: string | null;
   exercisesCount: number;
@@ -166,6 +172,12 @@ function WorkoutDetailModal({
                 <TypeIcon className="w-3 h-3" />
                 {workout.typeName}
               </span>
+              {workout.modality && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-orange-100 dark:bg-orange-950/40 text-orange-800 dark:text-orange-300 border border-orange-200 dark:border-orange-800">
+                  <Flame className="w-2.5 h-2.5" />
+                  {formatModalitySummary(workout.modality, workout.modalityConfig)}
+                </span>
+              )}
               {workout.totalTimeSeconds && workout.totalTimeSeconds > 0 ? (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
                   <Check className="w-2.5 h-2.5 stroke-[3]" /> Finalizado
@@ -692,6 +704,7 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
   const [workouts, setWorkouts] = useState<WorkoutHistoryItem[]>(history);
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState<string>('all');
+  const [filterModality, setFilterModality] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<'all' | 'finished' | 'draft'>('all');
   const [selectedWorkout, setSelectedWorkout] = useState<WorkoutHistoryItem | null>(null);
   const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
@@ -789,10 +802,20 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
     return Array.from(set).sort();
   }, [workouts]);
 
+  // Unique modalities for filter dropdown
+  const availableModalities = useMemo(() => {
+    const set = new Set<string>();
+    for (const w of workouts) {
+      if (w.modality) set.add(w.modality);
+    }
+    return Array.from(set).sort();
+  }, [workouts]);
+
   // Filtered workouts list
   const filteredWorkouts = useMemo(() => {
     return workouts.filter((w) => {
       const matchType = filterType === 'all' || w.typeName === filterType;
+      const matchModality = filterModality === 'all' || w.modality === filterModality;
       const isFinished = !!(w.totalTimeSeconds && w.totalTimeSeconds > 0);
       const matchStatus =
         filterStatus === 'all' ||
@@ -802,9 +825,9 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
         search.trim() === '' ||
         w.name.toLowerCase().includes(search.toLowerCase()) ||
         w.exercisesSummary.some((e) => e.name.toLowerCase().includes(search.toLowerCase()));
-      return matchType && matchStatus && matchSearch;
+      return matchType && matchModality && matchStatus && matchSearch;
     });
-  }, [workouts, search, filterType, filterStatus]);
+  }, [workouts, search, filterType, filterModality, filterStatus]);
 
   // Filtered templates list
   const filteredTemplates = useMemo(() => {
@@ -1085,6 +1108,26 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                   <ChevronRight className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 dark:text-gray-500 rotate-90 pointer-events-none" />
                 </div>
 
+                {/* Filter by Modality */}
+                {availableModalities.length > 0 && (
+                  <div className="relative shrink-0 flex-1 sm:flex-initial">
+                    <Flame className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-orange-500 pointer-events-none" />
+                    <select
+                      value={filterModality}
+                      onChange={(e) => setFilterModality(e.target.value)}
+                      className="w-full sm:w-auto appearance-none pl-8 pr-8 py-2 text-sm border border-orange-200 dark:border-orange-800/60 rounded-xl bg-orange-50/40 dark:bg-orange-950/20 hover:bg-orange-50 dark:hover:bg-orange-950/30 focus:bg-white dark:focus:bg-gray-800 shadow-2xs focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500 transition-all cursor-pointer font-medium text-orange-800 dark:text-orange-300"
+                    >
+                      <option value="all">Todas las modalidades</option>
+                      {availableModalities.map((m) => (
+                        <option key={m} value={m}>
+                          {m}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronRight className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-orange-400 rotate-90 pointer-events-none" />
+                  </div>
+                )}
+
                 {/* View Switcher (Table vs Cards) */}
                 <div className="flex items-center bg-gray-100 dark:bg-gray-800 p-1 rounded-xl border border-gray-200 dark:border-gray-700 shrink-0">
                   <button
@@ -1278,14 +1321,22 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                             </div>
                           </td>
 
-                          {/* Tipo */}
+                          {/* Tipo y Modalidad */}
                           <td className="py-3 px-3 whitespace-nowrap">
-                            <span
-                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide border ${style.badge}`}
-                            >
-                              <TypeIcon className="w-2.5 h-2.5" />
-                              {workout.typeName}
-                            </span>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span
+                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide border ${style.badge}`}
+                              >
+                                <TypeIcon className="w-2.5 h-2.5" />
+                                {workout.typeName}
+                              </span>
+                              {workout.modality && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-100 dark:bg-orange-950/40 text-orange-800 dark:text-orange-300 border border-orange-200 dark:border-orange-800 shrink-0">
+                                  <Flame className="w-2.5 h-2.5" />
+                                  {formatModalitySummary(workout.modality, workout.modalityConfig)}
+                                </span>
+                              )}
+                            </div>
                           </td>
 
                           {/* Estado / Duración */}
@@ -1500,6 +1551,12 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                                         <TypeIcon className="w-2.5 h-2.5" />
                                         {workout.typeName}
                                       </span>
+                                      {workout.modality && (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-orange-100 dark:bg-orange-950/40 text-orange-800 dark:text-orange-300 border border-orange-200 dark:border-orange-800 shrink-0">
+                                          <Flame className="w-2 h-2" />
+                                          {formatModalitySummary(workout.modality, workout.modalityConfig)}
+                                        </span>
+                                      )}
                                       {workout.totalTimeSeconds && workout.totalTimeSeconds > 0 ? (
                                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
                                           <Check className="w-2 h-2 stroke-[3]" /> Finalizado

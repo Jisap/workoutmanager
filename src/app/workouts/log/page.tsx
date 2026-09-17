@@ -9,7 +9,7 @@ import { getTemplateData, getLastWorkoutData, getWorkoutData, getAvailableExerci
 export default async function WorkoutLogPage({
   searchParams,
 }: {
-  searchParams: Promise<{ mode?: string; typeId?: string; templateId?: string; workoutId?: string }>;
+  searchParams: Promise<{ mode?: string; typeId?: string; templateId?: string; workoutId?: string; modality?: string }>;
 }) {
   const { userId } = await auth();
   if (!userId) redirect('/sign-in');
@@ -32,6 +32,8 @@ export default async function WorkoutLogPage({
   let currentTypeId = typeId ? parseInt(typeId, 10) : 1;
   let activeWorkoutId: number | null = null;
   let initialNotes = '';
+  let initialModality: string | null = params.modality || null;
+  let initialModalityConfig: any = null;
 
   // Obtener el nombre del tipo de entrenamiento
   if ((mode === 'free' || mode === 'new-template') && typeId) {
@@ -46,6 +48,8 @@ export default async function WorkoutLogPage({
     if (template) {
       workoutName = template.name;
       currentTypeId = template.typeId || 1;
+      initialModality = template.modality || initialModality;
+      initialModalityConfig = template.modalityConfig || null;
 
       const groupedExercises: { exerciseId: number; name: string; sets: any[] }[] = [];
       for (const ex of template.exercises) {
@@ -88,6 +92,9 @@ export default async function WorkoutLogPage({
     if (targetWorkout) {
       const isDraftWorkout =
         !targetWorkout.totalTimeSeconds || targetWorkout.totalTimeSeconds === 0;
+
+      initialModality = targetWorkout.modality || initialModality;
+      initialModalityConfig = targetWorkout.modalityConfig || null;
 
       // Si es un entrenamiento guardado sin finalizar o venimos explícitamente a reanudar/editar
       if (isDraftWorkout || mode === 'resume' || mode === 'edit') {
@@ -136,6 +143,8 @@ export default async function WorkoutLogPage({
       initialExercisesState={initialExercisesState}
       initialName={workoutName}
       initialNotes={initialNotes}
+      initialModality={initialModality}
+      initialModalityConfig={initialModalityConfig}
       workoutId={activeWorkoutId}
     />
   );

@@ -26,6 +26,8 @@ import {
   BarChart2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { type ModalityConfig } from '@/lib/db/schema';
+import { formatModalitySummary } from '@/lib/modality-utils';
 
 export interface SetDetailPreview {
   setNumber: number;
@@ -58,6 +60,8 @@ export interface SerializedWorkout {
   id: number;
   name: string;
   notes: string | null;
+  modality?: string | null;
+  modalityConfig?: ModalityConfig | null;
   startTime: Date | string;
   totalTimeSeconds: number | null;
   typeId: number;
@@ -71,6 +75,8 @@ export interface SerializedTemplate {
   id: number;
   name: string;
   description: string | null;
+  modality?: string | null;
+  modalityConfig?: ModalityConfig | null;
   typeId: number | null;
   typeName?: string;
   createdAt: Date | string;
@@ -362,14 +368,22 @@ export function WorkoutQuickSelector({
                             {item.name}
                           </span>
                         </div>
-                        {item.typeName && (
-                          <span
-                            className={`inline-flex items-center gap-1 px-1.5 py-0.2 rounded-md text-[10px] font-bold uppercase tracking-wide border ${typeStyle.badge}`}
-                          >
-                            <TypeIcon className="w-2.5 h-2.5" />
-                            {item.typeName}
-                          </span>
-                        )}
+                        <div className="flex items-center gap-1 flex-wrap">
+                          {item.typeName && (
+                            <span
+                              className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide border ${typeStyle.badge}`}
+                            >
+                              <TypeIcon className="w-2.5 h-2.5" />
+                              {item.typeName}
+                            </span>
+                          )}
+                          {item.modality && (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-orange-100 dark:bg-orange-950/40 text-orange-800 dark:text-orange-300 border border-orange-200 dark:border-orange-800 shrink-0">
+                              <Flame className="w-2.5 h-2.5" />
+                              {formatModalitySummary(item.modality, item.modalityConfig)}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </td>
 
@@ -585,6 +599,15 @@ export function WorkoutQuickSelector({
                 {(selectedWorkout?.typeName || selectedTemplate?.typeName) && (
                   <span className="px-2 py-0.5 text-[11px] font-bold rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300">
                     {selectedWorkout?.typeName || selectedTemplate?.typeName}
+                  </span>
+                )}
+                {(selectedWorkout?.modality || selectedTemplate?.modality) && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-bold rounded-full bg-orange-100 dark:bg-orange-950/40 text-orange-800 dark:text-orange-300 border border-orange-200 dark:border-orange-800">
+                    <Flame className="w-2.5 h-2.5" />
+                    {formatModalitySummary(
+                      selectedWorkout?.modality || selectedTemplate?.modality,
+                      selectedWorkout?.modalityConfig || selectedTemplate?.modalityConfig
+                    )}
                   </span>
                 )}
               </div>

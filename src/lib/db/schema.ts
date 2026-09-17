@@ -1,5 +1,22 @@
-import { pgTable, serial, text, integer, timestamp, boolean, real } from 'drizzle-orm/pg-core';
+import { pgTable, serial, text, integer, timestamp, boolean, real, jsonb } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
+
+export interface ModalityConfig {
+  timeCapMinutes?: number;
+  timeCapSeconds?: number;
+  // EMOM
+  intervalMinutes?: number; // 1 = Every 1 min (EMOM), 2 = Every 2 min (E2MOM), etc.
+  totalMinutes?: number;
+  // TABATA & HIIT
+  workSeconds?: number;
+  restSeconds?: number;
+  rounds?: number;
+  sets?: number;
+  restBetweenSetsSeconds?: number;
+  // Ladder
+  repScheme?: string; // e.g. "21-15-9" or "10 to 1"
+  notes?: string;
+}
 
 // 1. Tipos de Entrenamiento (Musculación, CrossFit, Hyrox, Cardio...)
 export const workoutTypes = pgTable('workout_types', {
@@ -34,6 +51,8 @@ export const workoutTemplates = pgTable('workout_templates', {
   userId: text('user_id').notNull(), // Clerk ID
   sourceWorkoutId: integer('source_workout_id'), // Para saber de qué entrenamiento real se copió
   description: text('description'),
+  modality: text('modality'), // AMRAP, For Time, EMOM, AFAP, TABATA, HIIT / Intervalos, Chipper, Ladder...
+  modalityConfig: jsonb('modality_config').$type<ModalityConfig>(),
   isPublic: boolean('is_public').default(false),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
@@ -57,6 +76,8 @@ export const workouts = pgTable('workouts', {
   templateId: integer('template_id').references(() => workoutTemplates.id),
   typeId: integer('type_id').references(() => workoutTypes.id).notNull(),
   name: text('name').notNull(),
+  modality: text('modality'), // AMRAP, For Time, EMOM, AFAP, TABATA, HIIT / Intervalos, Chipper, Ladder...
+  modalityConfig: jsonb('modality_config').$type<ModalityConfig>(),
   startTime: timestamp('start_time').defaultNow().notNull(),
   endTime: timestamp('end_time'),
   totalTimeSeconds: integer('total_time_seconds'),
