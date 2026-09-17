@@ -1818,15 +1818,59 @@ export async function getAdvancedProgressData(userId: string) {
     asymmetryList,
   };
 
-  // SBD Total
-  const sbdTotal =
-    big3Data.squat.estimated1RM +
-    big3Data.bench.estimated1RM +
-    big3Data.deadlift.estimated1RM;
+  // SBD Total & Proporciones
+  const squatEst = big3Data.squat.estimated1RM;
+  const benchEst = big3Data.bench.estimated1RM;
+  const deadliftEst = big3Data.deadlift.estimated1RM;
+  const sbdTotal = squatEst + benchEst + deadliftEst;
   const sbdRealTotal =
     big3Data.squat.maxWeightReal +
     big3Data.bench.maxWeightReal +
     big3Data.deadlift.maxWeightReal;
+
+  const squatPct = sbdTotal > 0 ? Math.round((squatEst / sbdTotal) * 100) : 0;
+  const benchPct = sbdTotal > 0 ? Math.round((benchEst / sbdTotal) * 100) : 0;
+  const deadliftPct = sbdTotal > 0 ? Math.round((deadliftEst / sbdTotal) * 100) : 0;
+
+  let balanceStatus = 'Equilibrado';
+  let balanceMessage = 'Proporción armónica en los 3 movimientos según estándares anatómicos de fuerza.';
+  let balanceType: 'balanced' | 'lagging_bench' | 'lagging_squat' | 'lagging_deadlift' | 'dominant' = 'balanced';
+
+  if (sbdTotal > 0) {
+    if (benchPct > 0 && benchPct < 20) {
+      balanceStatus = 'Press de Banca rezagado';
+      balanceMessage = `El Press de Banca representa el ${benchPct}% del total SBD (estándar óptimo: ~25%). Considera aumentar la frecuencia o volumen de empuje.`;
+      balanceType = 'lagging_bench';
+    } else if (squatPct > 0 && squatPct < 28) {
+      balanceStatus = 'Sentadilla rezagada';
+      balanceMessage = `La Sentadilla representa el ${squatPct}% del total SBD (estándar óptimo: ~35%). Mayor volumen o frecuencia de pierna recomendado.`;
+      balanceType = 'lagging_squat';
+    } else if (deadliftPct > 0 && deadliftPct < 32) {
+      balanceStatus = 'Peso Muerto rezagado';
+      balanceMessage = `El Peso Muerto representa el ${deadliftPct}% del total SBD (estándar óptimo: ~40%). Recomendado priorizar tracción pesada y cadena posterior.`;
+      balanceType = 'lagging_deadlift';
+    } else if (benchPct > 32 || squatPct > 44 || deadliftPct > 50) {
+      balanceStatus = 'Especialización marcada';
+      balanceMessage = 'Existe una marcada dominancia en uno de los tres movimientos respecto a la media de powerlifting.';
+      balanceType = 'dominant';
+    }
+  }
+
+  // Evolución temporal consolidada para gráficas (mejor marca de cada día)
+  const getDailyBestHistory = (history: typeof big3Data.squat.history) => {
+    const dailyMap: Record<string, { date: string; weight: number; reps: number; estimated1RM: number; workoutName: string }> = {};
+    for (const h of history) {
+      const dayKey = h.date.split('T')[0];
+      if (!dailyMap[dayKey] || h.estimated1RM > dailyMap[dayKey].estimated1RM) {
+        dailyMap[dayKey] = h;
+      }
+    }
+    return Object.values(dailyMap).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  };
+
+  const squatDailyHistory = getDailyBestHistory(big3Data.squat.history);
+  const benchDailyHistory = getDailyBestHistory(big3Data.bench.history);
+  const deadliftDailyHistory = getDailyBestHistory(big3Data.deadlift.history);
 
   return {
     general: {
@@ -1848,11 +1892,20 @@ export async function getAdvancedProgressData(userId: string) {
       avanzado: musculacionAvanzado,
     },
     powerlifting: {
-      squat: big3Data.squat,
-      bench: big3Data.bench,
-      deadlift: big3Data.deadlift,
+      squat: { ...big3Data.squat, dailyHistory: squatDailyHistory },
+      bench: { ...big3Data.bench, dailyHistory: benchDailyHistory },
+      deadlift: { ...big3Data.deadlift, dailyHistory: deadliftDailyHistory },
       sbdTotal,
       sbdRealTotal,
+      proportions: {
+        squatPct,
+        benchPct,
+        deadliftPct,
+        idealRatios: { squat: 35, bench: 25, deadlift: 40 },
+        balanceStatus,
+        balanceMessage,
+        balanceType,
+      },
     },
     crossfit: {
       totalWods: crossfitWodsList.length,
