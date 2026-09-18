@@ -12,7 +12,7 @@ interface FAQItem {
 const faqs: FAQItem[] = [
   {
     question: '¿En qué se diferencia Workout Manager de una app convencional o un bloc de notas?',
-    answer: 'La mayoría de apps se limitan a guardar números aislados. Workout Manager está estructurado con precisión biomecánica: calcula tu 1RM estimado en tiempo real usando fórmulas científicas (Epley/Brzycki), registra RPE/RIR, tempo bajo tensión (ej. 3-1-X-0), cataloga ejercicios por grupo muscular y proyecta tus curvas de sobrecarga progresiva sin publicidad ni fricción.',
+    answer: 'La mayoría de apps se limitan a guardar números aislados. Workout Manager está estructurado con precisión biomecánica: calcula tu 1RM estimado en tiempo real con la fórmula Epley, registra RPE/RIR, tempo bajo tensión (ej. 3-1-X-0), cataloga ejercicios por grupo muscular y proyecta tus curvas de sobrecarga progresiva sin publicidad ni fricción.',
     icon: Zap,
   },
   {
@@ -29,6 +29,11 @@ const faqs: FAQItem[] = [
     question: '¿Funciona de manera óptima en teléfonos móviles durante el gimnasio?',
     answer: 'Absolutamente. La interfaz ha sido diseñada mobile-first pensando en su uso ágil en la sala de pesas: botones numéricos rápidos, selectores de RPE táctiles y acceso inmediato a tu historial de levantamientos sin menús innecesarios.',
     icon: Smartphone,
+  },
+  {
+    question: '¿Puedo seguir benchmarks oficiales como Fran o Murph, y mi peso corporal?',
+    answer: 'Sí. Tienes un catálogo de 24 WODs oficiales (Girls, Héroes y clásicos) que se carga en un clic con sus cargas Rx; el sistema agrupa tus intentos, calcula tu mejora de tiempo y separa marcas Rx de Scaled. Además puedes registrar tu peso, % de grasa, masa muscular, IMC y perímetros, con gráfica de evolución y lectura automática de peso frente a volumen entrenado.',
+    icon: Zap,
   },
   {
     question: '¿Mis datos están seguros y sincronizados en la nube?',

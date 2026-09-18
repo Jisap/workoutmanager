@@ -27,7 +27,9 @@ import {
   ArrowUpRight,
   Flame,
   Award,
-  Layers
+  Layers,
+  Scale,
+  Trophy
 } from 'lucide-react';
 import { InteractiveHeroShowcase } from '@/components/landing/interactive-hero-showcase';
 import { LandingFAQ } from '@/components/landing/landing-faq';
@@ -87,8 +89,8 @@ export default async function Home() {
 
           {/* Subtitle */}
           <p className="max-w-2xl text-base sm:text-lg md:text-xl text-zinc-400 leading-relaxed font-normal">
-            Una plataforma de registro y análisis biométrico diseñada para atletas exigentes. 
-            Calcula tu 1RM en tiempo real, controla el RPE, el tempo y domina la sobrecarga progresiva sin fricción.
+            Una plataforma de registro y análisis biométrico diseñada para atletas exigentes.
+            Calcula tu 1RM en tiempo real, controla el RPE, sigue tus WODs favoritos y tu composición corporal, y domina la sobrecarga progresiva sin fricción.
           </p>
 
           {/* CTA Button Group */}
@@ -119,7 +121,7 @@ export default async function Home() {
           <div className="flex flex-wrap items-center justify-center gap-6 sm:gap-10 pt-4 text-xs font-mono text-zinc-400">
             <div className="flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-              <span>Algoritmos Epley / Brzycki</span>
+              <span>Fórmula Epley de 1RM</span>
             </div>
             <div className="flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4 text-blue-400" />
@@ -223,7 +225,7 @@ export default async function Home() {
                     <span className="text-emerald-400">1RM Est: 165 kg</span>
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2">
-                    {['Musculación', 'Powerlifting', 'Halterofilia', 'Hyrox', 'Cross Training'].map((tag) => (
+                    {['Musculación', 'Powerlifting', 'Halterofilia', 'Hyrox', 'Cross Training', 'WODs Oficiales'].map((tag) => (
                       <Badge key={tag} variant="secondary" className="bg-zinc-800/80 text-zinc-300 hover:bg-zinc-700 border-zinc-700 text-xs py-1">
                         {tag}
                       </Badge>
@@ -243,7 +245,7 @@ export default async function Home() {
                   <CardTitle className="text-xl text-zinc-100">Analítica & Carga</CardTitle>
                 </div>
                 <CardDescription className="text-zinc-400 text-sm leading-relaxed">
-                  Gráficas de progresión de tonelaje mensual, volumen por grupo muscular y prevención de sobreentrenamiento.
+                  Gráficas de progresión de tonelaje mensual, volumen por grupo muscular, comparador de ejercicios A vs B y alertas de estancamiento y sobreentrenamiento.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -321,12 +323,72 @@ export default async function Home() {
                 </div>
               </CardContent>
             </Card>
+            {/* Feature 5: Seguimiento Corporal */}
+            <Card className="group border-zinc-800/80 bg-zinc-900/40 hover:bg-zinc-900/70 hover:border-zinc-700 transition-all duration-300 backdrop-blur-sm">
+              <CardHeader>
+                <div className="mb-3 flex items-center gap-2.5">
+                  <div className="p-2 rounded-lg bg-sky-500/10 border border-sky-500/20 text-sky-400">
+                    <Scale className="h-5 w-5" />
+                  </div>
+                  <CardTitle className="text-xl text-zinc-100">Seguimiento Corporal</CardTitle>
+                </div>
+                <CardDescription className="text-zinc-400 text-sm leading-relaxed">
+                  Peso, % de grasa, masa muscular, IMC y perímetros con curva de evolución y lectura peso vs volumen entrenado.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="rounded-lg bg-zinc-950/60 p-3 border border-zinc-800 text-xs font-mono space-y-2">
+                  <div className="flex justify-between text-zinc-400">
+                    <span>Peso (30d):</span>
+                    <span className="text-sky-400 font-bold">−1,2 kg</span>
+                  </div>
+                  <div className="flex justify-between text-zinc-400">
+                    <span>Volumen (30d):</span>
+                    <span className="text-emerald-400 font-bold">+8%</span>
+                  </div>
+                  <p className="text-[11px] text-zinc-500 pt-1 border-t border-zinc-800/60">
+                    Definición manteniendo rendimiento ✓
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Feature 6: Large Span 2 - WODs Oficiales & Benchmarks */}
+            <Card className="group md:col-span-2 border-zinc-800/80 bg-zinc-900/40 hover:bg-zinc-900/70 hover:border-zinc-700 transition-all duration-300 backdrop-blur-sm overflow-hidden">
+              <CardHeader>
+                <div className="mb-3 flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400">
+                      <Trophy className="h-5 w-5" />
+                    </div>
+                    <CardTitle className="text-xl text-zinc-100">WODs Oficiales & Benchmarks</CardTitle>
+                  </div>
+                  <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-amber-400 font-mono text-[11px]">
+                    24 benchmarks
+                  </Badge>
+                </div>
+                <CardDescription className="text-zinc-400 text-sm leading-relaxed">
+                  Catálogo de Girls, Héroes y clásicos con cargas Rx. Carga el WOD en un clic y el sistema agrupa tus intentos, calcula deltas y separa marcas Rx de Scaled.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4">
+                  <div className="flex flex-wrap gap-2">
+                    {['Fran 21-15-9', 'Murph', 'Cindy AMRAP 20′', 'Grace 30 reps', 'DT 5 RFT', 'Helen 3 RFT'].map((tag) => (
+                      <Badge key={tag} variant="secondary" className="bg-zinc-800/80 text-zinc-300 hover:bg-zinc-700 border-zinc-700 text-xs py-1 font-mono">
+                        {tag}
+                      </Badge>
+                    ))}
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-zinc-800/60 pt-3 text-xs font-mono">
+                    <span className="text-zinc-400">Fran · mejor marca: <strong className="text-zinc-200">4:12</strong></span>
+                    <span className="text-emerald-400">−38s vs primer intento</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         </section>
-
-        {/* ========================================================================= */}
-        {/* COMPARISON TABLE: WORKOUT MANAGER VS OTHERS */}
-        {/* ========================================================================= */}
         <section className="mx-auto max-w-5xl px-4">
           <div className="text-center max-w-2xl mx-auto mb-12">
             <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-400 mb-3">
@@ -356,7 +418,7 @@ export default async function Home() {
                 <tbody className="divide-y divide-zinc-800/60 font-mono text-xs sm:text-sm">
                   {[
                     {
-                      feature: 'Cálculo de 1RM en tiempo real (Epley/Brzycki)',
+                      feature: 'Cálculo de 1RM en tiempo real (fórmula Epley)',
                       wm: true,
                       notes: false,
                       apps: 'Limitado / De pago',
@@ -378,6 +440,24 @@ export default async function Home() {
                       wm: true,
                       notes: false,
                       apps: 'Solo rutinas básicas',
+                    },
+                    {
+                      feature: 'Catálogo de WODs oficiales con deltas y marcas Rx',
+                      wm: true,
+                      notes: false,
+                      apps: false,
+                    },
+                    {
+                      feature: 'Seguimiento corporal: peso, % grasa, IMC y perímetros',
+                      wm: true,
+                      notes: 'Solo peso manual',
+                      apps: 'De pago',
+                    },
+                    {
+                      feature: 'Comparador de ejercicios y tendencia de progresión',
+                      wm: true,
+                      notes: false,
+                      apps: false,
                     },
                     {
                       feature: 'Experiencia limpia sin anuncios ni interrupciones',
