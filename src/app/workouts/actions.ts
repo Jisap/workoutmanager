@@ -1460,7 +1460,18 @@ export async function getAdvancedProgressData(userId: string) {
     notes: string | null;
   }[] = [];
 
-  // Benchmarks y WODs agrupados por nombre
+  // Benchmarks y WODs agrupados por nombre.
+  // IMPORTANTE: el logger uniquifica nombres ("Fran · 12 ene", "Fran (2)"), así que
+  // aquí se normaliza antes de agrupar; si no, cada repetición quedaría como
+  // intento único y los benchmarks oficiales jamás se detectarían.
+  const normalizeWorkoutName = (raw: string): string =>
+    raw
+      .replace(/\s*\(Copia\)+/gi, '')
+      .replace(/\s*\(Repetici[oó]n\)+/gi, '')
+      .replace(/\s*·\s*\d{1,2}\s+[a-záéíóú]+/gi, '')
+      .replace(/\s*\(\d+\)\s*$/g, '')
+      .trim() || 'Entrenamiento';
+
   const benchmarksMap: Record<
     string,
     {
@@ -1468,14 +1479,21 @@ export async function getAdvancedProgressData(userId: string) {
       workoutType: string;
       attempts: number;
       bestTimeSeconds: number | null;
+      bestRxTimeSeconds: number | null;
+      bestScaledTimeSeconds: number | null;
+      bestScoreRounds: number | null;
+      bestScoreReps: number | null;
       isRx: boolean;
       history: {
+        workoutId: number;
         date: string;
         timeSeconds: number | null;
         timeMinutes: number;
         isRx: boolean;
         notes: string | null;
         workoutType: string;
+        scoreRounds: number | null;
+        scoreReps: number | null;
       }[];
     }
   > = {};
@@ -1769,8 +1787,8 @@ export async function getAdvancedProgressData(userId: string) {
         notes: w.notes || null,
       });
 
-      // Agrupar Benchmarks y WODs repetidos
-      const cleanName = w.name.trim();
+      // Agrupar Benchmarks y WODs repetidos (nombre normalizado: sin fecha ni contadores)
+      const cleanName = normalizeWorkoutName(w.name);
       const currentWorkoutType = w.type?.name || (isCrossfitOrFuncional ? 'CrossFit / Funcional' : 'WOD');
       if (!benchmarksMap[cleanName]) {
         benchmarksMap[cleanName] = {
@@ -1778,6 +1796,10 @@ export async function getAdvancedProgressData(userId: string) {
           workoutType: currentWorkoutType,
           attempts: 0,
           bestTimeSeconds: null,
+          bestRxTimeSeconds: null,
+          bestScaledTimeSeconds: null,
+          bestScoreRounds: null,
+          bestScoreReps: null,
           isRx: wodIsRx,
           history: [],
         };
@@ -1792,19 +1814,44 @@ export async function getAdvancedProgressData(userId: string) {
         bObj.bestTimeSeconds = w.totalTimeSeconds;
         bObj.isRx = wodIsRx;
       }
+      // Mejor marca separada Rx / Scaled (no mezclar peras con manzanas)
+      if (w.totalTimeSeconds && w.totalTimeSeconds > 0) {
+        if (wodIsRx && (bObj.bestRxTimeSeconds === null || w.totalTimeSeconds < bObj.bestRxTimeSeconds)) {
+          bObj.bestRxTimeSeconds = w.totalTimeSeconds;
+        }
+        if (!wodIsRx && (bObj.bestScaledTimeSeconds === null || w.totalTimeSeconds < bObj.bestScaledTimeSeconds)) {
+          bObj.bestScaledTimeSeconds = w.totalTimeSeconds;
+        }
+      }
+      // Score de AMRAP/EMOM (rondas + reps extra), guardado en modalityConfig por el logger
+      const wodCfg = (w.modalityConfig as Record<string, unknown> | null) || null;
+      const scoreRounds = typeof wodCfg?.scoreRounds === 'number' ? (wodCfg.scoreRounds as number) : null;
+      const scoreReps = typeof wodCfg?.scoreReps === 'number' ? (wodCfg.scoreReps as number) : null;
+      if (scoreRounds !== null) {
+        const curR = bObj.bestScoreRounds ?? -1;
+        const curE = bObj.bestScoreReps ?? -1;
+        if (scoreRounds > curR || (scoreRounds === curR && (scoreReps ?? 0) > curE)) {
+          bObj.bestScoreRounds = scoreRounds;
+          bObj.bestScoreReps = scoreReps;
+        }
+      }
       bObj.history.push({
+        workoutId: w.id,
         date: new Date(w.startTime).toISOString(),
         timeSeconds: w.totalTimeSeconds || null,
         timeMinutes: totalMins,
         isRx: wodIsRx,
         notes: w.notes || null,
         workoutType: currentWorkoutType,
+        scoreRounds,
+        scoreReps,
       });
     }
 
     if (isHyroxOrCardio) {
       totalCardioSessions++;
       const mins = w.totalTimeSeconds ? Math.round(w.totalTimeSeconds / 60) : 0;
+      totalCardioMinutes += mins;
       // Splits ordenados por orden de carrera para la vista por sesión y comparador
       const orderedExercises = [...w.exercises].sort(
         (a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0)
@@ -1839,7 +1886,7 @@ export async function getAdvancedProgressData(userId: string) {
       w.name?.toLowerCase().includes('simulacro');
 
     if (isHyroxWorkout) {
-      const cleanName = w.name.trim();
+      const cleanName = normalizeWorkoutName(w.name);
       if (!hyroxEventsMap[cleanName]) {
         hyroxEventsMap[cleanName] = {
           name: cleanName,
@@ -2527,7 +2574,8 @@ export async function getAdvancedProgressData(userId: string) {
     'lynne', 'mary', 'chelsea', 'amanda', 'angie', 'barbara', 'elizabeth',
     'filthy fifty', 'the seven', 'kalsu', 'clovis', 'badger', 'nate',
     'lumberjack 20', 'bull', 'joshie', 'jason', 'michael', 'daniel',
-    'tommy v', 'holbrook', 'gwen', 'hope', 'garrett', 'hansen', 'randy', 'loredo'
+    'tommy v', 'holbrook', 'gwen', 'hope', 'garrett', 'hansen', 'randy', 'loredo',
+    'jt'
   ]);
 
   // Benchmarks formateados con deltas de mejora (solo oficiales o con 2+ intentos)
@@ -2549,6 +2597,10 @@ export async function getAdvancedProgressData(userId: string) {
         attempts: b.attempts,
         isOfficial,
         bestTimeSeconds: b.bestTimeSeconds,
+        bestRxTimeSeconds: b.bestRxTimeSeconds,
+        bestScaledTimeSeconds: b.bestScaledTimeSeconds,
+        bestScoreRounds: b.bestScoreRounds,
+        bestScoreReps: b.bestScoreReps,
         isRx: b.isRx,
         deltaSeconds,
         history: sortedH,

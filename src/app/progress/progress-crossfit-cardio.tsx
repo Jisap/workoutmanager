@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
+import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Zap,
@@ -20,6 +21,9 @@ import {
   ArrowDownRight,
   TrendingDown,
   Sparkles,
+  Repeat,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { type ModalityConfig } from '@/lib/db/schema';
 import { formatModalitySummary } from '@/lib/modality-utils';
@@ -51,15 +55,22 @@ interface BenchmarkItem {
   attempts: number;
   isOfficial?: boolean;
   bestTimeSeconds: number | null;
+  bestRxTimeSeconds?: number | null;
+  bestScaledTimeSeconds?: number | null;
+  bestScoreRounds?: number | null;
+  bestScoreReps?: number | null;
   isRx: boolean;
   deltaSeconds: number | null;
   history: {
+    workoutId?: number;
     date: string;
     timeSeconds: number | null;
     timeMinutes: number;
     isRx: boolean;
     notes: string | null;
     workoutType?: string;
+    scoreRounds?: number | null;
+    scoreReps?: number | null;
   }[];
 }
 
@@ -211,6 +222,20 @@ function formatSecondsToTime(seconds: number): string {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
+// Delta de mejora en formato m:ss (ej. "−900 seg" → "−15:00")
+function formatDeltaTime(seconds: number): string {
+  const abs = Math.abs(Math.round(seconds));
+  const m = Math.floor(abs / 60);
+  const s = abs % 60;
+  const sign = seconds > 0 ? '−' : seconds < 0 ? '+' : '';
+  return `${sign}${m}:${String(s).padStart(2, '0')}`;
+}
+
+function formatScore(rounds: number | null | undefined, reps: number | null | undefined): string {
+  if (rounds == null) return '—';
+  return reps != null && reps > 0 ? `${rounds}+${reps}` : `${rounds}`;
+}
+
 export function ProgressCrossfitCardio({ crossfit, hyroxCardio }: ProgressCrossfitCardioProps) {
   const [selectedModalityFilter, setSelectedModalityFilter] = useState<string>('all');
   const [selectedHyroxModalityFilter, setSelectedHyroxModalityFilter] = useState<string>('all');
@@ -221,11 +246,15 @@ export function ProgressCrossfitCardio({ crossfit, hyroxCardio }: ProgressCrossf
   // Comparador de sesiones: A = sesión analizada, B = referencia (o 'none')
   const [sessionAId, setSessionAId] = useState<number | null>(null);
   const [sessionBId, setSessionBId] = useState<string>('none');
+  // Benchmarks: historiales expandidos por nombre + levantamiento olímpico graficado
+  const [expandedBenchmarks, setExpandedBenchmarks] = useState<Record<string, boolean>>({});
+  const [olympicLift, setOlympicLift] = useState<'snatch' | 'cleanAndJerk'>('snatch');
 
   const modalityBreakdown = crossfit.modalityBreakdown || [];
   const hyroxModalityBreakdown = hyroxCardio.modalityBreakdown || [];
   const fastestForTime = crossfit.fastestForTime || [];
   const rxStats = crossfit.rxStats || { rxWodsCount: 0, scaledWodsCount: 0, totalWods: 0, rxPercentage: 0 };
+  const timeCapStats = crossfit.timeCapStats || { wodsWithCap: 0, finishedUnderCap: 0, capSuccessRate: 0 };
   const olympic = crossfit.olympic;
   const benchmarks = crossfit.benchmarks || [];
   const cardioPBs = crossfit.cardioPBs || hyroxCardio.cardioPBs || [];
@@ -470,6 +499,71 @@ export function ProgressCrossfitCardio({ crossfit, hyroxCardio }: ProgressCrossf
     return m;
   }, [compareRows]);
 
+  // ─── Evolución 1RM olímpico (Snatch / Clean & Jerk) ───
+  // El backend ya entrega dailyHistory; aquí se dibuja la curva de 1RM estimado.
+  const olympicSeries = useMemo(() => {
+    if (!olympic) return [];
+    const lift = olympicLift === 'snatch' ? olympic.snatch : olympic.cleanAndJerk;
+    return [...(lift.dailyHistory || [])].sort(
+      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+    );
+  }, [olympic, olympicLift]);
+
+  const olympicStats = useMemo(() => {
+    if (olympicSeries.length === 0) return null;
+    const vals = olympicSeries.map((p) => p.estimated1RM);
+    const best = Math.max(...vals);
+    return {
+      best,
+      first: vals[0],
+      latest: vals[vals.length - 1],
+      gain: vals[vals.length - 1] - vals[0],
+      count: olympicSeries.length,
+    };
+  }, [olympicSeries]);
+
+  const olympicSvg = { width: 720, height: 240, padLeft: 56, padRight: 24, padTop: 20, padBottom: 40 };
+  const olympicChart = useMemo(() => {
+    const { width, height, padLeft, padRight, padTop, padBottom } = olympicSvg;
+    const cw = width - padLeft - padRight;
+    const ch = height - padTop - padBottom;
+    if (olympicSeries.length === 0 || !olympicStats) {
+      return { points: [], lineD: '', areaD: '', yTicks: [] as { val: number; y: number }[] };
+    }
+    const vals = olympicSeries.map((p) => p.estimated1RM);
+    const min = Math.min(...vals);
+    const max = Math.max(...vals);
+    const span = Math.max(1, max - min);
+    const lo = Math.max(0, min - span * 0.3);
+    const hi = max + span * 0.3;
+    const range = Math.max(1, hi - lo);
+    const points = olympicSeries.map((p, i) => {
+      const x =
+        olympicSeries.length === 1
+          ? padLeft + cw / 2
+          : padLeft + (i / Math.max(1, olympicSeries.length - 1)) * cw;
+      const y = padTop + ch - ((p.estimated1RM - lo) / range) * ch;
+      return { x, y, ...p };
+    });
+    const lineD =
+      points.length > 1
+        ? points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ')
+        : '';
+    const bottomY = padTop + ch;
+    const areaD =
+      points.length > 1
+        ? `${lineD} L ${points[points.length - 1].x.toFixed(1)} ${bottomY} L ${points[0].x.toFixed(1)} ${bottomY} Z`
+        : '';
+    const steps = 4;
+    const yTicks = Array.from({ length: steps + 1 }, (_, i) => {
+      const val = Math.round(lo + (range * i) / steps);
+      const y = padTop + ch - (i / steps) * ch;
+      return { val, y };
+    });
+    return { points, lineD, areaD, yTicks };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [olympicSeries, olympicStats]);
+
   const formatDelta = (d: number) => `${d > 0 ? '+' : '−'}${Math.abs(d)}s`;
 
   // ─── Comparativa 1000m por tramo: los 8 runs de A frente a los de B ───
@@ -695,7 +789,28 @@ export function ProgressCrossfitCardio({ crossfit, hyroxCardio }: ProgressCrossf
               </Card>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {filteredBenchmarks.map((bm) => (
+                {filteredBenchmarks.map((bm) => {
+                  const isExpanded = !!expandedBenchmarks[bm.name];
+                  const timedAttempts = bm.history.filter((h) => h.timeSeconds != null && h.timeSeconds > 0);
+                  const lastWorkoutId = bm.history.length > 0 ? bm.history[bm.history.length - 1].workoutId : undefined;
+                  const hasScore = bm.bestScoreRounds != null;
+                  // Mini sparkline de tiempos (cronológico, abajo = más rápido)
+                  const spark = (() => {
+                    if (timedAttempts.length < 2) return null;
+                    const vals = timedAttempts.map((h) => h.timeSeconds as number);
+                    const min = Math.min(...vals);
+                    const max = Math.max(...vals);
+                    const span = Math.max(1, max - min);
+                    const W = 120, H = 34, P = 3;
+                    const pts = vals.map((v, i) => {
+                      const x = P + (i / Math.max(1, vals.length - 1)) * (W - P * 2);
+                      const y = P + (1 - (v - min) / span) * (H - P * 2);
+                      return `${x.toFixed(1)},${y.toFixed(1)}`;
+                    });
+                    return { line: pts.join(' '), last: vals[vals.length - 1], first: vals[0], W, H };
+                  })();
+                  const visibleHistory = isExpanded ? [...bm.history].reverse() : bm.history.slice(-3).reverse();
+                  return (
                   <Card key={bm.name} className="border-gray-200 dark:border-gray-700 dark:bg-gray-900 shadow-2xs">
                     <CardContent className="p-4 space-y-3">
                       <div className="flex items-start justify-between gap-2">
@@ -723,38 +838,109 @@ export function ProgressCrossfitCardio({ crossfit, hyroxCardio }: ProgressCrossf
                         </span>
                       </div>
 
-                      <div className="flex items-baseline justify-between pt-1">
+                      <div className="flex items-end justify-between gap-2 pt-1">
                         <div>
-                          <p className="text-xs text-gray-400">Mejor Tiempo / Récord</p>
-                          <p className="text-2xl font-black text-orange-600 dark:text-orange-400 font-mono">
-                            {bm.bestTimeSeconds ? formatSecondsToTime(bm.bestTimeSeconds) : 'Completado'}
+                          <p className="text-xs text-gray-400">
+                            {hasScore ? 'Mejor Score (rondas+reps)' : 'Mejor Tiempo / Récord'}
                           </p>
+                          <p className="text-2xl font-black text-orange-600 dark:text-orange-400 font-mono">
+                            {hasScore
+                              ? formatScore(bm.bestScoreRounds, bm.bestScoreReps)
+                              : bm.bestTimeSeconds
+                                ? formatSecondsToTime(bm.bestTimeSeconds)
+                                : 'Completado'}
+                          </p>
+                          {/* Mejores marcas separadas Rx / Scaled */}
+                          {!hasScore && bm.bestRxTimeSeconds != null && bm.bestScaledTimeSeconds != null && (
+                            <p className="text-[10px] text-gray-400 mt-0.5 font-mono">
+                              Rx {formatSecondsToTime(bm.bestRxTimeSeconds)} · Sc {formatSecondsToTime(bm.bestScaledTimeSeconds)}
+                            </p>
+                          )}
                         </div>
-                        <span className="text-xs text-gray-400">{bm.attempts} {bm.attempts === 1 ? 'intento' : 'intentos'}</span>
+                        <div className="flex flex-col items-end gap-1.5 shrink-0">
+                          {spark && (
+                            <svg width={spark.W} height={spark.H} className="overflow-visible">
+                              <title>{`Evolución: ${formatSecondsToTime(spark.first)} → ${formatSecondsToTime(spark.last)}`}</title>
+                              <polyline
+                                points={spark.line}
+                                fill="none"
+                                stroke={spark.last <= spark.first ? '#10b981' : '#f43f5e'}
+                                strokeWidth={2}
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              />
+                              <circle
+                                cx={Number(spark.line.split(' ').pop()?.split(',')[0])}
+                                cy={Number(spark.line.split(' ').pop()?.split(',')[1])}
+                                r={3}
+                                fill={spark.last <= spark.first ? '#10b981' : '#f43f5e'}
+                                stroke="white"
+                                strokeWidth={1.5}
+                              />
+                            </svg>
+                          )}
+                          <span className="text-xs text-gray-400">{bm.attempts} {bm.attempts === 1 ? 'intento' : 'intentos'}</span>
+                        </div>
                       </div>
 
-                      {bm.deltaSeconds !== null && (
-                        <div className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 p-2 rounded-lg border border-emerald-100 dark:border-emerald-900/40">
-                          <TrendingDown className="w-3.5 h-3.5" />
-                          <span className="font-bold">-{bm.deltaSeconds} seg de mejora</span>
+                      {bm.deltaSeconds !== null && bm.deltaSeconds !== 0 && (
+                        <div className={`flex items-center gap-1.5 text-xs p-2 rounded-lg border ${
+                          bm.deltaSeconds > 0
+                            ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 border-emerald-100 dark:border-emerald-900/40'
+                            : 'text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/30 border-rose-100 dark:border-rose-900/40'
+                        }`}>
+                          <TrendingDown className={`w-3.5 h-3.5 ${bm.deltaSeconds < 0 ? 'rotate-180' : ''}`} />
+                          <span className="font-bold">{formatDeltaTime(bm.deltaSeconds)} de mejora</span>
                           <span className="text-[10px] text-gray-400">vs primer intento</span>
                         </div>
                       )}
 
-                      {/* Historial de intentos */}
+                      {/* Historial de intentos (expandible) */}
                       <div className="pt-2 border-t border-gray-100 dark:border-gray-800 space-y-1 text-[11px] text-gray-500">
-                        {bm.history.slice(-3).reverse().map((h, hIdx) => (
-                          <div key={hIdx} className="flex items-center justify-between">
-                            <span>{new Date(h.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}</span>
-                            <span className="font-mono font-semibold text-gray-700 dark:text-gray-300">
-                              {h.timeSeconds ? formatSecondsToTime(h.timeSeconds) : `${h.timeMinutes} min`} {h.isRx ? '(Rx)' : ''}
-                            </span>
+                        {visibleHistory.map((h, hIdx) => (
+                          <div key={hIdx} className="flex items-center justify-between gap-2">
+                            <span className="shrink-0">{new Date(h.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}</span>
+                            {h.scoreRounds != null ? (
+                              <span className="font-mono font-semibold text-gray-700 dark:text-gray-300">
+                                {formatScore(h.scoreRounds, h.scoreReps)} {h.isRx ? '(Rx)' : ''}
+                              </span>
+                            ) : (
+                              <span className="font-mono font-semibold text-gray-700 dark:text-gray-300">
+                                {h.timeSeconds ? formatSecondsToTime(h.timeSeconds) : `${h.timeMinutes} min`} {h.isRx ? '(Rx)' : ''}
+                              </span>
+                            )}
                           </div>
                         ))}
+                        <div className="flex items-center justify-between pt-1">
+                          {bm.history.length > 3 ? (
+                            <button
+                              type="button"
+                              onClick={() => setExpandedBenchmarks((prev) => ({ ...prev, [bm.name]: !prev[bm.name] }))}
+                              className="flex items-center gap-1 text-[11px] font-bold text-orange-600 dark:text-orange-400 hover:underline cursor-pointer"
+                            >
+                              {isExpanded ? (
+                                <>Ver menos <ChevronUp className="w-3 h-3" /></>
+                              ) : (
+                                <>Ver historial completo ({bm.history.length}) <ChevronDown className="w-3 h-3" /></>
+                              )}
+                            </button>
+                          ) : <span />}
+                          {lastWorkoutId != null && (
+                            <Link
+                              href={`/workouts/log?mode=repeat&workoutId=${lastWorkoutId}`}
+                              className="flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline"
+                              title={`Repetir ${bm.name}`}
+                            >
+                              <Repeat className="w-3 h-3" />
+                              Repetir
+                            </Link>
+                          )}
+                        </div>
                       </div>
                     </CardContent>
                   </Card>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -784,6 +970,142 @@ export function ProgressCrossfitCardio({ crossfit, hyroxCardio }: ProgressCrossf
                   </span>
                   <span className="text-sm font-bold text-gray-400">kg Total</span>
                 </div>
+              </CardContent>
+            </Card>
+
+            {/* Curva de evolución 1RM estimado */}
+            <Card className="border-gray-200 dark:border-gray-700 dark:bg-gray-900 shadow-2xs">
+              <CardHeader className="pb-3 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/40">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <CardTitle className="text-sm font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                    <TrendingUp className="w-4 h-4 text-purple-600" />
+                    Evolución del 1RM Estimado
+                  </CardTitle>
+                  <div className="flex items-center gap-1.5">
+                    {(['snatch', 'cleanAndJerk'] as const).map((l) => (
+                      <button
+                        key={l}
+                        type="button"
+                        onClick={() => setOlympicLift(l)}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                          olympicLift === l
+                            ? 'bg-purple-600 text-white shadow-xs'
+                            : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-200'
+                        }`}
+                      >
+                        {l === 'snatch' ? 'Snatch' : 'Clean & Jerk'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="p-4 sm:p-5 space-y-4">
+                {olympicSeries.length === 0 || !olympicStats ? (
+                  <p className="text-xs text-gray-500 text-center py-6">
+                    Sin registros de {olympicLift === 'snatch' ? 'Snatch' : 'Clean & Jerk'} todavía.
+                  </p>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`text-xs font-bold px-2.5 py-1 rounded-lg ${
+                        olympicStats.gain > 0
+                          ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300'
+                          : olympicStats.gain < 0
+                          ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300'
+                          : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+                      }`}>
+                        {olympicStats.gain > 0
+                          ? `+${Math.round(olympicStats.gain * 10) / 10} kg desde el inicio`
+                          : olympicStats.gain < 0
+                          ? `${Math.round(olympicStats.gain * 10) / 10} kg vs inicio`
+                          : 'Sin variación'}
+                      </span>
+                      <span className="text-[11px] text-gray-400">
+                        Mejor: <strong className="text-purple-600 dark:text-purple-400 font-mono">{olympicStats.best} kg</strong> · {olympicStats.count} registros
+                      </span>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <svg viewBox={`0 0 ${olympicSvg.width} ${olympicSvg.height}`} className="w-full h-auto min-w-[500px]">
+                        <defs>
+                          <linearGradient id="olympicGradient" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#9333ea" stopOpacity="0.25" />
+                            <stop offset="100%" stopColor="#9333ea" stopOpacity="0.0" />
+                          </linearGradient>
+                        </defs>
+                        {olympicChart.yTicks.map((t, i) => (
+                          <g key={i}>
+                            <line
+                              x1={olympicSvg.padLeft}
+                              y1={t.y}
+                              x2={olympicSvg.width - olympicSvg.padRight}
+                              y2={t.y}
+                              stroke="currentColor"
+                              className="text-gray-200 dark:text-gray-800"
+                              strokeWidth={1}
+                              strokeDasharray={i === 0 ? '0' : '4,4'}
+                            />
+                            <text
+                              x={olympicSvg.padLeft - 8}
+                              y={t.y + 3.5}
+                              textAnchor="end"
+                              className="fill-gray-400 dark:fill-gray-500 font-mono text-[10px]"
+                            >
+                              {t.val}
+                            </text>
+                          </g>
+                        ))}
+                        {olympicChart.points.map((p, i) => {
+                          const show =
+                            olympicSeries.length <= 8 ||
+                            i === 0 ||
+                            i === olympicSeries.length - 1 ||
+                            i % Math.ceil(olympicSeries.length / 7) === 0;
+                          return show ? (
+                            <text
+                              key={i}
+                              x={p.x}
+                              y={olympicSvg.height - 12}
+                              textAnchor="middle"
+                              className="fill-gray-400 dark:fill-gray-500 text-[9px] font-medium"
+                            >
+                              {new Date(p.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
+                            </text>
+                          ) : null;
+                        })}
+                        {olympicChart.points.length > 1 && (
+                          <>
+                            <path d={olympicChart.areaD} fill="url(#olympicGradient)" />
+                            <path
+                              d={olympicChart.lineD}
+                              fill="none"
+                              stroke="#9333ea"
+                              strokeWidth={2.5}
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </>
+                        )}
+                        {olympicChart.points.map((pt, i) => {
+                          const isBest = pt.estimated1RM === olympicStats.best;
+                          return (
+                            <g key={i}>
+                              <circle
+                                cx={pt.x}
+                                cy={pt.y}
+                                r={isBest ? 4.5 : 3.5}
+                                fill={isBest ? '#f59e0b' : '#9333ea'}
+                                stroke="white"
+                                strokeWidth={2}
+                              >
+                                <title>{`${pt.weight}kg × ${pt.reps} (1RM ~${pt.estimated1RM}kg) · ${new Date(pt.date).toLocaleDateString('es-ES')}`}</title>
+                              </circle>
+                            </g>
+                          );
+                        })}
+                      </svg>
+                    </div>
+                  </>
+                )}
               </CardContent>
             </Card>
 
@@ -1896,6 +2218,15 @@ export function ProgressCrossfitCardio({ crossfit, hyroxCardio }: ProgressCrossf
             </div>
           </CardHeader>
           <CardContent className="p-4 sm:p-5 space-y-3">
+            {timeCapStats.wodsWithCap > 0 && (
+              <div className="flex items-center gap-2 text-xs bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 rounded-xl px-3 py-2">
+                <Timer className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                <span className="text-gray-600 dark:text-gray-300">
+                  <strong className="text-amber-700 dark:text-amber-300 font-mono">{timeCapStats.capSuccessRate}% bajo time-cap</strong>
+                  {' '}({timeCapStats.finishedUnderCap}/{timeCapStats.wodsWithCap} WODs con límite terminados a tiempo)
+                </span>
+              </div>
+            )}
             {filteredWods.length === 0 ? (
               <p className="text-xs text-gray-500 text-center py-6">
                 No hay WODs {selectedModalityFilter !== 'all' ? `con modalidad ${selectedModalityFilter}` : ''} registrados todavía.
@@ -1935,6 +2266,13 @@ export function ProgressCrossfitCardio({ crossfit, hyroxCardio }: ProgressCrossf
                       <Timer className="w-3.5 h-3.5" />
                       <span>{wod.totalTimeSeconds ? formatSecondsToTime(wod.totalTimeSeconds) : wod.totalTimeMinutes > 0 ? `${wod.totalTimeMinutes} min` : 'Completado'}</span>
                     </div>
+                    <Link
+                      href={`/workouts/log?mode=repeat&workoutId=${wod.id}`}
+                      className="shrink-0 p-1.5 rounded-lg text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-colors"
+                      title={`Repetir ${wod.name}`}
+                    >
+                      <Repeat className="w-3.5 h-3.5" />
+                    </Link>
                   </div>
                 ))}
               </div>

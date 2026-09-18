@@ -196,6 +196,9 @@ export function WorkoutLoggerClient({
   const [exercises, setExercises] = useState<LocalExercise[]>([]);
   const [isFinishDialogOpen, setIsFinishDialogOpen] = useState(false);
   const [totalTimeMinutes, setTotalTimeMinutes] = useState('45');
+  // Score para AMRAP/EMOM: rondas completas + reps extra (se guarda en modalityConfig)
+  const [scoreRounds, setScoreRounds] = useState('');
+  const [scoreReps, setScoreReps] = useState('');
   const [notes, setNotes] = useState(initialNotes);
   const [currentWorkoutId, setCurrentWorkoutId] = useState<number | null>(workoutId);
   const [isSaving, setIsSaving] = useState(false);
@@ -592,12 +595,25 @@ export function WorkoutLoggerClient({
   const handleFinish = async () => {
     setIsSaving(true);
     try {
+      // Score AMRAP/EMOM (rondas + reps): solo se adjunta al finalizar, nunca a plantillas
+      const parsedRounds = parseInt(scoreRounds, 10);
+      const parsedReps = parseInt(scoreReps, 10);
+      const finishConfig =
+        requiresModality && modality && (modality === 'AMRAP' || modality === 'EMOM')
+          ? {
+              ...modalityConfig,
+              ...(!isNaN(parsedRounds) && parsedRounds >= 0 ? { scoreRounds: parsedRounds } : {}),
+              ...(!isNaN(parsedReps) && parsedReps >= 0 ? { scoreReps: parsedReps } : {}),
+            }
+          : requiresModality && modality
+            ? modalityConfig
+            : null;
       const payload = {
         workoutId: currentWorkoutId,
         typeId: parseInt(typeId || '1', 10),
         name: typeName,
         modality: requiresModality ? modality : null,
-        modalityConfig: requiresModality && modality ? modalityConfig : null,
+        modalityConfig: finishConfig,
         totalTimeSeconds: (parseInt(totalTimeMinutes, 10) || 0) * 60,
         notes,
         exercises: exercises.map((ex, index) => ({
@@ -1789,6 +1805,36 @@ export function WorkoutLoggerClient({
                 </p>
               )}
             </div>
+            {/* Score para AMRAP/EMOM: rondas + reps extra (para comparar progreso) */}
+            {requiresModality && (modality === 'AMRAP' || modality === 'EMOM') && (
+              <div className="grid grid-cols-2 gap-3 p-3 rounded-xl bg-orange-50/70 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-800/50">
+                <div className="space-y-1.5">
+                  <Label>Rondas completas</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    placeholder="Ej: 8"
+                    value={scoreRounds}
+                    onChange={(e) => setScoreRounds(e.target.value)}
+                    className="tabular-nums text-center font-bold"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Reps extra</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    placeholder="Ej: 12"
+                    value={scoreReps}
+                    onChange={(e) => setScoreReps(e.target.value)}
+                    className="tabular-nums text-center font-bold"
+                  />
+                </div>
+                <p className="col-span-2 text-[11px] text-gray-500 dark:text-gray-400">
+                  Tu marca (p. ej. 8+12) se usará en Progreso para comparar intentos de este {modality}.
+                </p>
+              </div>
+            )}
             <div className="space-y-2">
               <Label>Notas / Sensaciones</Label>
               <Textarea

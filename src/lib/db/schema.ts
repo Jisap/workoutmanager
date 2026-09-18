@@ -15,6 +15,9 @@ export interface ModalityConfig {
   restBetweenSetsSeconds?: number;
   // Ladder
   repScheme?: string; // e.g. "21-15-9" or "10 to 1"
+  // Score de AMRAP/EMOM (rondas completas + reps extra de la última ronda)
+  scoreRounds?: number;
+  scoreReps?: number;
   notes?: string;
 }
 
