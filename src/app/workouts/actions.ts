@@ -1468,8 +1468,12 @@ export async function getAdvancedProgressData(userId: string) {
     raw
       .replace(/\s*\(Copia\)+/gi, '')
       .replace(/\s*\(Repetici[oó]n\)+/gi, '')
+      // Etiqueta de división del catálogo de WODs ("Fran · RX · 12 ene" → "Fran").
+      // Solo si es un segmento final (seguido de "·" o fin), para no tocar nombres propios.
+      .replace(/\s*·\s*RX(\s+W)?(?=\s*·|\s*$)/gi, '')
       .replace(/\s*·\s*\d{1,2}\s+[a-záéíóú]+/gi, '')
       .replace(/\s*\(\d+\)\s*$/g, '')
+      .replace(/\s+/g, ' ')
       .trim() || 'Entrenamiento';
 
   const benchmarksMap: Record<

@@ -17,6 +17,7 @@ import { ModalityConfigPanel } from '@/components/workout/modality-config-panel'
 import { formatModalitySummary } from '@/lib/modality-utils';
 import { HyroxRaceBuilder, type HyroxGeneratedExercise } from '@/components/workout/hyrox-race-builder';
 import { CrossfitWodPicker, type WodApplyPayload } from '@/components/workout/crossfit-wod-picker';
+import { OFFICIAL_WODS } from '@/lib/wods-catalog';
 
 export const MODALITY_OPTIONS = [
   { id: 'For Time', label: 'For Time', icon: Timer, desc: 'Completar todo el trabajo en el menor tiempo' },
@@ -330,6 +331,17 @@ export function WorkoutLoggerClient({
     currentTypeNameLower.includes('hyrox');
   const isHyroxRaceLike = isHyroxPage && exercises.length >= 1;
   const useHyroxUnified = isHyroxRaceLike && hyroxUnified;
+
+  // Contexto CrossFit/Funcional (excluye Hyrox, que tiene su propio generador).
+  // Se usa para el catálogo de WODs y para sugerir el nombre del benchmark al finalizar:
+  // con el nombre por defecto ("CrossFit · 18 sept") el entreno jamás se agruparía en Progreso.
+  const isCrossfitPickerContext =
+    !isHyroxPage &&
+    (currentTypeNameLower.includes('crossfit') ||
+      currentTypeNameLower.includes('funcional') ||
+      currentTypeNameLower.includes('wod') ||
+      typeName.toLowerCase().includes('crossfit') ||
+      typeName.toLowerCase().includes('funcional'));
 
   const hyroxProgress = useMemo(() => {
     if (!isHyroxRaceLike) return { done: 0, total: 0, totalSeconds: 0 };
@@ -974,12 +986,7 @@ export function WorkoutLoggerClient({
       {/* ─── CATÁLOGO DE WODs OFICIALES (CrossFit / Funcional) ─── */}
       {/* Visible en entrenos personalizados de CrossFit/Funcional (también en modo
           plantilla: desde aquí se puede "Guardar como Plantilla" con el WOD cargado) */}
-      {!isHyroxPage &&
-        (currentTypeNameLower.includes('crossfit') ||
-          currentTypeNameLower.includes('funcional') ||
-          currentTypeNameLower.includes('wod') ||
-          typeName.toLowerCase().includes('crossfit') ||
-          typeName.toLowerCase().includes('funcional')) && (
+      {isCrossfitPickerContext && (
           <div className="space-y-2">
             {exercises.length > 0 && (
               <button
@@ -1777,6 +1784,34 @@ export function WorkoutLoggerClient({
                 }}
                 placeholder="Nombre del entrenamiento"
               />
+              {/* Atajo de nombre: si es un benchmark conocido, usar su nombre oficial
+                  hace que se agrupe en Progreso (el nombre por defecto con fecha no agrupa) */}
+              {isCrossfitPickerContext && (
+                <div className="space-y-1.5 pt-1">
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                    ¿Es un benchmark conocido? Toca su nombre para agruparlo en Progreso:
+                  </p>
+                  <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto pr-0.5">
+                    {OFFICIAL_WODS.map((w) => (
+                      <button
+                        key={w.id}
+                        type="button"
+                        onClick={() => {
+                          setTypeName(w.name);
+                          setTemplateName(w.name);
+                        }}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer border ${
+                          typeName.trim().toLowerCase() === w.name.toLowerCase()
+                            ? 'bg-orange-500 text-white border-orange-600 shadow-xs'
+                            : 'bg-orange-50 dark:bg-orange-950/30 text-orange-800 dark:text-orange-300 border-orange-200 dark:border-orange-800/50 hover:bg-orange-100 dark:hover:bg-orange-950/50'
+                        }`}
+                      >
+                        {w.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="space-y-2">
