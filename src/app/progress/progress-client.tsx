@@ -6,8 +6,10 @@ import { ProgressGeneralStats } from './progress-general-stats';
 import { ProgressMusculacion } from './progress-musculacion';
 import { ProgressPowerlifting } from './progress-powerlifting';
 import { ProgressCrossfitCardio } from './progress-crossfit-cardio';
+import { ProgressCorporal } from './progress-corporal';
 import { ExerciseProgressChart } from './exercise-progress-chart';
 import { ConsistencyHeatmap } from './consitency-heatmap';
+import type { BodyMeasurementDTO } from './measurements-actions';
 import {
   BarChart3,
   Dumbbell,
@@ -19,6 +21,7 @@ import {
   Flame,
   Activity,
   Heart,
+  Scale,
 } from 'lucide-react';
 
 interface ProgressClientProps {
@@ -38,6 +41,8 @@ interface ProgressClientProps {
   selectedExerciseId: number | null;
   exerciseProgress: any;
   consistencyData: any;
+  bodyMeasurements: BodyMeasurementDTO[];
+  initialTab?: 'general' | 'musculacion' | 'powerlifting' | 'crossfit' | 'exercise' | 'corporal';
 }
 
 export function ProgressClient({
@@ -47,8 +52,10 @@ export function ProgressClient({
   selectedExerciseId,
   exerciseProgress,
   consistencyData,
+  bodyMeasurements,
+  initialTab = 'general',
 }: ProgressClientProps) {
-  const [activeTab, setActiveTab] = useState<'general' | 'musculacion' | 'powerlifting' | 'crossfit' | 'exercise'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'musculacion' | 'powerlifting' | 'crossfit' | 'exercise' | 'corporal'>(initialTab);
 
   const tabs = [
     { id: 'general', label: 'General', icon: BarChart3, color: 'text-blue-600' },
@@ -56,6 +63,7 @@ export function ProgressClient({
     { id: 'powerlifting', label: 'Powerlifting (Big 3)', icon: Award, color: 'text-orange-600' },
     { id: 'crossfit', label: 'CrossFit & Hyrox', icon: Zap, color: 'text-pink-600' },
     { id: 'exercise', label: 'Por Ejercicio', icon: LineChart, color: 'text-emerald-600' },
+    { id: 'corporal', label: 'Corporal', icon: Scale, color: 'text-sky-600' },
   ];
 
   return (
@@ -150,6 +158,20 @@ export function ProgressClient({
           crossfit={advancedData.crossfit}
           hyroxCardio={advancedData.hyroxCardio}
         />
+      )}
+
+      {/* 6. TAB CORPORAL (peso, composición y perímetros) */}
+      {activeTab === 'corporal' && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <Scale className="w-4 h-4 text-sky-600" />
+            <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">
+              Seguimiento Corporal
+            </h3>
+          </div>
+
+          <ProgressCorporal measurements={bodyMeasurements} />
+        </div>
       )}
 
       {/* 5. TAB POR EJERCICIO (Analítica individual) */}

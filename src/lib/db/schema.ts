@@ -113,6 +113,24 @@ export const sets = pgTable('sets', {
   notes: text('notes'),
 });
 
+// 9. Mediciones Corporales (seguimiento voluntario: peso, composición y perímetros)
+export const bodyMeasurements = pgTable('body_measurements', {
+  id: serial('id').primaryKey(),
+  userId: text('user_id').notNull(), // Clerk ID
+  measuredAt: timestamp('measured_at').defaultNow().notNull(),
+  weightKg: real('weight_kg'),
+  heightCm: real('height_cm'),
+  bodyFatPct: real('body_fat_pct'),
+  muscleMassKg: real('muscle_mass_kg'),
+  waistCm: real('waist_cm'),
+  chestCm: real('chest_cm'),
+  armCm: real('arm_cm'),
+  thighCm: real('thigh_cm'),
+  hipCm: real('hip_cm'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
 // --- RELACIONES (Para que Drizzle pueda hacer joins fácilmente) ---
 export const workoutsRelations = relations(workouts, ({ one, many }) => ({
   type: one(workoutTypes, { fields: [workouts.typeId], references: [workoutTypes.id] }),

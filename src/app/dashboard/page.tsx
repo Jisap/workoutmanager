@@ -5,8 +5,9 @@ import { auth } from '@clerk/nextjs/server';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Calendar, Dumbbell, TrendingUp, Plus, Activity } from 'lucide-react';
+import { Calendar, Dumbbell, TrendingUp, Plus, Activity, Scale } from 'lucide-react';
 import { getConsistencyData } from '../workouts/actions';
+import { getBodySummary } from '../progress/measurements-actions';
 import { ConsistencyHeatmap } from '../progress/consitency-heatmap';
 
 export default async function DashboardPage() {
@@ -17,7 +18,7 @@ export default async function DashboardPage() {
     }
 
     // Obtener últimos entrenamientos y datos de consistencia en paralelo
-    const [recentWorkouts, consistencyData] = await Promise.all([
+    const [recentWorkouts, consistencyData, bodySummary] = await Promise.all([
         db
             .select({
                 id: workouts.id,
@@ -32,6 +33,7 @@ export default async function DashboardPage() {
             .orderBy(desc(workouts.startTime))
             .limit(5),
         getConsistencyData(userId),
+        getBodySummary(),
     ]);
 
     // Stats básicas
@@ -54,7 +56,7 @@ export default async function DashboardPage() {
             </div>
 
             {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between pb-2">
                         <CardTitle className="text-sm font-medium">Entrenamientos Totales</CardTitle>
@@ -82,11 +84,49 @@ export default async function DashboardPage() {
                         <CardTitle className="text-sm font-medium">Frecuencia Semanal</CardTitle>
                         <TrendingUp className="w-4 h-4 text-gray-400 dark:text-gray-500" />
                     </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold dark:text-gray-100">{consistencyData.avgPerWeek} días</div>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Promedio por semana</p>
-                    </CardContent>
-                </Card>
+                <CardContent>
+                    <div className="text-2xl font-bold dark:text-gray-100">{consistencyData.avgPerWeek} días</div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Promedio por semana</p>
+                </CardContent>
+            </Card>
+
+            <Card>
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                    <CardTitle className="text-sm font-medium">Peso Corporal</CardTitle>
+                    <Scale className="w-4 h-4 text-gray-400 dark:text-gray-500" />
+                </CardHeader>
+                <CardContent>
+                    {bodySummary.latestWeight != null ? (
+                        <>
+                            <div className="text-2xl font-bold dark:text-gray-100">
+                                {bodySummary.latestWeight.toFixed(1)} kg
+                                {bodySummary.delta30d != null && bodySummary.delta30d !== 0 && (
+                                    <span className={`ml-2 text-sm font-bold ${bodySummary.delta30d > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                                        {bodySummary.delta30d > 0 ? `+${bodySummary.delta30d}` : bodySummary.delta30d} kg
+                                    </span>
+                                )}
+                            </div>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                <Link href="/progress?tab=corporal" className="text-sky-600 dark:text-sky-400 font-semibold hover:underline">
+                                    Ver evolución →
+                                </Link>
+                                {bodySummary.daysSinceLast != null && bodySummary.daysSinceLast > 7 && (
+                                    <span> · hace {bodySummary.daysSinceLast} días sin medirte</span>
+                                )}
+                            </p>
+                        </>
+                    ) : (
+                        <>
+                            <div className="text-2xl font-bold dark:text-gray-100">—</div>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                <Link href="/progress?tab=corporal" className="text-sky-600 dark:text-sky-400 font-semibold hover:underline">
+                                    Registrar primera medición →
+                                </Link>
+                            </p>
+                        </>
+                    )}
+                </CardContent>
+            </Card>
             </div>
 
             {/* Mapa de Actividad Interactivo */}

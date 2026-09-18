@@ -8,24 +8,32 @@ import {
   getAdvancedProgressData,
 } from '../workouts/actions';
 import { ProgressClient } from './progress-client';
+import { getBodyMeasurements } from './measurements-actions';
 import { LineChart } from 'lucide-react';
 
 export default async function ProgressPage({
   searchParams,
 }: {
-  searchParams: Promise<{ exerciseId?: string }>;
+  searchParams: Promise<{ exerciseId?: string; tab?: string }>;
 }) {
   const { userId } = await auth();
   if (!userId) redirect('/sign-in');
 
   const resolvedParams = await searchParams;
 
+  // Pestaña inicial por URL (?tab=corporal) para deep-links desde el dashboard
+  const validTabs = ['general', 'musculacion', 'powerlifting', 'crossfit', 'exercise', 'corporal'] as const;
+  const initialTab = validTabs.includes(resolvedParams.tab as (typeof validTabs)[number])
+    ? (resolvedParams.tab as (typeof validTabs)[number])
+    : 'general';
+
   // Cargar datos en paralelo para máxima velocidad
-  const [advancedData, progressData, availableExercises, consistencyData] = await Promise.all([
+  const [advancedData, progressData, availableExercises, consistencyData, bodyMeasurements] = await Promise.all([
     getAdvancedProgressData(userId),
     getProgressData(userId),
     getAvailableExercises(userId),
     getConsistencyData(userId),
+    getBodyMeasurements(),
   ]);
 
   // Si no hay ejercicio especificado en la URL, seleccionar el primero disponible
@@ -61,6 +69,8 @@ export default async function ProgressPage({
         selectedExerciseId={selectedExerciseId}
         exerciseProgress={exerciseProgress}
         consistencyData={consistencyData}
+        bodyMeasurements={bodyMeasurements}
+        initialTab={initialTab}
       />
     </div>
   );
