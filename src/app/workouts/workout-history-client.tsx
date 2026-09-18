@@ -1484,7 +1484,7 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                       <th className="py-3 px-3 text-center">Estado / Duración</th>
                       <th className="py-3 px-3 text-center">Volumen</th>
                       <th className="py-3 px-3 text-center">Series</th>
-                      <th className="py-3 px-4 hidden md:table-cell">Ejercicios Realizados</th>
+                      <th className="py-3 px-4 hidden lg:table-cell">Ejercicios Realizados</th>
                       <th className="py-3 px-4 text-right">Acciones</th>
                     </tr>
                   </thead>
@@ -1519,20 +1519,20 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                             </div>
                           </td>
 
-                          {/* Nombre */}
-                          <td className="py-3 px-4 font-bold text-gray-900 dark:text-gray-100 max-w-[200px]">
-                            <div className="truncate flex items-center gap-1.5" title={workout.name}>
-                              <span>{workout.name}</span>
+                          {/* Nombre (2 líneas + tooltip: no se pierde información) */}
+                          <td className="py-3 px-4 font-bold text-gray-900 dark:text-gray-100 min-w-[150px] max-w-[260px]">
+                            <div className="flex items-start gap-1.5" title={workout.name}>
+                              <span className="line-clamp-2 break-words leading-snug">{workout.name}</span>
                               {workout.notes && (
-                                <span title={workout.notes}>
+                                <span title={workout.notes} className="mt-0.5">
                                   <FileText className="w-3 h-3 text-amber-500 shrink-0" />
                                 </span>
                               )}
                             </div>
                           </td>
 
-                          {/* Tipo y Modalidad */}
-                          <td className="py-3 px-3 whitespace-nowrap">
+                          {/* Tipo y Modalidad (las insignias pueden partir línea) */}
+                          <td className="py-3 px-3 min-w-[120px] max-w-[220px]">
                             <div className="flex items-center gap-1.5 flex-wrap">
                               <span
                                 className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide border ${style.badge}`}
@@ -1586,8 +1586,8 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                             {workout.totalSets}
                           </td>
 
-                          {/* Ejercicios resumidos */}
-                          <td className="py-3 px-4 hidden md:table-cell max-w-[320px]">
+                          {/* Ejercicios resumidos (chips acotados + tooltip con el detalle) */}
+                          <td className="py-3 px-4 hidden lg:table-cell max-w-[240px]">
                             <div
                               className="flex flex-wrap gap-1 cursor-pointer hover:bg-blue-50/50 dark:hover:bg-blue-900/10 rounded-lg p-1 -m-1 transition-colors"
                               onClick={(e) => {
@@ -1604,7 +1604,7 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                               {workout.exercisesSummary.slice(0, 3).map((ex, idx) => (
                                 <span
                                   key={idx}
-                                  className="inline-flex items-center gap-1 bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 text-[10px] px-2 py-0.5 rounded-md border border-gray-200/70 dark:border-gray-700 truncate max-w-[220px]"
+                                  className="inline-flex items-center gap-1 bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 text-[10px] px-2 py-0.5 rounded-md border border-gray-200/70 dark:border-gray-700 truncate max-w-[160px]"
                                   title={`${ex.name}: ${ex.repsSummary || `${ex.setsCount} series`}`}
                                 >
                                   <strong className="font-semibold text-gray-900 dark:text-gray-100 truncate">{ex.name}</strong>
@@ -2157,7 +2157,7 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                       <th className="py-3 px-3">Tipo</th>
                       <th className="py-3 px-3 text-center">Ejercicios</th>
                       <th className="py-3 px-3 text-center">Series Totales</th>
-                      <th className="py-3 px-4 hidden md:table-cell">Detalle de Ejercicios & Cargas</th>
+                      <th className="py-3 px-4 hidden lg:table-cell">Detalle de Ejercicios & Cargas</th>
                       <th className="py-3 px-4 text-right">Acciones</th>
                     </tr>
                   </thead>
@@ -2171,9 +2171,9 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                           key={`tpl-row-${template.id}`}
                           className="hover:bg-purple-50/30 dark:hover:bg-purple-900/10 transition-colors group"
                         >
-                          {/* Nombre y Descripción */}
-                          <td className="py-3.5 px-4 font-bold text-gray-900 dark:text-gray-100 max-w-[220px]">
-                            <div className="truncate text-sm font-extrabold text-gray-900 dark:text-gray-100" title={template.name}>
+                          {/* Nombre y Descripción (2 líneas + tooltip) */}
+                          <td className="py-3.5 px-4 font-bold text-gray-900 dark:text-gray-100 min-w-[150px] max-w-[240px]">
+                            <div className="line-clamp-2 break-words leading-snug text-sm font-extrabold text-gray-900 dark:text-gray-100" title={template.name}>
                               {template.name}
                             </div>
                             {template.description && (
@@ -2206,7 +2206,7 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                           </td>
 
                           {/* Detalle de ejercicios */}
-                          <td className="py-3.5 px-4 hidden md:table-cell max-w-[340px]">
+                          <td className="py-3.5 px-4 hidden lg:table-cell max-w-[260px]">
                             <div
                               className="flex flex-wrap gap-1.5 cursor-pointer hover:bg-purple-50/30 dark:hover:bg-purple-900/10 rounded-lg p-1 -m-1 transition-colors"
                               onClick={(e) => {
@@ -2228,10 +2228,10 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                               {template.exercises.slice(0, 5).map((ex, idx) => (
                                 <span
                                   key={idx}
-                                  className="inline-flex items-center gap-1 bg-gray-50 dark:bg-gray-800/50 text-gray-800 dark:text-gray-200 text-[11px] px-2 py-0.5 rounded-lg border border-gray-200/70 dark:border-gray-700"
+                                  className="inline-flex items-center gap-1 bg-gray-50 dark:bg-gray-800/50 text-gray-800 dark:text-gray-200 text-[11px] px-2 py-0.5 rounded-lg border border-gray-200/70 dark:border-gray-700 truncate max-w-[170px]"
                                   title={`${ex.name}: ${ex.formattedSummary || (ex.targetReps ? `${ex.targetReps} reps` : 'Libre')}`}
                                 >
-                                  <strong className="font-semibold text-gray-900 dark:text-gray-100">{ex.name}</strong>
+                                  <strong className="font-semibold text-gray-900 dark:text-gray-100 truncate">{ex.name}</strong>
                                   <span className="text-purple-700 dark:text-purple-300 font-mono text-[10px]">
                                     ({ex.formattedSummary || (ex.targetReps ? `${ex.targetReps} reps` : 'Libre')})
                                   </span>
