@@ -1,9 +1,9 @@
 'use client';
 
-import Link from 'next/link';
+import Link, { useLinkStatus } from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { Home, Dumbbell, BarChart3, Settings, Plus, LogOut, Bookmark } from 'lucide-react';
+import { Home, Dumbbell, BarChart3, Settings, Plus, LogOut, Bookmark, Loader2, type LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { SignOutButton, useUser } from '@clerk/nextjs';
 
@@ -13,6 +13,21 @@ const navigation = [
   { name: 'Progreso', href: '/progress', icon: BarChart3 },
   { name: 'Configuración', href: '/settings', icon: Settings },
 ];
+
+// Icono de navegación que se convierte en spinner mientras la ruta destino carga.
+// Debe renderizarse dentro de un <Link> (usa useLinkStatus).
+function NavIcon({ Icon, className }: { Icon: LucideIcon; className?: string }) {
+  const { pending } = useLinkStatus();
+  if (pending) return <Loader2 className={cn(className, 'animate-spin')} />;
+  return <Icon className={className} />;
+}
+
+// Spinner en línea para los botones de acción (sin sustituir su icono).
+function LinkPendingSpinner({ className }: { className?: string }) {
+  const { pending } = useLinkStatus();
+  if (!pending) return null;
+  return <Loader2 className={cn('animate-spin', className)} />;
+}
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -57,7 +72,7 @@ export function Sidebar() {
                         : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-100'
                     )}
                   >
-                    <Icon className={cn('w-4 h-4 mr-3', isActive ? 'text-blue-600' : 'text-gray-400 dark:text-gray-500')} />
+                    <NavIcon Icon={Icon} className={cn('w-4 h-4 mr-3', isActive ? 'text-blue-600' : 'text-gray-400 dark:text-gray-500')} />
                     {item.name}
                   </Link>
                 );
@@ -72,6 +87,7 @@ export function Sidebar() {
               >
                 <Plus className="w-4 h-4 mr-2" />
                 Nuevo Entrenamiento
+                <LinkPendingSpinner className="w-4 h-4 ml-2" />
               </Link>
 
               <Link
@@ -80,6 +96,7 @@ export function Sidebar() {
               >
                 <Bookmark className="w-3.5 h-3.5 mr-1.5 text-purple-600" />
                 Nueva Plantilla
+                <LinkPendingSpinner className="w-3.5 h-3.5 ml-1.5 text-purple-600" />
               </Link>
             </div>
           </div>
@@ -140,7 +157,7 @@ export function Sidebar() {
                   isActive ? 'text-blue-600 font-bold' : 'text-gray-500 hover:text-gray-900'
                 )}
               >
-                <Icon className="w-5 h-5 mb-0.5" />
+                <NavIcon Icon={Icon} className="w-5 h-5 mb-0.5" />
                 {item.name}
               </Link>
             );
