@@ -62,7 +62,13 @@ function bmiCategory(bmi: number): { label: string; className: string } {
   return { label: 'Obesidad', className: 'text-rose-600 dark:text-rose-400' };
 }
 
-export function ProgressCorporal({ measurements }: { measurements: BodyMeasurementDTO[] }) {
+export function ProgressCorporal({
+  measurements,
+  trainingVolume = [],
+}: {
+  measurements: BodyMeasurementDTO[];
+  trainingVolume?: { date: string; volume: number }[];
+}) {
   const router = useRouter();
   const [metricId, setMetricId] = useState<CorporalMetric>('weightKg');
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
@@ -222,6 +228,68 @@ export function ProgressCorporal({ measurements }: { measurements: BodyMeasureme
     }
   };
 
+  // ─── Correlación peso ↔ volumen entrenado (últimos 30 días) ───
+  // Lectura orientativa: ¿el cuerpo y el rendimiento van en la misma dirección?
+  const correlation = useMemo(() => {
+    const DAY = 24 * 60 * 60 * 1000;
+    const now = new Date().getTime();
+    const weights = measurements
+      .filter((r) => r.weightKg != null)
+      .map((r) => ({ t: new Date(r.measuredAt).getTime(), v: r.weightKg as number }))
+      .sort((a, b) => a.t - b.t);
+    let deltaW: number | null = null;
+    if (weights.length >= 2) {
+      const last = weights[weights.length - 1];
+      const older = weights.filter((w) => w.t <= now - 30 * DAY);
+      const ref = older.length > 0 ? older[older.length - 1] : weights[0];
+      if (ref.t !== last.t) deltaW = Math.round((last.v - ref.v) * 10) / 10;
+    }
+
+    const recentVol = trainingVolume
+      .filter((w) => new Date(w.date).getTime() >= now - 30 * DAY)
+      .reduce((a, w) => a + (w.volume || 0), 0);
+    const prevVol = trainingVolume
+      .filter((w) => {
+        const t = new Date(w.date).getTime();
+        return t >= now - 60 * DAY && t < now - 30 * DAY;
+      })
+      .reduce((a, w) => a + (w.volume || 0), 0);
+    const volPct = prevVol > 0 ? Math.round(((recentVol - prevVol) / prevVol) * 100) : null;
+
+    if (deltaW == null || volPct == null) {
+      return { deltaW, volPct, verdict: null as string | null, tone: 'neutral' as const };
+    }
+    const wUp = deltaW >= 0.5;
+    const wDown = deltaW <= -0.5;
+    const vUp = volPct >= 5;
+    const vDown = volPct <= -5;
+
+    let verdict: string;
+    let tone: 'good' | 'warn' | 'neutral' = 'neutral';
+    if (!wUp && !wDown && vUp) {
+      verdict = 'Peso estable con más trabajo: posible recomposición (misma báscula, más rendimiento).';
+      tone = 'good';
+    } else if (!wUp && !wDown && !vUp && !vDown) {
+      verdict = 'Todo estable: peso y trabajo en mantenimiento.';
+    } else if (!wUp && !wDown && vDown) {
+      verdict = 'Peso estable pero con menos trabajo: vigila la adherencia al plan.';
+      tone = 'warn';
+    } else if (wUp && vUp) {
+      verdict = 'Ganancia alineada con el entreno: el peso acompaña al aumento de trabajo.';
+      tone = 'good';
+    } else if (wUp) {
+      verdict = 'El peso sube sin más trabajo: revisa dieta, descanso y NEAT antes de asumir que es músculo.';
+      tone = 'warn';
+    } else if (vDown) {
+      verdict = 'Peso y trabajo a la baja: posible exceso de déficit o fatiga acumulada.';
+      tone = 'warn';
+    } else {
+      verdict = 'Definición manteniendo rendimiento: el peso baja sin perder trabajo. Buena señal.';
+      tone = 'good';
+    }
+    return { deltaW, volPct, verdict, tone };
+  }, [measurements, trainingVolume]);
+
   const reversed = [...measurements].reverse();
 
   return (
@@ -294,6 +362,55 @@ export function ProgressCorporal({ measurements }: { measurements: BodyMeasureme
           </CardContent>
         </Card>
       </div>
+
+      {/* ─── CORRELACIÓN PESO ↔ VOLUMEN (últimos 30 días) ─── */}
+      <Card className="border-gray-200 dark:border-gray-700 dark:bg-gray-900 shadow-2xs">
+        <CardHeader className="pb-3 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/40">
+          <CardTitle className="text-sm font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+            <TrendingUp className="w-4 h-4 text-sky-600" />
+            Peso vs Volumen Entrenado
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-4 sm:p-5 space-y-3">
+          {correlation.verdict == null ? (
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Necesitas al menos 2 registros de peso y volumen entrenado en los últimos 60 días para la lectura.
+              Registra tu peso cada semana y entrena con regularidad: aquí aparecerá si tu cuerpo y tu rendimiento
+              van en la misma dirección.
+            </p>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-2 sm:gap-3">
+                <div className="p-3 rounded-xl bg-sky-50/70 dark:bg-sky-950/20 border border-sky-100 dark:border-sky-800/50 text-center">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-sky-600 dark:text-sky-400">Peso (30d)</p>
+                  <p className={`text-xl font-black tabular-nums ${correlation.deltaW != null && correlation.deltaW !== 0 ? 'text-gray-900 dark:text-gray-100' : 'text-gray-400'}`}>
+                    {correlation.deltaW != null && correlation.deltaW > 0 ? '+' : ''}{correlation.deltaW?.toFixed(1)} kg
+                  </p>
+                </div>
+                <div className="p-3 rounded-xl bg-purple-50/70 dark:bg-purple-950/20 border border-purple-100 dark:border-purple-800/50 text-center">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400">Volumen (30d vs previos)</p>
+                  <p className={`text-xl font-black tabular-nums ${correlation.volPct !== 0 ? 'text-gray-900 dark:text-gray-100' : 'text-gray-400'}`}>
+                    {correlation.volPct != null && correlation.volPct > 0 ? '+' : ''}{correlation.volPct}%
+                  </p>
+                </div>
+              </div>
+              <div className={`flex items-start gap-2 p-3 rounded-xl border text-xs ${
+                correlation.tone === 'good'
+                  ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/50 text-emerald-900 dark:text-emerald-200'
+                  : correlation.tone === 'warn'
+                  ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800/50 text-amber-900 dark:text-amber-200'
+                  : 'bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300'
+              }`}>
+                <span className="font-bold">{correlation.verdict}</span>
+              </div>
+              <p className="text-[10px] text-gray-400 dark:text-gray-500">
+                Lectura orientativa: el peso fluctúa por agua, glucógeno y digestiones. Valora tendencias de varias
+                semanas, no un dato aislado.
+              </p>
+            </>
+          )}
+        </CardContent>
+      </Card>
 
       {measurements.length === 0 ? (
         <Card className="border-dashed bg-gray-50/50 dark:bg-gray-800/30">

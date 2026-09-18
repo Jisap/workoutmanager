@@ -170,7 +170,16 @@ export function ProgressClient({
             </h3>
           </div>
 
-          <ProgressCorporal measurements={bodyMeasurements} />
+          <ProgressCorporal
+            measurements={bodyMeasurements}
+            trainingVolume={(advancedData.musculacion?.avanzado?.weeklyVolumeTimeline || []).map((w: any) => ({
+              date: w.week,
+              volume: ['Pecho', 'Espalda', 'Piernas', 'Gluteos', 'Hombros', 'Brazos', 'Core'].reduce(
+                (acc: number, g: string) => acc + (Number(w[g]) || 0),
+                0
+              ),
+            }))}
+          />
         </div>
       )}
 
