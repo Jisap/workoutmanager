@@ -397,7 +397,7 @@ function CustomExercisesSection({
         )}
 
         {/* Exercise list */}
-        <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+        <div className="space-y-2 max-h-72 lg:max-h-96 overflow-y-auto pr-1">
           {exercises.map((ex) => (
             <div
               key={ex.id}
@@ -681,7 +681,7 @@ function CategoriesSection({
         </div>
 
         {/* Lista de Categorías */}
-        <div className="divide-y divide-gray-100 border border-gray-100 rounded-xl overflow-hidden dark:divide-gray-800 dark:border-gray-800 max-h-80 overflow-y-auto">
+        <div className="divide-y divide-gray-100 border border-gray-100 rounded-xl overflow-hidden dark:divide-gray-800 dark:border-gray-800 max-h-80 lg:max-h-[28rem] overflow-y-auto">
           {filteredCategories.map((cat) => (
             <div
               key={cat.id}
@@ -763,7 +763,7 @@ function CategoriesSection({
                     )}
                   </div>
 
-                  <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-xs text-gray-400 font-medium tabular-nums dark:text-gray-500">
                       {cat.exerciseCount ?? 0} {cat.exerciseCount === 1 ? 'ejercicio' : 'ejercicios'}
                     </span>
@@ -1034,6 +1034,16 @@ function PreferencesSection() {
 // ─────────────────────────────────────────────────────────────────────────────
 function ThemeSection() {
   const { theme, toggleTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMounted(true);
+  }, []);
+
+  // Sin este guard, el servidor renderiza el tema claro y el cliente el guardado
+  // (localStorage), produciendo hydration mismatch en las clases del icono.
+  if (!mounted) return <div className="h-24 animate-pulse bg-gray-100 dark:bg-gray-800 rounded-lg" />;
 
   return (
     <Section
@@ -1096,14 +1106,20 @@ export function SettingsClient({
   categories,
 }: SettingsClientProps) {
   return (
-    <div className="max-w-2xl mx-auto space-y-6 pb-24">
-      <ProfileSection profile={profile} />
-      <GoalsSection />
-      <CustomExercisesSection initialExercises={customExercises} categories={categories} />
-      <CategoriesSection initialCategories={categories} />
-      <WorkoutTypesSection workoutTypes={workoutTypes} />
-      <PreferencesSection />
-      <ThemeSection />
+    <div className="max-w-2xl lg:max-w-6xl mx-auto pb-24 grid grid-cols-1 lg:grid-cols-5 gap-6 items-start">
+      {/* Columna principal (ancha): perfil y gestión de datos */}
+      <div className="space-y-6 lg:col-span-3 min-w-0">
+        <ProfileSection profile={profile} />
+        <CustomExercisesSection initialExercises={customExercises} categories={categories} />
+        <CategoriesSection initialCategories={categories} />
+      </div>
+      {/* Columna secundaria (estrecha): objetivos y preferencias */}
+      <div className="space-y-6 lg:col-span-2 min-w-0">
+        <GoalsSection />
+        <WorkoutTypesSection workoutTypes={workoutTypes} />
+        <PreferencesSection />
+        <ThemeSection />
+      </div>
     </div>
   );
 }
