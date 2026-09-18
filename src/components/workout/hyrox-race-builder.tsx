@@ -140,7 +140,7 @@ const OFFICIAL_STATIONS_SPECS: HyroxStationSpec[] = [
     notes: 'Estación 6: 200m (2 Kettlebells)',
   },
   {
-    searchQuery: ['sandbag carry', 'sandbag lunges', 'zancadas saco', 'zancadas'],
+    searchQuery: ['sandbag lunges', 'sandbag lunge', 'sandbag carry', 'sandbag', 'zancadas saco', 'zancadas'],
     defaultName: 'Sandbag Lunges',
     distance: 100,
     reps: 0,

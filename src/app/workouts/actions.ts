@@ -1956,7 +1956,7 @@ export async function getAdvancedProgressData(userId: string) {
         hyroxStationKey = 'rowing';
       } else if (exNorm.includes('farmers carry') || exNorm.includes('farmer carry') || exNorm.includes('paseo del granjero') || exNorm.includes('farmers walk') || exNorm.includes('granjero') || (inHyroxContext && exNorm.includes('carry'))) {
         hyroxStationKey = 'farmersCarry';
-      } else if (exNorm.includes('sandbag lunges') || exNorm.includes('zancadas saco') || exNorm.includes('lunges saco') || exNorm.includes('sandbag lunge') || (exNorm.includes('zancadas') && exNorm.includes('saco')) || (inHyroxContext && (exNorm.includes('zancada') || exNorm.includes('lunge')))) {
+      } else if (exNorm.includes('sandbag lunges') || exNorm.includes('zancadas saco') || exNorm.includes('lunges saco') || exNorm.includes('sandbag lunge') || (exNorm.includes('zancadas') && exNorm.includes('saco')) || (inHyroxContext && (exNorm.includes('zancada') || exNorm.includes('lunge') || exNorm.includes('sandbag')))) {
         hyroxStationKey = 'sandbagLunges';
       } else if (exNorm.includes('wall ball') || exNorm.includes('wallball') || exNorm.includes('balon medicinal')) {
         hyroxStationKey = 'wallBalls';
@@ -2152,9 +2152,10 @@ export async function getAdvancedProgressData(userId: string) {
   };
 
   // 3b. ESTADÍSTICAS AVANZADAS DE MUSCULACIÓN
-  const isMusculacionWorkout = (w: (typeof chronologicalWorkouts)[0]) =>
-    w.type?.name?.toLowerCase().includes('musculación') ||
-    w.type?.name?.toLowerCase().includes('musculacion');
+  // NOTA: se incluyen TODOS los entrenos con trabajo de fuerza (peso x reps en
+  // grupos Pecho/Espalda/Piernas/Gluteos/Hombros/Brazos/Core), sin filtrar por
+  // tipo de entreno. Filtrar solo por tipo 'Musculación' dejaba fuera entrenos
+  // de Powerlifting/Funcional/etc. y el timeline se quedaba con 1 solo punto.
 
   // Helper: obtener semana (lunes) de una fecha
   const getWeekKey = (date: Date): string => {
@@ -2210,17 +2211,21 @@ export async function getAdvancedProgressData(userId: string) {
   // Listas de semana ordenadas
   const allWeekKeys = new Set<string>();
 
+  // Timeline por sesión (para mostrar evolución aunque todo caiga en 1 semana)
+  const sessionVolumeList: {
+    date: string;
+    label: string;
+    workoutName: string;
+    total: number;
+    groups: Record<string, number>;
+  }[] = [];
+
   for (const w of chronologicalWorkouts) {
-    if (!isMusculacionWorkout(w)) continue;
-
     const weekKey = getWeekKey(new Date(w.startTime));
-    allWeekKeys.add(weekKey);
-
-    if (!weeklyVolumeByGroup[weekKey]) weeklyVolumeByGroup[weekKey] = {};
-    if (!weeklyFrequencyByGroup[weekKey]) weeklyFrequencyByGroup[weekKey] = {};
 
     const groupsTrainedThisSession = new Set<string>();
     let sessionVolume = 0;
+    const sessionGroups: Record<string, number> = {};
 
     for (const we of w.exercises) {
       const catName = we.exercise.category?.name || categoryNameMap.get(we.exercise.categoryId || 0) || 'Otros';
@@ -2250,9 +2255,13 @@ export async function getAdvancedProgressData(userId: string) {
         sessionVolume += vol;
         musculacionOnlySets++;
 
-        // Volumen semanal por grupo
-        weeklyVolumeByGroup[weekKey][groupName] = (weeklyVolumeByGroup[weekKey][groupName] || 0) + vol;
-        groupsTrainedThisSession.add(groupName);
+        // Volumen semanal/por sesión por grupo (solo grupos principales de fuerza)
+        if (groupName !== 'Otros') {
+          if (!weeklyVolumeByGroup[weekKey]) weeklyVolumeByGroup[weekKey] = {};
+          weeklyVolumeByGroup[weekKey][groupName] = (weeklyVolumeByGroup[weekKey][groupName] || 0) + vol;
+          sessionGroups[groupName] = (sessionGroups[groupName] || 0) + vol;
+          groupsTrainedThisSession.add(groupName);
+        }
 
         // Zonas de repeticiones
         if (rVal < 6) repZoneCounts.fuerza++;
@@ -2288,21 +2297,71 @@ export async function getAdvancedProgressData(userId: string) {
       }
     }
 
-    // Frecuencia semanal por grupo
-    for (const g of groupsTrainedThisSession) {
-      weeklyFrequencyByGroup[weekKey][g] = (weeklyFrequencyByGroup[weekKey][g] || 0) + 1;
+    // Solo cuentan sesiones con trabajo real de fuerza en grupos principales.
+    // Así las sesiones puras de cardio no crean semanas vacías ni puntos fantasma.
+    if (groupsTrainedThisSession.size > 0) {
+      allWeekKeys.add(weekKey);
+
+      // Frecuencia semanal por grupo
+      if (!weeklyFrequencyByGroup[weekKey]) weeklyFrequencyByGroup[weekKey] = {};
+      for (const g of groupsTrainedThisSession) {
+        weeklyFrequencyByGroup[weekKey][g] = (weeklyFrequencyByGroup[weekKey][g] || 0) + 1;
+      }
+
+      // Timeline por sesión (últimas sesiones con fuerza, en orden cronológico)
+      const sessionTotal = Object.values(sessionGroups).reduce((a, b) => a + b, 0);
+      const sessionDate = new Date(w.startTime);
+      sessionVolumeList.push({
+        date: sessionDate.toISOString(),
+        label: sessionDate.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }),
+        workoutName: w.name,
+        total: sessionTotal,
+        groups: { ...sessionGroups },
+      });
     }
 
-    // Densidad
-    totalMusculacionSessionVolume += sessionVolume;
-    if (w.totalTimeSeconds && w.totalTimeSeconds > 0) {
-      totalMusculacionSessionMinutes += w.totalTimeSeconds / 60;
+    // Densidad (solo sesiones con fuerza)
+    if (groupsTrainedThisSession.size > 0) {
+      totalMusculacionSessionVolume += sessionVolume;
+      if (w.totalTimeSeconds && w.totalTimeSeconds > 0) {
+        totalMusculacionSessionMinutes += w.totalTimeSeconds / 60;
+      }
     }
   }
 
-  // Ordenar semanas cronológicamente y tomar las últimas 12
-  const sortedWeekKeys = Array.from(allWeekKeys).sort().slice(-12);
+  // Ordenar semanas cronológicamente, rellenar huecos con ceros y tomar las últimas 12.
+  // Sin relleno, los huecos (semanas sin entrenar) se ocultan y la "evolución" engaña.
+  const addDays = (weekKey: string, days: number): string => {
+    const [y, m, d] = weekKey.split('-').map(Number);
+    const dt = new Date(y, m - 1, d);
+    dt.setDate(dt.getDate() + days);
+    return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+  };
+  const allSortedWeeks = Array.from(allWeekKeys).sort();
+  const last12Raw = allSortedWeeks.slice(-12);
+  const sortedWeekKeys: string[] = [];
+  if (last12Raw.length > 0) {
+    let cursor = last12Raw[0];
+    const last = last12Raw[last12Raw.length - 1];
+    // Seguridad: como máximo 12 entradas aunque haya huecos grandes
+    while (cursor <= last && sortedWeekKeys.length < 12) {
+      sortedWeekKeys.push(cursor);
+      if (cursor === last) break;
+      cursor = addDays(cursor, 7);
+    }
+    // Si el rango con huecos supera 12 semanas, quedarse con las 12 más recientes
+    while (sortedWeekKeys.length > 12) sortedWeekKeys.shift();
+  }
   const groupNames = ['Pecho', 'Espalda', 'Piernas', 'Gluteos', 'Hombros', 'Brazos', 'Core'];
+
+  // Últimas 15 sesiones con fuerza (para ver evolución aunque todo caiga en 1 semana)
+  const sessionVolumeTimeline = sessionVolumeList.slice(-15).map((s) => ({
+    week: s.date,
+    label: s.label,
+    workoutName: s.workoutName,
+    total: s.total,
+    ...Object.fromEntries(groupNames.map((g) => [g, s.groups[g] || 0])),
+  }));
 
   const weeklyVolumeTimeline = sortedWeekKeys.map((wk) => ({
     week: wk,
@@ -2388,6 +2447,7 @@ export async function getAdvancedProgressData(userId: string) {
   const musculacionAvanzado = {
     weeklyVolumeTimeline,
     weeklyFrequencyTimeline,
+    sessionVolumeTimeline,
     groupFrequencyAvg,
     repZones,
     avgRelativeIntensity,

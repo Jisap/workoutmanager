@@ -33,6 +33,20 @@ interface MusculacionAvanzado {
     Brazos: number;
     Core: number;
   }[];
+  // Timeline por sesión (fallback cuando todo cae en 1 semana: sí muestra evolución)
+  sessionVolumeTimeline?: {
+    week: string;
+    label: string;
+    workoutName?: string;
+    total?: number;
+    Pecho: number;
+    Espalda: number;
+    Piernas: number;
+    Gluteos: number;
+    Hombros: number;
+    Brazos: number;
+    Core: number;
+  }[];
   weeklyFrequencyTimeline: {
     week: string;
     label: string;
@@ -125,7 +139,12 @@ export function ProgressMusculacion({ musculacion }: ProgressMusculacionProps) {
   const chartWidth = svgWidth - padLeft - padRight;
   const chartHeight = svgHeight - padTop - padBottom;
 
-  const chartData = avanzado.weeklyVolumeTimeline;
+  const weeklyData = avanzado.weeklyVolumeTimeline ?? [];
+  const sessionData = avanzado.sessionVolumeTimeline ?? [];
+  // Si solo hay 0-1 semanas con datos pero sí hay varias sesiones,
+  // mostrar evolución por sesión: si no, el gráfico queda en un único punto.
+  const useSessionView = weeklyData.length <= 1 && sessionData.length > 1;
+  const chartData = useSessionView ? sessionData : weeklyData;
 
   const activeGroups = useMemo(() => {
     if (selectedGroup === 'all') return groupOrder;
@@ -267,9 +286,13 @@ export function ProgressMusculacion({ musculacion }: ProgressMusculacionProps) {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <CardTitle className="text-sm font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
                 <TrendingUp className="w-4 h-4 text-purple-600" />
-                Volumen Semanal por Grupo Muscular
+                {useSessionView ? 'Volumen por Sesión por Grupo Muscular' : 'Volumen Semanal por Grupo Muscular'}
               </CardTitle>
-              <span className="text-[11px] text-gray-400">Últimas {chartData.length} semanas</span>
+              <span className="text-[11px] text-gray-400">
+                {useSessionView
+                  ? `Últimas ${chartData.length} sesiones`
+                  : `Últimas ${chartData.length} semanas`}
+              </span>
             </div>
           </CardHeader>
           <CardContent className="p-4 sm:p-5 space-y-4">
@@ -459,7 +482,12 @@ export function ProgressMusculacion({ musculacion }: ProgressMusculacionProps) {
             {hoveredWeek !== null && hoveredWeek < chartData.length && (
               <div className="bg-gray-900 text-white dark:bg-gray-800 border border-gray-700 rounded-xl p-3 shadow-xl text-xs space-y-2">
                 <div className="flex items-center justify-between border-b border-gray-700/60 pb-1.5">
-                  <span className="font-bold text-gray-200">{chartData[hoveredWeek].label}</span>
+                  <span className="font-bold text-gray-200">
+                    {chartData[hoveredWeek].label}
+                    {'workoutName' in chartData[hoveredWeek] && (chartData[hoveredWeek] as { workoutName?: string }).workoutName
+                      ? ` · ${(chartData[hoveredWeek] as { workoutName?: string }).workoutName}`
+                      : ''}
+                  </span>
                   <span className="font-mono text-gray-400 text-[11px]">
                     Total:{' '}
                     {(

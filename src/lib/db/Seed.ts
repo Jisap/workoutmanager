@@ -153,7 +153,7 @@ async function seed() {
 
         // === STRONGMAN ===
         { name: 'Farmer Carry', categoryId: getId('Strongman') },
-        { name: 'Sandbag Carry', categoryId: getId('Strongman') },
+        { name: 'Sandbag Lunges', categoryId: getId('Strongman') },
         { name: 'Sled Push', categoryId: getId('Strongman') },
         { name: 'Sled Pull', categoryId: getId('Strongman') },
         { name: 'Atlas Stones', categoryId: getId('Strongman') },
