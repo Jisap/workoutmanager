@@ -577,6 +577,8 @@ export async function getExerciseProgress(userId: string, exerciseId: number) {
       weight: sets.weight,
       reps: sets.repCount,
       rpe: sets.rpe,
+      distance: sets.distance,
+      durationSeconds: sets.durationSeconds,
     })
     .from(sets)
     .innerJoin(workoutExercises, eq(sets.workoutExerciseId, workoutExercises.id))
@@ -598,6 +600,9 @@ export async function getExerciseProgress(userId: string, exerciseId: number) {
     estimated1RM: number;
     totalVolume: number;
     totalReps: number;
+    totalDistance: number;
+    totalDurationSeconds: number;
+    maxDistance: number;
     isBodyweight: boolean;
     isDraft: boolean;
     avgRpe: number | null;
@@ -607,6 +612,8 @@ export async function getExerciseProgress(userId: string, exerciseId: number) {
       reps: number;
       rpe: number | null;
       estimated1RM: number;
+      distance: number | null;
+      durationSeconds: number | null;
     }[];
   }
 
@@ -615,15 +622,18 @@ export async function getExerciseProgress(userId: string, exerciseId: number) {
   const rpeAcc: Record<number, { sum: number; count: number }> = {};
 
   for (const row of exerciseSets) {
-    // Permitir sets sin peso (bodyweight): solo necesitamos reps
-    if (!row.reps) continue;
-
-    const r = Number(row.reps);
+    // Incluir series de fuerza (reps), cardio (distancia/tiempo) y carries (peso+distancia).
+    // Antes se exigían reps y el cardio puro (remo, run, SkiErg) desaparecía de las estadísticas.
+    const r = row.reps ? Number(row.reps) : 0;
     const w = row.weight !== null && row.weight !== undefined ? Number(row.weight) : 0;
+    const dist = row.distance !== null && row.distance !== undefined ? Number(row.distance) : 0;
+    const dur = row.durationSeconds !== null && row.durationSeconds !== undefined ? Number(row.durationSeconds) : 0;
+    if (r <= 0 && w <= 0 && dist <= 0 && dur <= 0) continue;
+
     const hasWeight = w > 0;
 
-    // Fórmula Epley para 1RM: w * (1 + r / 30). Para bodyweight est1RM = maxReps
-    const est1RM = hasWeight
+    // Fórmula Epley para 1RM: w * (1 + r / 30). Solo con peso Y reps (no para carries por metros).
+    const est1RM = hasWeight && r > 0
       ? (r === 1 ? w : Math.round(w * (1 + r / 30) * 10) / 10)
       : 0;
 
@@ -635,8 +645,11 @@ export async function getExerciseProgress(userId: string, exerciseId: number) {
         maxWeight: w,
         maxReps: r,
         estimated1RM: est1RM,
-        totalVolume: hasWeight ? Math.round(w * r) : 0,
+        totalVolume: hasWeight && r > 0 ? Math.round(w * r) : 0,
         totalReps: r,
+        totalDistance: dist,
+        totalDurationSeconds: dur,
+        maxDistance: dist,
         isBodyweight: !hasWeight,
         // Borrador = guardado sin finalizar (tiempo 0): contamina la curva si se incluye
         isDraft: !row.totalTimeSeconds || row.totalTimeSeconds <= 0,
@@ -648,6 +661,8 @@ export async function getExerciseProgress(userId: string, exerciseId: number) {
             reps: r,
             rpe: row.rpe ?? null,
             estimated1RM: est1RM,
+            distance: dist > 0 ? dist : null,
+            durationSeconds: dur > 0 ? dur : null,
           },
         ],
       };
@@ -657,13 +672,16 @@ export async function getExerciseProgress(userId: string, exerciseId: number) {
     } else {
       const sess = sessionsMap[row.workoutId];
       sess.totalReps += r;
+      sess.totalDistance += dist;
+      sess.totalDurationSeconds += dur;
+      if (dist > sess.maxDistance) sess.maxDistance = dist;
       if (row.rpe != null && row.rpe > 0) {
         const acc = rpeAcc[row.workoutId] || { sum: 0, count: 0 };
         acc.sum += row.rpe;
         acc.count += 1;
         rpeAcc[row.workoutId] = acc;
       }
-      if (hasWeight) {
+      if (hasWeight && r > 0) {
         sess.totalVolume += Math.round(w * r);
         sess.isBodyweight = false;
       }
@@ -673,6 +691,8 @@ export async function getExerciseProgress(userId: string, exerciseId: number) {
         reps: r,
         rpe: row.rpe ?? null,
         estimated1RM: est1RM,
+        distance: dist > 0 ? dist : null,
+        durationSeconds: dur > 0 ? dur : null,
       });
 
       if (r > sess.maxReps) sess.maxReps = r;

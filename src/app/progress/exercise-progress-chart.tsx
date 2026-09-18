@@ -22,6 +22,8 @@ import {
   Filter,
   Check,
   Zap,
+  Timer,
+  Route,
 } from 'lucide-react';
 
 export interface SetDetail {
@@ -30,6 +32,8 @@ export interface SetDetail {
   reps: number;
   rpe: number | null;
   estimated1RM: number;
+  distance: number | null;
+  durationSeconds: number | null;
 }
 
 export interface ProgressSessionPoint {
@@ -41,6 +45,9 @@ export interface ProgressSessionPoint {
   estimated1RM: number;
   totalVolume: number;
   totalReps: number;
+  totalDistance: number;
+  totalDurationSeconds: number;
+  maxDistance: number;
   isBodyweight: boolean;
   isDraft: boolean;
   avgRpe: number | null;
@@ -61,8 +68,16 @@ interface ExerciseAnalyticsProps {
   data: ProgressSessionPoint[] | null;
 }
 
-type MetricType = '1rm' | 'maxWeight' | 'volume' | 'reps';
+type MetricType = '1rm' | 'maxWeight' | 'volume' | 'reps' | 'distance' | 'duration';
 type TimeRange = '1m' | '3m' | '6m' | '1y' | 'all';
+
+// En la métrica de tiempo menos es mejor (los PRs y la tendencia invierten su sentido)
+const lowerIsBetter = (m: MetricType) => m === 'duration';
+
+function formatDuration(totalSeconds: number): string {
+  const s = Math.max(0, Math.round(totalSeconds));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
 
 export function ExerciseProgressChart({
   availableExercises,
@@ -77,8 +92,21 @@ export function ExerciseProgressChart({
     return data.every((s) => s.isBodyweight);
   }, [data]);
 
-  // Estados interactivos
-  const [metric, setMetric] = useState<MetricType>(() => (data?.every((s) => s.isBodyweight) ? 'reps' : '1rm'));
+  // Qué tipos de datos tiene el ejercicio (fuerza, cardio, carries, bodyweight)
+  const hasWeightData = useMemo(() => (data || []).some((s) => !s.isBodyweight), [data]);
+  const has1RMData = useMemo(() => (data || []).some((s) => s.estimated1RM > 0), [data]);
+  const hasDistData = useMemo(() => (data || []).some((s) => (s.totalDistance || 0) > 0), [data]);
+  const hasTimeData = useMemo(() => (data || []).some((s) => (s.totalDurationSeconds || 0) > 0), [data]);
+
+  // Estados interactivos (métrica por defecto según el tipo real de datos)
+  const [metric, setMetric] = useState<MetricType>(() => {
+    if (!data || data.length === 0) return '1rm';
+    if (data.some((s) => s.estimated1RM > 0)) return '1rm';
+    if (data.some((s) => !s.isBodyweight)) return 'maxWeight';
+    if (data.some((s) => (s.totalDistance || 0) > 0)) return 'distance';
+    if (data.some((s) => (s.totalDurationSeconds || 0) > 0)) return 'duration';
+    return 'reps';
+  });
   const [timeRange, setTimeRange] = useState<TimeRange>('all');
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   // Nuevos: tendencia, volumen en barras, borradores y comparador
@@ -161,18 +189,23 @@ export function ExerciseProgressChart({
     if (metric === '1rm') return s.estimated1RM;
     if (metric === 'maxWeight') return s.maxWeight;
     if (metric === 'reps') return s.maxReps;
-    return s.totalVolume;
+    if (metric === 'distance') return s.totalDistance || 0;
+    if (metric === 'duration') return s.totalDurationSeconds || 0;
+    // Volumen: en bodyweight se mide en reps (el volumen en kg siempre es 0 ahí)
+    return isBodyweight ? (s.totalReps ?? 0) : s.totalVolume;
   };
 
-  // PRs cronológicos: sesiones que superan todo lo anterior (desde la 2ª en adelante)
+  // PRs cronológicos: sesiones que superan todo lo anterior (desde la 2ª en adelante).
+  // En tiempo, mejor = menos segundos (se ignoran sesiones sin tiempo registrado).
   const chronoPRs = useMemo(() => {
+    const lower = lowerIsBetter(metric);
     const flags = new Array(filteredData.length).fill(false);
-    let best = -Infinity;
+    let best = lower ? Infinity : -Infinity;
     filteredData.forEach((s, i) => {
       const v = metricVal(s);
       if (i === 0) {
         best = v;
-      } else if (v > best) {
+      } else if (lower ? v > 0 && v < best : v > best) {
         flags[i] = true;
         best = v;
       }
@@ -250,19 +283,22 @@ export function ExerciseProgressChart({
   const stats = useMemo(() => {
     if (!filteredData || filteredData.length === 0) return null;
 
-    const values = filteredData.map((d) => {
-      if (metric === '1rm') return d.estimated1RM;
-      if (metric === 'maxWeight') return d.maxWeight;
-      if (metric === 'reps') return d.maxReps;
-      return d.totalVolume;
-    });
+    const values = filteredData.map((d) => metricVal(d));
 
     const currentVal = values[values.length - 1];
     const initialVal = values[0];
     const peakVal = Math.max(...values);
     const minVal = Math.min(...values);
+    // Mejor marca según el sentido de la métrica (en tiempo gana el mínimo > 0)
+    const positiveVals = values.filter((v) => v > 0);
+    const bestVal = lowerIsBetter(metric)
+      ? positiveVals.length > 0
+        ? Math.min(...positiveVals)
+        : 0
+      : peakVal;
     const diff = currentVal - initialVal;
     const diffPercent = initialVal > 0 ? (diff / initialVal) * 100 : 0;
+    const avgMetricVal = values.reduce((a, b) => a + b, 0) / values.length;
 
     // Mejor 1RM histórico
     const best1RMSession = [...filteredData].sort((a, b) => b.estimated1RM - a.estimated1RM)[0];
@@ -270,27 +306,43 @@ export function ExerciseProgressChart({
     const bestMaxRepsSession = [...filteredData].sort((a, b) => b.maxReps - a.maxReps)[0];
     const totalVolumeAll = filteredData.reduce((acc, s) => acc + s.totalVolume, 0);
     const totalRepsAll = filteredData.reduce((acc, s) => acc + (s.totalReps ?? 0), 0);
+    const totalDistanceAll = filteredData.reduce((acc, s) => acc + (s.totalDistance || 0), 0);
+    const totalDurationAll = filteredData.reduce((acc, s) => acc + (s.totalDurationSeconds || 0), 0);
     const avgVolume = Math.round(totalVolumeAll / filteredData.length);
     const avgReps = Math.round(totalRepsAll / filteredData.length);
+    // Mejor distancia (máximo por sesión) y mejor tiempo (mínimo con registro)
+    const withDist = filteredData.filter((s) => (s.totalDistance || 0) > 0);
+    const bestDistanceSession = withDist.length > 0 ? [...withDist].sort((a, b) => (b.totalDistance || 0) - (a.totalDistance || 0))[0] : undefined;
+    const withTime = filteredData.filter((s) => (s.totalDurationSeconds || 0) > 0);
+    const bestDurationSession = withTime.length > 0 ? [...withTime].sort((a, b) => (a.totalDurationSeconds || 0) - (b.totalDurationSeconds || 0))[0] : undefined;
 
     return {
       currentVal,
       peakVal,
       minVal,
+      bestVal,
       diff,
       diffPercent,
+      avgMetricVal,
       best1RM: best1RMSession?.estimated1RM ?? 0,
       best1RMSession,
       bestMaxWeight: bestMaxWeightSession?.maxWeight ?? 0,
       bestMaxWeightSession,
       bestMaxReps: bestMaxRepsSession?.maxReps ?? 0,
       bestMaxRepsSession,
+      bestDistance: bestDistanceSession?.totalDistance ?? 0,
+      bestDistanceSession,
+      bestDuration: bestDurationSession?.totalDurationSeconds ?? 0,
+      bestDurationSession,
+      totalDistanceAll,
+      totalDurationAll,
       avgVolume,
       avgReps,
       totalRepsAll,
       totalSessions: filteredData.length,
       values,
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filteredData, metric]);
 
   // Configuraciones del gráfico SVG
@@ -451,14 +503,32 @@ export function ExerciseProgressChart({
     if (m === '1rm') return '1RM Estimado';
     if (m === 'maxWeight') return 'Carga Máxima';
     if (m === 'reps') return 'Máx. Repeticiones';
+    if (m === 'distance') return 'Distancia / Sesión';
+    if (m === 'duration') return 'Tiempo / Sesión';
     return 'Volumen Total';
   };
 
   const formatVal = (v: number) => {
-    if (metric === 'volume') return `${v.toLocaleString('es-ES')} kg`;
+    if (metric === 'volume') return isBodyweight ? `${v} reps` : `${v.toLocaleString('es-ES')} kg`;
     if (metric === 'reps') return `${v} reps`;
+    if (metric === 'distance') return `${v.toLocaleString('es-ES')} m`;
+    if (metric === 'duration') return formatDuration(v);
     return `${v} kg`;
   };
+
+  // Diferencia inicio→fin con unidades y signo (en tiempo, bajar es mejorar)
+  const formatDiff = (d: number) => {
+    if (metric === 'duration') {
+      if (d === 0) return '0:00';
+      const sign = d > 0 ? '+' : '−';
+      return `${sign}${formatDuration(Math.abs(d))}`;
+    }
+    if (metric === 'distance') return `${d > 0 ? '+' : ''}${d.toLocaleString('es-ES')} m`;
+    if (metric === 'reps' || (metric === 'volume' && isBodyweight)) return `${d > 0 ? '+' : ''}${d} reps`;
+    return `${d > 0 ? '+' : ''}${d} kg`;
+  };
+
+  const isGoodDiff = (d: number) => (lowerIsBetter(metric) ? d < 0 : d > 0);
 
   return (
     <div className="space-y-6">
@@ -636,13 +706,13 @@ export function ExerciseProgressChart({
         <>
           {/* 2. BARRA DE CONTROL DE MÉTRICAS Y RANGOS TEMPORALES */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-gray-200 dark:bg-gray-900 dark:border-gray-700">
-            {/* Selector de Métrica */}
-            <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl dark:bg-gray-800">
-              {!isBodyweight && (
+            {/* Selector de Métrica (solo las que tienen datos reales) */}
+            <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl dark:bg-gray-800 overflow-x-auto">
+              {has1RMData && (
                 <>
                   <button
                     onClick={() => setMetric('1rm')}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all whitespace-nowrap ${
                       metric === '1rm'
                         ? 'bg-white text-purple-700 shadow-xs dark:bg-gray-700 dark:text-purple-300'
                         : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100'
@@ -654,7 +724,7 @@ export function ExerciseProgressChart({
 
                   <button
                     onClick={() => setMetric('maxWeight')}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all whitespace-nowrap ${
                       metric === 'maxWeight'
                         ? 'bg-white text-purple-700 shadow-xs dark:bg-gray-700 dark:text-purple-300'
                         : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100'
@@ -666,10 +736,24 @@ export function ExerciseProgressChart({
                 </>
               )}
 
-              {isBodyweight && (
+              {hasWeightData && !has1RMData && (
+                <button
+                  onClick={() => setMetric('maxWeight')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all whitespace-nowrap ${
+                    metric === 'maxWeight'
+                      ? 'bg-white text-purple-700 shadow-xs dark:bg-gray-700 dark:text-purple-300'
+                      : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100'
+                  }`}
+                >
+                  <Trophy className="w-3.5 h-3.5" />
+                  <span>Carga Máx.</span>
+                </button>
+              )}
+
+              {!hasWeightData && (
                 <button
                   onClick={() => setMetric('reps')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all whitespace-nowrap ${
                     metric === 'reps'
                       ? 'bg-white text-purple-700 shadow-xs dark:bg-gray-700 dark:text-purple-300'
                       : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100'
@@ -680,9 +764,38 @@ export function ExerciseProgressChart({
                 </button>
               )}
 
+              {hasDistData && (
+                <button
+                  onClick={() => setMetric('distance')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all whitespace-nowrap ${
+                    metric === 'distance'
+                      ? 'bg-white text-purple-700 shadow-xs dark:bg-gray-700 dark:text-purple-300'
+                      : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100'
+                  }`}
+                >
+                  <Route className="w-3.5 h-3.5" />
+                  <span>Distancia</span>
+                </button>
+              )}
+
+              {hasTimeData && (
+                <button
+                  onClick={() => setMetric('duration')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all whitespace-nowrap ${
+                    metric === 'duration'
+                      ? 'bg-white text-purple-700 shadow-xs dark:bg-gray-700 dark:text-purple-300'
+                      : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100'
+                  }`}
+                >
+                  <Timer className="w-3.5 h-3.5" />
+                  <span>Tiempo</span>
+                </button>
+              )}
+
+              {(!hasWeightData || maxVolume > 0) && (
               <button
                 onClick={() => setMetric('volume')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all whitespace-nowrap ${
                   metric === 'volume'
                     ? 'bg-white text-purple-700 shadow-xs dark:bg-gray-700 dark:text-purple-300'
                     : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100'
@@ -691,6 +804,7 @@ export function ExerciseProgressChart({
                 <Layers className="w-3.5 h-3.5" />
                 <span>{isBodyweight ? 'Total Reps' : 'Volumen'}</span>
               </button>
+              )}
             </div>
 
             {/* Selector de Rango Temporal */}
@@ -859,9 +973,9 @@ export function ExerciseProgressChart({
             </div>
           )}
 
-          {/* 3. TARJETAS DE IMPACTO ANALÍTICO (KPIs) */}
+          {/* 3. TARJETAS DE IMPACTO ANALÍTICO (KPIs adaptados al tipo de ejercicio) */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
-            {/* Récord: 1RM para con peso, Máx Reps para bodyweight */}
+            {/* Récord principal */}
             <div className="bg-gradient-to-br from-purple-500 to-indigo-600 text-white rounded-2xl p-4 shadow-sm relative overflow-hidden">
               <div className="absolute right-[-10px] bottom-[-10px] opacity-10">
                 <Target className="w-24 h-24 text-white" />
@@ -869,51 +983,73 @@ export function ExerciseProgressChart({
               <div className="relative z-10 space-y-1">
                 <span className="text-xs font-medium text-purple-100 flex items-center gap-1">
                   <Trophy className="w-3.5 h-3.5 text-yellow-300" />
-                  {isBodyweight ? 'Máx. Repeticiones' : 'Récord 1RM Estimado'}
+                  {hasWeightData && stats.best1RM > 0
+                    ? 'Récord 1RM Estimado'
+                    : hasWeightData
+                    ? 'Récord de Carga'
+                    : hasDistData
+                    ? 'Mayor Distancia / Sesión'
+                    : hasTimeData
+                    ? 'Mejor Tiempo / Sesión'
+                    : 'Máx. Repeticiones'}
                 </span>
                 <p className="text-2xl sm:text-3xl font-black tracking-tight tabular-nums">
-                  {isBodyweight ? stats.bestMaxReps : stats.best1RM}
-                  <span className="text-sm font-medium opacity-80">
-                    {isBodyweight ? ' reps' : ' kg'}
-                  </span>
+                  {hasWeightData && stats.best1RM > 0 ? (
+                    <>{stats.best1RM}<span className="text-sm font-medium opacity-80"> kg</span></>
+                  ) : hasWeightData ? (
+                    <>{stats.bestMaxWeight}<span className="text-sm font-medium opacity-80"> kg</span></>
+                  ) : hasDistData ? (
+                    <>{stats.bestDistance.toLocaleString('es-ES')}<span className="text-sm font-medium opacity-80"> m</span></>
+                  ) : hasTimeData ? (
+                    <>{formatDuration(stats.bestDuration)}</>
+                  ) : (
+                    <>{stats.bestMaxReps}<span className="text-sm font-medium opacity-80"> reps</span></>
+                  )}
                 </p>
                 <p className="text-[11px] text-purple-100/90 truncate">
-                  {isBodyweight
-                    ? (stats.bestMaxRepsSession
-                        ? new Date(stats.bestMaxRepsSession.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })
-                        : 'Sin registros')
-                    : (stats.best1RMSession
-                        ? `${new Date(stats.best1RMSession.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })} (${stats.best1RMSession.maxWeight}kg x ${stats.best1RMSession.maxReps})`
-                        : 'Sin registros')}
+                  {(() => {
+                    const s = hasWeightData
+                      ? stats.best1RM > 0 ? stats.best1RMSession : stats.bestMaxWeightSession
+                      : hasDistData ? stats.bestDistanceSession : hasTimeData ? stats.bestDurationSession : stats.bestMaxRepsSession;
+                    if (!s) return 'Sin registros';
+                    const d = new Date(s.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+                    if (hasWeightData && stats.best1RM > 0) return `${d} (${s.maxWeight}kg x ${s.maxReps})`;
+                    return d;
+                  })()}
                 </p>
               </div>
             </div>
 
-            {/* Carga Máxima (solo si tiene peso) / Total Reps (bodyweight) */}
+            {/* Secundario: carga máxima / acumulado de distancia / tiempo / reps */}
             <div className="bg-white rounded-2xl p-4 border border-gray-200/90 shadow-xs space-y-1 dark:bg-gray-900 dark:border-gray-700">
               <span className="text-xs font-medium text-gray-500 dark:text-gray-400 flex items-center gap-1">
                 <Dumbbell className="w-3.5 h-3.5 text-blue-500" />
-                {isBodyweight ? 'Total Reps Acumuladas' : 'Carga Máxima Levantada'}
+                {hasWeightData ? 'Carga Máxima Levantada' : hasDistData ? 'Distancia Acumulada' : hasTimeData ? 'Tiempo Acumulado' : 'Total Reps Acumuladas'}
               </span>
               <p className="text-2xl sm:text-3xl font-extrabold text-gray-900 dark:text-gray-100 tracking-tight tabular-nums">
-                {isBodyweight ? stats.totalRepsAll : stats.bestMaxWeight}
-                <span className="text-sm font-normal text-gray-400 dark:text-gray-500">
-                  {isBodyweight ? ' reps' : ' kg'}
-                </span>
+                {hasWeightData ? (
+                  <>{stats.bestMaxWeight}<span className="text-sm font-normal text-gray-400 dark:text-gray-500"> kg</span></>
+                ) : hasDistData ? (
+                  <>{stats.totalDistanceAll.toLocaleString('es-ES')}<span className="text-sm font-normal text-gray-400 dark:text-gray-500"> m</span></>
+                ) : hasTimeData ? (
+                  <>{formatDuration(stats.totalDurationAll)}</>
+                ) : (
+                  <>{stats.totalRepsAll}<span className="text-sm font-normal text-gray-400 dark:text-gray-500"> reps</span></>
+                )}
               </p>
               <p className="text-[11px] text-gray-400 dark:text-gray-500">
-                {isBodyweight
-                  ? `en ${stats.totalSessions} sesiones`
-                  : (stats.bestMaxWeightSession ? `x ${stats.bestMaxWeightSession.maxReps} reps` : '—')}
+                {hasWeightData && stats.bestMaxWeightSession
+                  ? `x ${stats.bestMaxWeightSession.maxReps} reps`
+                  : `en ${stats.totalSessions} ${stats.totalSessions === 1 ? 'sesión' : 'sesiones'}`}
               </p>
             </div>
 
-            {/* Progresión Neta */}
+            {/* Progresión Neta (sentido según métrica: en tiempo, bajar es mejorar) */}
             <div className="bg-white rounded-2xl p-4 border border-gray-200/90 shadow-xs space-y-1 dark:bg-gray-900 dark:border-gray-700">
               <span className="text-xs font-medium text-gray-500 dark:text-gray-400 flex items-center gap-1">
-                {stats.diff > 0 ? (
+                {stats.diff !== 0 && isGoodDiff(stats.diff) ? (
                   <ArrowUpRight className="w-3.5 h-3.5 text-emerald-600" />
-                ) : stats.diff < 0 ? (
+                ) : stats.diff !== 0 ? (
                   <ArrowDownRight className="w-3.5 h-3.5 text-rose-600" />
                 ) : (
                   <Minus className="w-3.5 h-3.5 text-gray-400" />
@@ -922,30 +1058,24 @@ export function ExerciseProgressChart({
               </span>
               <p
                 className={`text-2xl sm:text-3xl font-extrabold tracking-tight tabular-nums ${
-                  stats.diff > 0 ? 'text-emerald-600' : stats.diff < 0 ? 'text-rose-600' : 'text-gray-700 dark:text-gray-300'
+                  stats.diff !== 0 && isGoodDiff(stats.diff) ? 'text-emerald-600' : stats.diff !== 0 ? 'text-rose-600' : 'text-gray-700 dark:text-gray-300'
                 }`}
               >
-                {stats.diff > 0 ? `+${stats.diff}` : stats.diff}
-                <span className="text-sm font-normal text-gray-400 dark:text-gray-500">
-                  {isBodyweight ? ' reps' : ' kg'}
-                </span>
+                {formatDiff(Math.round(stats.diff * 10) / 10)}
               </p>
               <p className="text-[11px] text-gray-500 dark:text-gray-400 font-medium">
                 {stats.diffPercent > 0 ? `+${stats.diffPercent.toFixed(1)}%` : `${stats.diffPercent.toFixed(1)}%`} desde el inicio
               </p>
             </div>
 
-            {/* Reps/Volumen Medio */}
+            {/* Media por sesión de la métrica activa */}
             <div className="bg-white rounded-2xl p-4 border border-gray-200/90 shadow-xs space-y-1 dark:bg-gray-900 dark:border-gray-700">
               <span className="text-xs font-medium text-gray-500 dark:text-gray-400 flex items-center gap-1">
                 <BarChart3 className="w-3.5 h-3.5 text-amber-500" />
-                {isBodyweight ? 'Reps Medias / Sesión' : 'Volumen Medio / Sesión'}
+                Media / Sesión ({getMetricLabel(metric)})
               </span>
               <p className="text-2xl sm:text-3xl font-extrabold text-gray-900 dark:text-gray-100 tracking-tight tabular-nums">
-                {isBodyweight ? stats.avgReps : stats.avgVolume.toLocaleString('es-ES')}
-                <span className="text-sm font-normal text-gray-400 dark:text-gray-500">
-                  {isBodyweight ? ' reps' : ' kg'}
-                </span>
+                {formatVal(Math.round(stats.avgMetricVal * 10) / 10)}
               </p>
               <p className="text-[11px] text-gray-400 dark:text-gray-500">
                 En {stats.totalSessions} {stats.totalSessions === 1 ? 'sesión' : 'sesiones'}
@@ -1015,7 +1145,13 @@ export function ExerciseProgressChart({
                         textAnchor="end"
                         className="text-[10px] fill-gray-400 font-medium select-none dark:fill-gray-500"
                       >
-                        {metric === 'volume' ? `${Math.round(tickVal / 100) * 100}` : metric === 'reps' ? `${tickVal}r` : `${tickVal}kg`}
+                        {metric === 'duration'
+                          ? formatDuration(tickVal)
+                          : metric === 'distance'
+                          ? `${tickVal}m`
+                          : metric === 'volume'
+                          ? isBodyweight ? `${tickVal}r` : `${Math.round(tickVal / 100) * 100}`
+                          : metric === 'reps' ? `${tickVal}r` : `${tickVal}kg`}
                       </text>
                     </g>
                   );
@@ -1104,7 +1240,7 @@ export function ExerciseProgressChart({
                 {points.map((p, i) => {
                   const isHovered = hoveredIndex === i;
                   const isLast = i === points.length - 1 && hoveredIndex === null;
-                  const isPeak = p.val === stats.peakVal;
+                  const isPeak = p.val === stats.bestVal && stats.bestVal > 0;
                   const isChronoPR = !!chronoPRs[i];
 
                   return (
@@ -1202,31 +1338,59 @@ export function ExerciseProgressChart({
                   </div>
                   <div className="flex flex-wrap items-center gap-1.5 pt-1">
                     <span className="text-xs text-gray-400 dark:text-gray-500">Series:</span>
-                    {activePoint.session.sets.map((s, idx) => (
+                    {activePoint.session.sets.map((s, idx) => {
+                      const parts: string[] = [];
+                      if (s.weight > 0 && s.reps > 0) parts.push(`${s.weight}kg × ${s.reps}`);
+                      else if (s.weight > 0) parts.push(`${s.weight}kg`);
+                      else if (s.reps > 0) parts.push(`${s.reps} reps`);
+                      if (s.distance) parts.push(`${s.distance}m`);
+                      if (s.durationSeconds) parts.push(formatDuration(s.durationSeconds));
+                      return (
                       <span
                         key={idx}
                         className="px-2 py-0.5 text-xs bg-white rounded-md border border-gray-200 text-gray-700 font-medium tabular-nums dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300"
                       >
-                        {s.weight > 0 ? `${s.weight}kg × ` : ''}{s.reps} reps
+                        {parts.join(' · ') || '—'}
                         {s.rpe ? <span className="text-gray-400 dark:text-gray-500 text-[10px]"> (RPE {s.rpe})</span> : ''}
                       </span>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
 
-                <div className="flex items-center gap-4 border-t sm:border-t-0 pt-2 sm:pt-0 border-gray-200 dark:border-gray-700">
+                <div className="flex items-center gap-4 border-t sm:border-t-0 pt-2 sm:pt-0 border-gray-200 dark:border-gray-700 flex-wrap">
+                  {hasWeightData && (
                   <div className="text-left sm:text-right">
                     <span className="text-[11px] text-gray-400 dark:text-gray-500 block">1RM Estimado</span>
                     <span className="font-bold text-sm text-purple-700 dark:text-purple-400 tabular-nums">
                       {activePoint.session.estimated1RM} kg
                     </span>
                   </div>
+                  )}
+                  {maxVolume > 0 && (
                   <div className="text-left sm:text-right">
                     <span className="text-[11px] text-gray-400 dark:text-gray-500 block">Volumen</span>
                     <span className="font-bold text-sm text-gray-900 dark:text-gray-100 tabular-nums">
                       {activePoint.session.totalVolume.toLocaleString('es-ES')} kg
                     </span>
                   </div>
+                  )}
+                  {(activePoint.session.totalDistance || 0) > 0 && (
+                  <div className="text-left sm:text-right">
+                    <span className="text-[11px] text-gray-400 dark:text-gray-500 block">Distancia</span>
+                    <span className="font-bold text-sm text-gray-900 dark:text-gray-100 tabular-nums">
+                      {(activePoint.session.totalDistance || 0).toLocaleString('es-ES')} m
+                    </span>
+                  </div>
+                  )}
+                  {(activePoint.session.totalDurationSeconds || 0) > 0 && (
+                  <div className="text-left sm:text-right">
+                    <span className="text-[11px] text-gray-400 dark:text-gray-500 block">Tiempo</span>
+                    <span className="font-bold text-sm text-gray-900 dark:text-gray-100 tabular-nums">
+                      {formatDuration(activePoint.session.totalDurationSeconds || 0)}
+                    </span>
+                  </div>
+                  )}
                   {activePoint.session.avgRpe != null && (
                     <div className="text-left sm:text-right">
                       <span className="text-[11px] text-gray-400 dark:text-gray-500 block">Esfuerzo medio</span>
@@ -1300,6 +1464,8 @@ export function ExerciseProgressChart({
                     {!isBodyweight && <th className="text-right px-4 py-3">1RM Est.</th>}
                     {isBodyweight && <th className="text-right px-4 py-3">Máx Reps</th>}
                     <th className="text-right px-4 py-3">{isBodyweight ? 'Total Reps' : 'Volumen'}</th>
+                    {hasDistData && <th className="text-right px-4 py-3">Distancia</th>}
+                    {hasTimeData && <th className="text-right px-4 py-3">Tiempo</th>}
                     {hasRpeData && <th className="text-right px-4 py-3 hidden sm:table-cell">RPE Ø</th>}
                   </tr>
                 </thead>
@@ -1338,14 +1504,22 @@ export function ExerciseProgressChart({
 
                           <td className="px-4 py-3 hidden md:table-cell">
                             <div className="flex flex-wrap gap-1">
-                              {session.sets.map((s, idx) => (
+                              {session.sets.map((s, idx) => {
+                                const parts: string[] = [];
+                                if (s.weight > 0 && s.reps > 0) parts.push(`${s.weight}kg × ${s.reps}`);
+                                else if (s.weight > 0) parts.push(`${s.weight}kg`);
+                                else if (s.reps > 0) parts.push(`${s.reps} reps`);
+                                if (s.distance) parts.push(`${s.distance}m`);
+                                if (s.durationSeconds) parts.push(formatDuration(s.durationSeconds));
+                                return (
                                 <span
                                   key={idx}
                                   className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-700 font-medium tabular-nums dark:bg-gray-800 dark:text-gray-300"
                                 >
-                                  {s.weight > 0 ? `${s.weight}kg × ` : ''}{s.reps} reps
+                                  {parts.join(' · ') || '—'}
                                 </span>
-                              ))}
+                                );
+                              })}
                             </div>
                           </td>
 
@@ -1391,6 +1565,16 @@ export function ExerciseProgressChart({
                               ? `${session.totalReps ?? 0} reps`
                               : `${session.totalVolume.toLocaleString('es-ES')} kg`}
                           </td>
+                          {hasDistData && (
+                            <td className="px-4 py-3 text-right font-medium text-gray-600 dark:text-gray-400 tabular-nums">
+                              {(session.totalDistance || 0) > 0 ? `${(session.totalDistance || 0).toLocaleString('es-ES')} m` : '—'}
+                            </td>
+                          )}
+                          {hasTimeData && (
+                            <td className="px-4 py-3 text-right font-medium text-gray-600 dark:text-gray-400 tabular-nums">
+                              {(session.totalDurationSeconds || 0) > 0 ? formatDuration(session.totalDurationSeconds || 0) : '—'}
+                            </td>
+                          )}
                           {hasRpeData && (
                             <td className="px-4 py-3 text-right hidden sm:table-cell">
                               <span className={`font-bold tabular-nums ${
