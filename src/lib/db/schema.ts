@@ -1,4 +1,4 @@
-import { pgTable, serial, text, integer, timestamp, boolean, real, jsonb } from 'drizzle-orm/pg-core';
+import { pgTable, serial, text, integer, timestamp, boolean, real, jsonb, index } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
 export interface ModalityConfig {
@@ -35,7 +35,9 @@ export const exerciseCategories = pgTable('exercise_categories', {
   type: text('type'), // Agrupación lógica (ej. 'Fuerza', 'Cardio', 'Funcional')
   isCustom: boolean('is_custom').default(false),
   userId: text('user_id'), // Solo si isCustom es true (Clerk ID)
-});
+}, (t) => [
+  index('exercise_categories_user_id_idx').on(t.userId),
+]);
 
 // 3. Catálogo de Ejercicios
 export const exercises = pgTable('exercises', {
@@ -44,7 +46,10 @@ export const exercises = pgTable('exercises', {
   categoryId: integer('category_id').references(() => exerciseCategories.id),
   isCustom: boolean('is_custom').default(false),
   userId: text('user_id'), // Solo si isCustom es true (Clerk ID)
-});
+}, (t) => [
+  index('exercises_user_id_idx').on(t.userId),
+  index('exercises_category_id_idx').on(t.categoryId),
+]);
 
 // 4. Plantillas de Entrenamiento (Rutinas guardadas / WODs favoritos)
 export const workoutTemplates = pgTable('workout_templates', {
@@ -58,7 +63,10 @@ export const workoutTemplates = pgTable('workout_templates', {
   modalityConfig: jsonb('modality_config').$type<ModalityConfig>(),
   isPublic: boolean('is_public').default(false),
   createdAt: timestamp('created_at').defaultNow().notNull(),
-});
+}, (t) => [
+  index('workout_templates_user_id_idx').on(t.userId),
+  index('workout_templates_source_workout_id_idx').on(t.sourceWorkoutId),
+]);
 
 // 5. Ejercicios dentro de una Plantilla
 export const templateExercises = pgTable('template_exercises', {
@@ -70,7 +78,9 @@ export const templateExercises = pgTable('template_exercises', {
   targetWeight: real('target_weight'),
   targetDistance: integer('target_distance'),
   timeCapSeconds: integer('time_cap_seconds'),
-});
+}, (t) => [
+  index('template_exercises_template_id_idx').on(t.templateId),
+]);
 
 // 6. Entrenamientos Realizados (El log diario)
 export const workouts = pgTable('workouts', {
@@ -86,7 +96,11 @@ export const workouts = pgTable('workouts', {
   totalTimeSeconds: integer('total_time_seconds'),
   notes: text('notes'),
   isPersonal: boolean('is_personal').default(false),
-});
+}, (t) => [
+  index('workouts_user_id_idx').on(t.userId),
+  index('workouts_user_id_start_time_idx').on(t.userId, t.startTime),
+  index('workouts_type_id_idx').on(t.typeId),
+]);
 
 // 7. Ejercicios dentro de un Entrenamiento Realizado
 export const workoutExercises = pgTable('workout_exercises', {
@@ -98,7 +112,10 @@ export const workoutExercises = pgTable('workout_exercises', {
   targetWeight: real('target_weight'),
   targetDistance: integer('target_distance'),
   targetDurationSeconds: integer('target_duration_seconds'),
-});
+}, (t) => [
+  index('workout_exercises_workout_id_idx').on(t.workoutId),
+  index('workout_exercises_exercise_id_idx').on(t.exerciseId),
+]);
 
 // 8. Series Realizadas (El dato atómico)
 export const sets = pgTable('sets', {
@@ -111,7 +128,9 @@ export const sets = pgTable('sets', {
   rpe: integer('rpe'),
   isRx: boolean('is_rx').default(true),
   notes: text('notes'),
-});
+}, (t) => [
+  index('sets_workout_exercise_id_idx').on(t.workoutExerciseId),
+]);
 
 // 9. Mediciones Corporales (seguimiento voluntario: peso, composición y perímetros)
 export const bodyMeasurements = pgTable('body_measurements', {
@@ -129,7 +148,10 @@ export const bodyMeasurements = pgTable('body_measurements', {
   hipCm: real('hip_cm'),
   notes: text('notes'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
-});
+}, (t) => [
+  index('body_measurements_user_id_idx').on(t.userId),
+  index('body_measurements_user_id_measured_at_idx').on(t.userId, t.measuredAt),
+]);
 
 // --- RELACIONES (Para que Drizzle pueda hacer joins fácilmente) ---
 export const workoutsRelations = relations(workouts, ({ one, many }) => ({

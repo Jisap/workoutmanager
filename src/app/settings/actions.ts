@@ -8,27 +8,30 @@ import { revalidatePath } from 'next/cache';
 
 /** Obtener todos los ejercicios personalizados del usuario con su categoría y estadísticas de uso */
 export async function getCustomExercises(userId: string) {
-  const customExercises = await db
-    .select({
-      id: exercises.id,
-      name: exercises.name,
-      categoryId: exercises.categoryId,
-      categoryName: exerciseCategories.name,
-    })
-    .from(exercises)
-    .leftJoin(exerciseCategories, eq(exercises.categoryId, exerciseCategories.id))
-    .where(and(eq(exercises.isCustom, true), eq(exercises.userId, userId)));
+  // Las dos consultas son independientes: se lanzan en paralelo.
+  const [customExercises, usageCounts] = await Promise.all([
+    db
+      .select({
+        id: exercises.id,
+        name: exercises.name,
+        categoryId: exercises.categoryId,
+        categoryName: exerciseCategories.name,
+      })
+      .from(exercises)
+      .leftJoin(exerciseCategories, eq(exercises.categoryId, exerciseCategories.id))
+      .where(and(eq(exercises.isCustom, true), eq(exercises.userId, userId))),
 
-  // Para cada ejercicio, contar cuántas veces se ha usado
-  const usageCounts = await db
-    .select({
-      exerciseId: workoutExercises.exerciseId,
-      count: sql<number>`count(*)`.mapWith(Number),
-    })
-    .from(workoutExercises)
-    .innerJoin(workouts, eq(workoutExercises.workoutId, workouts.id))
-    .where(eq(workouts.userId, userId))
-    .groupBy(workoutExercises.exerciseId);
+    // Para cada ejercicio, contar cuántas veces se ha usado
+    db
+      .select({
+        exerciseId: workoutExercises.exerciseId,
+        count: sql<number>`count(*)`.mapWith(Number),
+      })
+      .from(workoutExercises)
+      .innerJoin(workouts, eq(workoutExercises.workoutId, workouts.id))
+      .where(eq(workouts.userId, userId))
+      .groupBy(workoutExercises.exerciseId),
+  ]);
 
   const usageMap = new Map<number, number>();
   for (const u of usageCounts) usageMap.set(u.exerciseId, u.count);
@@ -93,27 +96,30 @@ export async function getExerciseCategories(userIdParam?: string) {
     userId = authData.userId ?? undefined;
   }
 
-  const categoryList = await db
-    .select({
-      id: exerciseCategories.id,
-      name: exerciseCategories.name,
-      type: exerciseCategories.type,
-      isCustom: exerciseCategories.isCustom,
-      userId: exerciseCategories.userId,
-    })
-    .from(exerciseCategories)
-    .where(userId ? or(isNull(exerciseCategories.userId), eq(exerciseCategories.userId, userId)) : isNull(exerciseCategories.userId))
-    .orderBy(exerciseCategories.isCustom, exerciseCategories.name);
+  // Lista y conteo son independientes: se lanzan en paralelo.
+  const [categoryList, exerciseCounts] = await Promise.all([
+    db
+      .select({
+        id: exerciseCategories.id,
+        name: exerciseCategories.name,
+        type: exerciseCategories.type,
+        isCustom: exerciseCategories.isCustom,
+        userId: exerciseCategories.userId,
+      })
+      .from(exerciseCategories)
+      .where(userId ? or(isNull(exerciseCategories.userId), eq(exerciseCategories.userId, userId)) : isNull(exerciseCategories.userId))
+      .orderBy(exerciseCategories.isCustom, exerciseCategories.name),
 
-  // Conteo de ejercicios en cada categoría (globales + del usuario)
-  const exerciseCounts = await db
-    .select({
-      categoryId: exercises.categoryId,
-      count: sql<number>`count(*)`.mapWith(Number),
-    })
-    .from(exercises)
-    .where(userId ? or(isNull(exercises.userId), eq(exercises.userId, userId)) : isNull(exercises.userId))
-    .groupBy(exercises.categoryId);
+    // Conteo de ejercicios en cada categoría (globales + del usuario)
+    db
+      .select({
+        categoryId: exercises.categoryId,
+        count: sql<number>`count(*)`.mapWith(Number),
+      })
+      .from(exercises)
+      .where(userId ? or(isNull(exercises.userId), eq(exercises.userId, userId)) : isNull(exercises.userId))
+      .groupBy(exercises.categoryId),
+  ]);
 
   const countMap = new Map<number, number>();
   for (const c of exerciseCounts) {
@@ -234,23 +240,26 @@ export async function deleteExerciseCategory(categoryId: number) {
 
 /** Estadísticas globales del usuario para el resumen de perfil */
 export async function getUserStats(userId: string) {
-  const [workoutCount] = await db
-    .select({ count: sql<number>`count(*)`.mapWith(Number) })
-    .from(workouts)
-    .where(eq(workouts.userId, userId));
+  // Las tres consultas son independientes: se lanzan en paralelo.
+  const [[workoutCount], [customExerciseCount], [firstWorkout]] = await Promise.all([
+    db
+      .select({ count: sql<number>`count(*)`.mapWith(Number) })
+      .from(workouts)
+      .where(eq(workouts.userId, userId)),
 
-  const [customExerciseCount] = await db
-    .select({ count: sql<number>`count(*)`.mapWith(Number) })
-    .from(exercises)
-    .where(and(eq(exercises.isCustom, true), eq(exercises.userId, userId)));
+    db
+      .select({ count: sql<number>`count(*)`.mapWith(Number) })
+      .from(exercises)
+      .where(and(eq(exercises.isCustom, true), eq(exercises.userId, userId))),
 
-  // Primer entrenamiento registrado
-  const [firstWorkout] = await db
-    .select({ startTime: workouts.startTime })
-    .from(workouts)
-    .where(eq(workouts.userId, userId))
-    .orderBy(workouts.startTime)
-    .limit(1);
+    // Primer entrenamiento registrado
+    db
+      .select({ startTime: workouts.startTime })
+      .from(workouts)
+      .where(eq(workouts.userId, userId))
+      .orderBy(workouts.startTime)
+      .limit(1),
+  ]);
 
   return {
     totalWorkouts: workoutCount?.count ?? 0,

@@ -3,8 +3,46 @@
 import { db } from '@/lib/db';
 import { workoutTemplates, templateExercises, workouts, workoutExercises, sets, exercises, exerciseCategories, type ModalityConfig } from '@/lib/db/schema';
 import { auth } from '@clerk/nextjs/server';
-import { eq, or, isNull, desc, asc, and, sql } from 'drizzle-orm';
+import { eq, or, isNull, desc, asc, and, sql, inArray } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
+import { cache } from 'react';
+
+// Comprueba si el usuario ya tiene un entrenamiento con ese nombre
+// (comparación insensible a mayúsculas, una sola fila como máximo).
+async function workoutNameExists(userId: string, name: string) {
+  const [row] = await db
+    .select({ id: workouts.id })
+    .from(workouts)
+    .where(and(eq(workouts.userId, userId), sql`lower(${workouts.name}) = lower(${name})`))
+    .limit(1);
+  return !!row;
+}
+
+// Dataset analítico completo del usuario, compartido y memoizado por request.
+// getProgressData, getConsistencyData y getAdvancedProgressData recorrían la misma
+// tabla 3 veces por visita a /progress (12-18 round-trips con neon-http, donde cada
+// await es un viaje de red). Con cache() es 1 sola carga por request: trae el
+// superconjunto (tipo + categoría + series) que las tres necesitan para agregar en JS.
+export const getUserAnalyticsDataset = cache(async (userId: string) => {
+  return db.query.workouts.findMany({
+    where: eq(workouts.userId, userId),
+    orderBy: [desc(workouts.startTime)],
+    with: {
+      type: true,
+      exercises: {
+        with: {
+          exercise: {
+            with: {
+              category: true,
+            },
+          },
+          sets: true,
+        },
+        orderBy: (fields, { asc }) => asc(fields.orderIndex),
+      },
+    },
+  });
+});
 
 export async function saveWorkout(data: {
   workoutId?: number | null;
@@ -71,16 +109,13 @@ export async function saveWorkout(data: {
       // 1b. Crear nuevo registro de entrenamiento.
       // Garantía de nombre único: si ya existe otro entreno con el mismo nombre,
       // se sufija con (2), (3)... para que cada sesión sea identificable.
-      let finalName = data.name.trim() || 'Entrenamiento';
-      const sameName = await db
-        .select({ id: workouts.id, name: workouts.name })
-        .from(workouts)
-        .where(eq(workouts.userId, userId));
-      const taken = new Set(sameName.map((r) => r.name.toLowerCase()));
-      if (taken.has(finalName.toLowerCase())) {
-        let n = 2;
-        while (taken.has(`${finalName.toLowerCase()} (${n})`)) n++;
-        finalName = `${finalName} (${n})`;
+      // Se comprueba con consultas acotadas (limit 1) en lugar de traer
+      // todos los entrenamientos del usuario a memoria.
+      const baseName = data.name.trim() || 'Entrenamiento';
+      let finalName = baseName;
+      let n = 2;
+      while (await workoutNameExists(userId, finalName)) {
+        finalName = `${baseName} (${n++})`;
       }
 
       const [newWorkout] = await db
@@ -101,30 +136,49 @@ export async function saveWorkout(data: {
       targetWorkoutId = newWorkout.id;
     }
 
-    // 2. Insertar ejercicios y sus series
-    for (const ex of data.exercises) {
-      const [newWorkoutExercise] = await db
-        .insert(workoutExercises)
-        .values({
-          workoutId: targetWorkoutId,
-          exerciseId: ex.exerciseId,
-          orderIndex: ex.orderIndex,
-        })
-        .returning();
+    // 2. Insertar ejercicios y sus series en 2 únicas consultas
+    // (1 round-trip por tabla en lugar de 2×N en serie; con neon-http
+    // cada await es un viaje de red independiente).
+    const insertedExercises =
+      data.exercises.length > 0
+        ? await db
+            .insert(workoutExercises)
+            .values(
+              data.exercises.map((ex) => ({
+                workoutId: targetWorkoutId,
+                exerciseId: ex.exerciseId,
+                orderIndex: ex.orderIndex,
+              }))
+            )
+            .returning()
+        : [];
 
-      if (ex.sets.length > 0) {
-        await db.insert(sets).values(
-          ex.sets.map((set) => ({
-            workoutExerciseId: newWorkoutExercise.id,
-            repCount: set.repCount,
-            weight: set.weight,
-            distance: set.distance,
-            durationSeconds: set.durationSeconds,
-            rpe: set.rpe,
-            isRx: set.isRx,
-          }))
-        );
-      }
+    // Asignar cada tanda de series a su ejercicio (cola por clave para
+    // tolerar duplicados de exerciseId/orderIndex).
+    const idsByKey = new Map<string, number[]>();
+    for (const we of insertedExercises) {
+      const key = `${we.exerciseId}:${we.orderIndex}`;
+      const queue = idsByKey.get(key) ?? [];
+      queue.push(we.id);
+      idsByKey.set(key, queue);
+    }
+
+    const allSets = data.exercises.flatMap((ex) => {
+      const workoutExerciseId = idsByKey.get(`${ex.exerciseId}:${ex.orderIndex}`)?.shift();
+      if (workoutExerciseId == null) return [];
+      return ex.sets.map((set) => ({
+        workoutExerciseId,
+        repCount: set.repCount,
+        weight: set.weight,
+        distance: set.distance,
+        durationSeconds: set.durationSeconds,
+        rpe: set.rpe,
+        isRx: set.isRx,
+      }));
+    });
+
+    if (allSets.length > 0) {
+      await db.insert(sets).values(allSets);
     }
 
     revalidatePath('/workouts');
@@ -484,18 +538,8 @@ export async function createDirectTemplate(data: {
 }
 
 export async function getProgressData(userId: string) {
-  const allWorkouts = await db.query.workouts.findMany({
-    where: eq(workouts.userId, userId),
-    orderBy: [desc(workouts.startTime)],
-    with: {
-      exercises: {
-        with: {
-          exercise: true,
-          sets: true,
-        },
-      },
-    },
-  });
+  // Reutiliza el dataset memoizado por request (ver getUserAnalyticsDataset).
+  const allWorkouts = await getUserAnalyticsDataset(userId);
 
   // 2. Calcular Récords Personales (PRs)
   const prs: Record<string, { weight: number; reps: number; date: Date; exerciseName: string }> = {};
@@ -720,20 +764,8 @@ export async function getExerciseProgressForCurrentUser(exerciseId: number) {
 }
 
 export async function getConsistencyData(userId: string) {
-  const allWorkouts = await db.query.workouts.findMany({
-    where: eq(workouts.userId, userId),
-    orderBy: [desc(workouts.startTime)],
-    with: {
-      type: true,
-      exercises: {
-        with: {
-          exercise: true,
-          sets: true,
-        },
-        orderBy: (fields, { asc }) => asc(fields.orderIndex),
-      },
-    },
-  });
+  // Reutiliza el dataset memoizado por request (ver getUserAnalyticsDataset).
+  const allWorkouts = await getUserAnalyticsDataset(userId);
 
   // 1. Mapa de calor: contar entrenamientos por día (formato "YYYY-MM-DD")
   const dailyCounts: Record<string, number> = {};
@@ -854,29 +886,30 @@ export async function getConsistencyData(userId: string) {
   };
 }
 
-export async function getWorkoutHistory(userId: string, limit: number = 200) {
-  const [history, userTemplates] = await Promise.all([
-    db.query.workouts.findMany({
-      where: eq(workouts.userId, userId),
-      orderBy: [desc(workouts.startTime)],
-      limit,
-      with: {
-        type: true,
-        exercises: {
-          with: {
-            exercise: true,
-            sets: true,
-          },
-          orderBy: (fields, { asc }) => asc(fields.orderIndex),
+export async function getWorkoutHistoryRaw(userId: string, limit: number = 200) {
+  return db.query.workouts.findMany({
+    where: eq(workouts.userId, userId),
+    orderBy: [desc(workouts.startTime)],
+    limit,
+    with: {
+      type: true,
+      exercises: {
+        with: {
+          exercise: true,
+          sets: true,
         },
+        orderBy: (fields, { asc }) => asc(fields.orderIndex),
       },
-    }),
-    db.query.workoutTemplates.findMany({
-      where: eq(workoutTemplates.userId, userId),
-      columns: { id: true, sourceWorkoutId: true },
-    }),
-  ]);
+    },
+  });
+}
 
+export type WorkoutHistoryRaw = Awaited<ReturnType<typeof getWorkoutHistoryRaw>>;
+
+function mapHistoryItems(
+  history: WorkoutHistoryRaw,
+  userTemplates: { sourceWorkoutId: number | null }[]
+) {
   const savedWorkoutIds = new Set(
     userTemplates
       .map((t) => t.sourceWorkoutId)
@@ -964,32 +997,48 @@ export async function getWorkoutHistory(userId: string, limit: number = 200) {
   });
 }
 
-export async function getUserTemplates(userId: string) {
-  const rawTemplates = await db.query.workoutTemplates.findMany({
-    where: eq(workoutTemplates.userId, userId),
-    orderBy: [desc(workoutTemplates.createdAt)],
-    with: {
-      type: true,
-      exercises: {
-        with: {
-          exercise: true,
-        },
-        orderBy: (fields, { asc }) => asc(fields.orderIndex),
-      },
-    },
-  });
+export async function getWorkoutHistory(userId: string, limit: number = 200) {
+  const [history, userTemplates] = await Promise.all([
+    getWorkoutHistoryRaw(userId, limit),
+    db.query.workoutTemplates.findMany({
+      where: eq(workoutTemplates.userId, userId),
+      columns: { id: true, sourceWorkoutId: true },
+    }),
+  ]);
 
-  // Si hay plantillas con sourceWorkoutId, cargar los datos del entrenamiento original
-  // como respaldo para recuperar todas las series, reps y pesos originales si la plantilla
-  // solo tenía 1 registro por ejercicio
-  const sourceWorkoutIds = rawTemplates
-    .map((t) => t.sourceWorkoutId)
-    .filter((id): id is number => id !== null && id !== undefined);
+  return mapHistoryItems(history, userTemplates);
+}
 
+// Workout fuente mínimo necesario para resolver plantillas creadas desde sesiones.
+export interface TemplateSourceWorkout {
+  id: number;
+  exercises: {
+    exerciseId: number;
+    exercise: { name: string };
+    sets: {
+      repCount: number | null;
+      weight: number | null;
+      durationSeconds: number | null;
+    }[];
+  }[];
+}
+
+// Resuelve los workouts fuente de las plantillas reutilizando los ya cargados
+// (p. ej. el historial de la página) y trayendo solo los ausentes con un único
+// IN acotado al usuario (antes: cadena OR ilimitada, sin scope de usuario y
+// re-transfiriendo sesiones ya cargadas por getWorkoutHistory).
+async function resolveSourceWorkoutsMap(
+  userId: string,
+  sourceWorkoutIds: number[],
+  preloaded: TemplateSourceWorkout[]
+) {
   const sourceWorkoutsMap = new Map<number, any>();
-  if (sourceWorkoutIds.length > 0) {
+  for (const w of preloaded) sourceWorkoutsMap.set(w.id, w);
+
+  const missingIds = sourceWorkoutIds.filter((id) => !sourceWorkoutsMap.has(id));
+  if (missingIds.length > 0) {
     const sws = await db.query.workouts.findMany({
-      where: or(...sourceWorkoutIds.map((id) => eq(workouts.id, id))),
+      where: and(eq(workouts.userId, userId), inArray(workouts.id, missingIds)),
       with: {
         exercises: {
           with: {
@@ -1004,6 +1053,40 @@ export async function getUserTemplates(userId: string) {
       sourceWorkoutsMap.set(sw.id, sw);
     }
   }
+  return sourceWorkoutsMap;
+}
+
+export async function getRawTemplates(userId: string) {
+  return db.query.workoutTemplates.findMany({
+    where: eq(workoutTemplates.userId, userId),
+    orderBy: [desc(workoutTemplates.createdAt)],
+    with: {
+      type: true,
+      exercises: {
+        with: {
+          exercise: true,
+        },
+        orderBy: (fields, { asc }) => asc(fields.orderIndex),
+      },
+    },
+  });
+}
+
+export type RawTemplates = Awaited<ReturnType<typeof getRawTemplates>>;
+
+async function mapTemplateItems(
+  userId: string,
+  rawTemplates: RawTemplates,
+  preloadedSourceWorkouts: TemplateSourceWorkout[] = []
+) {
+  // Si hay plantillas con sourceWorkoutId, cargar los datos del entrenamiento original
+  // como respaldo para recuperar todas las series, reps y pesos originales si la plantilla
+  // solo tenía 1 registro por ejercicio
+  const sourceWorkoutIds = rawTemplates
+    .map((t) => t.sourceWorkoutId)
+    .filter((id): id is number => id !== null && id !== undefined);
+
+  const sourceWorkoutsMap = await resolveSourceWorkoutsMap(userId, sourceWorkoutIds, preloadedSourceWorkouts);
 
   return rawTemplates.map((t) => {
     // Agrupar TODOS los rows del mismo exerciseId (sean o no consecutivos)
@@ -1110,6 +1193,29 @@ export async function getUserTemplates(userId: string) {
   });
 }
 
+export async function getUserTemplates(userId: string, preloadedSourceWorkouts: TemplateSourceWorkout[] = []) {
+  const rawTemplates = await getRawTemplates(userId);
+  return mapTemplateItems(userId, rawTemplates, preloadedSourceWorkouts);
+}
+
+// Carga combinada para /workouts: historial + plantillas compartiendo los workouts
+// fuente (cero re-transferencias cuando las fuentes están en el historial, el caso común).
+export async function getWorkoutsOverview(userId: string, limit: number = 200) {
+  const [historyRaw, templatesMeta, rawTemplates] = await Promise.all([
+    getWorkoutHistoryRaw(userId, limit),
+    db.query.workoutTemplates.findMany({
+      where: eq(workoutTemplates.userId, userId),
+      columns: { id: true, sourceWorkoutId: true },
+    }),
+    getRawTemplates(userId),
+  ]);
+
+  const history = mapHistoryItems(historyRaw, templatesMeta);
+  const templates = await mapTemplateItems(userId, rawTemplates, historyRaw);
+
+  return { history, templates };
+}
+
 export async function updateWorkout(data: {
   id: number;
   name: string;
@@ -1168,20 +1274,26 @@ export async function updateWorkoutSetTimes(data: {
     .where(eq(workoutExercises.workoutId, data.workoutId));
   const ownedSetIds = new Set(ownedSets.map((r) => r.setId));
 
-  let updatedCount = 0;
-  for (const u of data.updates) {
-    if (!ownedSetIds.has(u.setId)) continue;
-    if (u.durationSeconds != null && (isNaN(u.durationSeconds) || u.durationSeconds < 0)) continue;
-    if (u.durationSeconds != null && u.durationSeconds > 5 * 3600) continue; // cordura: máx 5h por tramo
-    await db
-      .update(sets)
-      .set({
-        durationSeconds: u.durationSeconds,
-        ...(u.distance !== undefined ? { distance: u.distance } : {}),
-      })
-      .where(eq(sets.id, u.setId));
-    updatedCount++;
-  }
+  // Los updates se lanzan en paralelo (un solo lote de round-trips en vez de N en serie).
+  const validUpdates = data.updates.filter((u) => {
+    if (!ownedSetIds.has(u.setId)) return false;
+    if (u.durationSeconds != null && (isNaN(u.durationSeconds) || u.durationSeconds < 0)) return false;
+    if (u.durationSeconds != null && u.durationSeconds > 5 * 3600) return false; // cordura: máx 5h por tramo
+    return true;
+  });
+
+  await Promise.all(
+    validUpdates.map((u) =>
+      db
+        .update(sets)
+        .set({
+          durationSeconds: u.durationSeconds,
+          ...(u.distance !== undefined ? { distance: u.distance } : {}),
+        })
+        .where(eq(sets.id, u.setId))
+    )
+  );
+  const updatedCount = validUpdates.length;
 
   revalidatePath('/workouts');
   revalidatePath('/dashboard');
@@ -1254,25 +1366,10 @@ export async function deleteWorkoutTemplate(templateId: number) {
 // ANALÍTICA AVANZADA Y ESTADÍSTICAS GLOBALES
 // ==========================================
 export async function getAdvancedProgressData(userId: string) {
+  // El dataset de workouts se reutiliza memoizado por request
+  // (ver getUserAnalyticsDataset); las categorías van en paralelo.
   const [allWorkouts, allCategories] = await Promise.all([
-    db.query.workouts.findMany({
-      where: eq(workouts.userId, userId),
-      orderBy: [desc(workouts.startTime)],
-      with: {
-        type: true,
-        exercises: {
-          with: {
-            exercise: {
-              with: {
-                category: true,
-              },
-            },
-            sets: true,
-          },
-          orderBy: (fields, { asc }) => asc(fields.orderIndex),
-        },
-      },
-    }),
+    getUserAnalyticsDataset(userId),
     db.select().from(exerciseCategories),
   ]);
 

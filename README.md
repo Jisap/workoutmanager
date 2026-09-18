@@ -8,32 +8,35 @@
 [![Neon](https://img.shields.io/badge/Database-Neon_Postgres-00E599?logo=postgresql)](https://neon.tech/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
-> **Workout Manager** es una aplicación web moderna, rápida y escalable para la gestión, seguimiento y análisis detallado de rutinas de entrenamiento. Permite crear plantillas, registrar series con métricas avanzadas (peso, repeticiones, RPE, distancia) y visualizar el progreso con estadísticas globales.
+> **Workout Manager** es una aplicación web moderna, rápida y escalable para la gestión, seguimiento y análisis detallado de rutinas de entrenamiento. Permite crear plantillas, registrar series con métricas avanzadas (peso, repeticiones, RPE, distancia, duración, Rx) y visualizar el progreso con estadísticas por modalidad, además de llevar un seguimiento de medidas corporales.
 
 ---
 
 ## ✨ Características Principales
 
-- 🔐 **Autenticación Segura** — Integración completa con **Clerk** (Sign-in / Sign-up).
-- 📝 **Gestión de Entrenamientos** — Creación, edición y ejecución de sesiones en tiempo real.
-- 📚 **Plantillas y Categorías** — Rutinas reutilizables y ejercicios organizados por categorías personalizadas.
-- 📊 **Seguimiento de Progreso** — Dashboard con estadísticas globales y análisis de rendimiento histórico.
-- 🎯 **Métricas Detalladas** — Registro preciso por serie: repeticiones, peso, distancia, duración, RPE y notas.
-- 🎨 **UI Moderna y Accesible** — Construida con **Shadcn UI**, **Base UI** y **Tailwind v4**, con modo oscuro/claro nativo.
-- ⚡ **Rendimiento Optimizado** — App Router de Next.js 16, Server Components y tipografía **Geist**.
+- 🔐 **Autenticación Segura** — Integración completa con **Clerk** (Sign-in / Sign-up, modal y rutas).
+- 📝 **Gestión de Entrenamientos** — Creación, edición y ejecución de sesiones en tiempo real, con historial y clonado a plantilla.
+- 🏋️ **Modalidades de Entrenamiento** — Soporte para AMRAP, For Time, EMOM, AFAP, TABATA, HIIT, Chipper y Ladder, con configuración y resumen por modalidad.
+- 🏆 **Catálogo de WODs Oficiales** — Girls, Héroes y clásicos con prescripción Rx (hombres/mujeres) listos para cargar en un clic (`src/lib/wods-catalog.ts`).
+- 📚 **Plantillas y Categorías** — Rutinas reutilizables, 7 tipos de entrenamiento y ejercicios organizados por categorías personalizadas (propias o globales).
+- 📊 **Seguimiento de Progreso** — Dashboard con racha, frecuencia semanal y heatmap de consistencia; pestañas de General, Musculación, Powerlifting, CrossFit/Cardio, Por Ejercicio y Corporal.
+- 🎯 **Métricas Detalladas** — Registro preciso por serie: repeticiones, peso, distancia, duración, RPE, marca Rx/Scaled y notas; cálculo de 1RM estimado (fórmula Epley).
+- ⚖️ **Medidas Corporales** — Peso, % de grasa, masa muscular, IMC y perímetros con curva de evolución y lectura peso vs volumen entrenado.
+- 🎨 **UI Moderna y Accesible** — Construida con **Shadcn UI**, **Base UI** y **Tailwind v4**, con modo oscuro/claro (ThemeProvider propio con persistencia en `localStorage`).
+- ⚡ **Rendimiento Optimizado** — App Router de Next.js 16, Server Components y tipografías **Oswald + Inter + JetBrains Mono**.
 
 ---
 
 ## 🛠️ Stack Tecnológico
 
-| Categoría             | Tecnologías                                                                              |
-| :-------------------- | :--------------------------------------------------------------------------------------- |
-| **Frontend**          | Next.js 16 (App Router), React 19, TypeScript                                            |
-| **Estilos y UI**      | Tailwind CSS v4, Shadcn UI, `@base-ui/react`, `lucide-react`, `class-variance-authority` |
-| **Base de Datos**     | Neon (PostgreSQL Serverless)                                                             |
-| **ORM y Migraciones** | Drizzle ORM, `drizzle-kit`                                                               |
-| **Autenticación**     | Clerk (`@clerk/nextjs`)                                                                  |
-| **Herramientas**      | ESLint 9, PostCSS, `tsx` (scripts de seed)                                               |
+| Categoría             | Tecnologías                                                                                              |
+| :-------------------- | :------------------------------------------------------------------------------------------------------- |
+| **Frontend**          | Next.js 16 (App Router), React 19, TypeScript                                                            |
+| **Estilos y UI**      | Tailwind CSS v4, Shadcn UI (estilo `base-nova`), `@base-ui/react`, `lucide-react`, `class-variance-authority`, `tw-animate-css`, `cmdk` |
+| **Base de Datos**     | Neon (PostgreSQL Serverless)                                                                             |
+| **ORM y Migraciones** | Drizzle ORM, `drizzle-kit` (`@neondatabase/serverless` + `postgres`)                                     |
+| **Autenticación**     | Clerk (`@clerk/nextjs`)                                                                                  |
+| **Herramientas**      | ESLint 9, PostCSS (`@tailwindcss/postcss`), `tsx` + `dotenv`/`dotenv-cli` (script de seed)                |
 
 ---
 
@@ -78,15 +81,17 @@ NEXT_PUBLIC_CLERK_SIGN_UP_URL="/sign-up"
 
 ### 4. Configurar la base de datos
 ```bash
-# Generar migraciones (si modificaste el esquema)
+# Generar migraciones (si modificaste el esquema en src/lib/db/schema.ts)
 npm run db:generate
 
 # Aplicar cambios a la base de datos
 npm run db:push
 
-# (Opcional) Poblar con datos de prueba
+# Poblar con el catálogo base: 7 tipos de entrenamiento, 15 categorías y ~100 ejercicios
 npm run db:seed
 ```
+
+> 💡 `drizzle.config.ts` y el seed leen `.env.local` (y como alternativa `.env`).
 
 ### 5. Iniciar el servidor de desarrollo
 ```bash
@@ -95,6 +100,13 @@ npm run dev
 
 Abre [http://localhost:3000](http://localhost:3000) en tu navegador. 🚀
 
+### 6. Otros comandos útiles
+```bash
+npm run build   # Compilar para producción
+npm run start   # Servir la build de producción
+npm run lint    # Ejecutar ESLint
+```
+
 ---
 
 ## 📁 Estructura del Proyecto
@@ -102,27 +114,44 @@ Abre [http://localhost:3000](http://localhost:3000) en tu navegador. 🚀
 ```
 workoutmanager/
 ├── drizzle/                  # Migraciones y metadatos (Drizzle)
-├── public/                   # Archivos estáticos (imágenes, iconos, fuentes)
+├── public/                   # Archivos estáticos (logos, iconos)
 ├── src/
 │   ├── app/                  # Rutas y páginas (Next.js App Router)
-│   │   ├── dashboard/        # Vista principal del usuario
-│   │   ├── progress/         # Estadísticas globales y gráficos
-│   │   ├── settings/         # Configuración y categorías personalizadas
-│   │   ├── workouts/         # Gestión y ejecución de entrenamientos
-│   │   ├── sign-in/          # Rutas de Clerk
-│   │   └── page.tsx          # Landing
-│   ├── components/           # Componentes UI reutilizables (Shadcn, Base UI)
+│   │   ├── dashboard/        # Vista principal (rachas, heatmap, recientes, peso)
+│   │   ├── progress/         # Analítica: general, musculación, powerlifting,
+│   │   │                     # crossfit/cardio, por ejercicio y corporal + actions
+│   │   ├── settings/         # Perfil, ejercicios/categorías personalizadas + actions
+│   │   ├── workouts/         # Historial, plantillas, creación (new/) y registro (log/) + actions
+│   │   ├── sign-in/          # Ruta de inicio de sesión (Clerk)
+│   │   ├── sign-up/          # Ruta de registro (Clerk)
+│   │   ├── layout.tsx        # Layout raíz (Clerk, Sidebar, ThemeProvider, fuentes)
+│   │   └── page.tsx          # Landing pública
+│   ├── components/           # Componentes reutilizables
+│   │   ├── landing/          # Showcase interactivo y FAQ de la landing
+│   │   ├── layout/           # Sidebar de la app
+│   │   ├── ui/               # Componentes Shadcn/Base UI
+│   │   ├── workout/          # Creador de ejercicios, picker de WODs, builder Hyrox,
+│   │   │                     # panel de modalidad y combobox de ejercicios
+│   │   └── ThemeProvider.tsx # Tema claro/oscuro con persistencia (wm_theme)
 │   ├── lib/
-│   │   ├── db/               # Configuración Drizzle ORM y scripts de seed
+│   │   ├── db/               # schema.ts, index.ts y Seed.ts (Drizzle ORM)
+│   │   ├── modality-utils.ts # Resumen y duración estimada por modalidad
+│   │   ├── wods-catalog.ts   # Catálogo de WODs oficiales con Rx H/M
 │   │   └── utils.ts          # Utilidades (clsx, tailwind-merge)
-│   └── middleware.ts         # Middleware Next.js (protección de rutas Clerk)
+│   └── middleware.ts         # Middleware de Clerk (las páginas verifican sesión con auth())
 ├── components.json           # Configuración Shadcn UI
-├── drizzle.config.ts         # Configuración Drizzle Kit
+├── drizzle.config.ts         # Configuración Drizzle Kit (lee .env.local / .env)
 ├── next.config.ts            # Configuración Next.js
 ├── package.json              # Dependencias y scripts
 ├── postcss.config.mjs        # Configuración PostCSS / Tailwind v4
-└── tsconfig.json             # Configuración TypeScript
+└── tsconfig.json             # Configuración TypeScript (alias @/* → ./src/*)
 ```
+
+## 🗄️ Modelo de Datos
+
+Tablas principales en `src/lib/db/schema.ts`: `workout_types`, `exercise_categories`, `exercises`, `workout_templates`, `template_exercises`, `workouts`, `workout_exercises`, `sets` (dato atómico: reps, peso, distancia, duración, RPE, Rx, notas) y `body_measurements` (peso, composición y perímetros).
+
+El esquema incluye 14 índices btree sobre las rutas calientes (`workouts(userId, startTime)`, `workoutExercises(workoutId)`, `sets(workoutExerciseId)`, etc.). Tras modificar el esquema, genera la migración con `npm run db:generate` y aplícala con `npm run db:push`.
 
 ---
 

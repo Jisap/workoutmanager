@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useDeferredValue } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -936,6 +936,11 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
   const [templateSearch, setTemplateSearch] = useState('');
   const [templateViewMode, setTemplateViewMode] = useState<'table' | 'cards'>('cards');
 
+  // Búsquedas diferidas: el input responde al instante y el filtrado
+  // (con .some anidados sobre cientos de sesiones) no bloquea cada tecla.
+  const deferredSearch = useDeferredValue(search);
+  const deferredTemplateSearch = useDeferredValue(templateSearch);
+
   // Deletion modal state
   const [deletingItem, setDeletingItem] = useState<{
     type: 'workout' | 'template';
@@ -1032,29 +1037,29 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
         (filterStatus === 'finished' && isFinished) ||
         (filterStatus === 'draft' && !isFinished);
       const matchSearch =
-        search.trim() === '' ||
-        w.name.toLowerCase().includes(search.toLowerCase()) ||
-        w.exercisesSummary.some((e) => e.name.toLowerCase().includes(search.toLowerCase()));
+        deferredSearch.trim() === '' ||
+        w.name.toLowerCase().includes(deferredSearch.toLowerCase()) ||
+        w.exercisesSummary.some((e) => e.name.toLowerCase().includes(deferredSearch.toLowerCase()));
       return matchType && matchModality && matchStatus && matchSearch;
     });
-  }, [workouts, search, filterType, filterModality, filterStatus]);
+  }, [workouts, deferredSearch, filterType, filterModality, filterStatus]);
 
   // Filtered templates list
   const filteredTemplates = useMemo(() => {
     return templates.filter((t) => {
       return (
-        templateSearch.trim() === '' ||
-        t.name.toLowerCase().includes(templateSearch.toLowerCase()) ||
-        t.typeName.toLowerCase().includes(templateSearch.toLowerCase()) ||
-        t.exercises.some((e) => e.name.toLowerCase().includes(templateSearch.toLowerCase()))
+        deferredTemplateSearch.trim() === '' ||
+        t.name.toLowerCase().includes(deferredTemplateSearch.toLowerCase()) ||
+        t.typeName.toLowerCase().includes(deferredTemplateSearch.toLowerCase()) ||
+        t.exercises.some((e) => e.name.toLowerCase().includes(deferredTemplateSearch.toLowerCase()))
       );
     });
-  }, [templates, templateSearch]);
+  }, [templates, deferredTemplateSearch]);
 
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, filterType, filterStatus, pageSize]);
+  }, [deferredSearch, filterType, filterStatus, pageSize]);
 
   // Pagination calculations for workouts
   const totalItems = filteredWorkouts.length;

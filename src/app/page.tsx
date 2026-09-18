@@ -614,6 +614,7 @@ export default async function Home() {
             alt="JisapDev"
             width={120}
             height={120}
+            loading="lazy"
             className="h-12 w-auto rounded-lg object-contain"
           />
           <p className="text-xs text-zinc-500">

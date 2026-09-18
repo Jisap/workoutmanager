@@ -1,7 +1,7 @@
 import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import { getWorkoutHistory, getUserTemplates } from './actions';
+import { getWorkoutsOverview } from './actions';
 import { Button } from '@/components/ui/button';
 import { Dumbbell, History } from 'lucide-react';
 import { WorkoutHistoryClient } from './workout-history-client';
@@ -10,10 +10,8 @@ export default async function WorkoutsHistoryPage() {
   const { userId } = await auth();
   if (!userId) redirect('/sign-in');
 
-  const [history, templates] = await Promise.all([
-    getWorkoutHistory(userId, 200),
-    getUserTemplates(userId),
-  ]);
+  // Historial + plantillas en una sola carga combinada (comparten workouts fuente)
+  const { history, templates } = await getWorkoutsOverview(userId, 200);
 
   return (
     <div className="w-full max-w-7xl mx-auto space-y-6">

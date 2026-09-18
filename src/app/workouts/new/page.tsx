@@ -15,27 +15,29 @@ export default async function NewWorkoutPage() {
   const { userId } = await auth();
   if (!userId) redirect('/sign-in');
 
-  // 1. Obtener tipos de entrenamiento disponibles
-  const types = await db.select().from(workoutTypes);
+  // 1+3. Tipos y entrenamientos recientes en paralelo; las plantillas (2.)
+  // reutilizan los recientes como workouts fuente sin re-transferirlos.
+  const [types, recentWorkouts] = await Promise.all([
+    db.select().from(workoutTypes),
+    // Entrenamientos realizados con ejercicios y sus series completas
+    db.query.workouts.findMany({
+      where: eq(workouts.userId, userId),
+      orderBy: [desc(workouts.startTime)],
+      with: {
+        type: true,
+        exercises: {
+          with: {
+            exercise: true,
+            sets: true,
+          },
+          orderBy: (fields, { asc }) => asc(fields.orderIndex),
+        },
+      },
+    }),
+  ]);
 
   // 2. Obtener plantillas del usuario con ejercicios formateados y ricos
-  const templates = await getUserTemplates(userId);
-
-  // 3. Obtener los entrenamientos realizados con ejercicios y sus series completas
-  const recentWorkouts = await db.query.workouts.findMany({
-    where: eq(workouts.userId, userId),
-    orderBy: [desc(workouts.startTime)],
-    with: {
-      type: true,
-      exercises: {
-        with: {
-          exercise: true,
-          sets: true,
-        },
-        orderBy: (fields, { asc }) => asc(fields.orderIndex),
-      },
-    },
-  });
+  const templates = await getUserTemplates(userId, recentWorkouts);
 
   // Serializar datos limpios y detallados para el componente cliente
   const serializedRecent = recentWorkouts.map((w) => {

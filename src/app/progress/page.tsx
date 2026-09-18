@@ -27,24 +27,31 @@ export default async function ProgressPage({
     ? (resolvedParams.tab as (typeof validTabs)[number])
     : 'general';
 
+  // Si la URL ya trae ejercicio (?exerciseId=), su progresión se carga en
+  // paralelo con el resto en lugar de esperar en cascada.
+  const parsedExerciseId = resolvedParams.exerciseId ? parseInt(resolvedParams.exerciseId, 10) : null;
+  const paramExerciseId = parsedExerciseId != null && !Number.isNaN(parsedExerciseId) ? parsedExerciseId : null;
+
   // Cargar datos en paralelo para máxima velocidad
-  const [advancedData, progressData, availableExercises, consistencyData, bodyMeasurements] = await Promise.all([
+  const [advancedData, progressData, availableExercises, consistencyData, bodyMeasurements, paramExerciseProgress] = await Promise.all([
     getAdvancedProgressData(userId),
     getProgressData(userId),
     getAvailableExercises(userId),
     getConsistencyData(userId),
     getBodyMeasurements(),
+    paramExerciseId != null
+      ? getExerciseProgress(userId, paramExerciseId)
+      : Promise.resolve(null),
   ]);
 
   // Si no hay ejercicio especificado en la URL, seleccionar el primero disponible
-  const selectedExerciseId = resolvedParams.exerciseId
-    ? parseInt(resolvedParams.exerciseId, 10)
-    : (availableExercises[0]?.id ?? null);
+  const selectedExerciseId = paramExerciseId ?? (availableExercises[0]?.id ?? null);
 
-  // Cargar progresión del ejercicio seleccionado
-  const exerciseProgress = selectedExerciseId
-    ? await getExerciseProgress(userId, selectedExerciseId)
-    : null;
+  // Cargar progresión del ejercicio seleccionado (solo si no vino ya en el lote anterior)
+  const exerciseProgress =
+    selectedExerciseId == null || selectedExerciseId === paramExerciseId
+      ? paramExerciseProgress
+      : await getExerciseProgress(userId, selectedExerciseId);
 
   return (
     <div className="max-w-5xl mx-auto space-y-6 pb-24">

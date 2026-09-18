@@ -38,7 +38,6 @@ export default async function DashboardPage() {
 
     // Stats básicas
     const totalWorkouts = consistencyData.totalWorkouts;
-    const totalTime = recentWorkouts.reduce((acc, w) => acc + (w.totalTimeSeconds || 0), 0);
 
     return (
         <div className="space-y-6">

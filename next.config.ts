@@ -1,7 +1,13 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  experimental: {
+    // Reduce el JS de cliente empaquetando solo los iconos/primitivas usados
+    optimizePackageImports: ["lucide-react", "@base-ui/react"],
+  },
+  images: {
+    formats: ["image/avif", "image/webp"],
+  },
 };
 
 export default nextConfig;

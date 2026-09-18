@@ -1,13 +1,9 @@
 'use client';
 
 import { useState } from 'react';
+import dynamic from 'next/dynamic';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ProgressGeneralStats } from './progress-general-stats';
-import { ProgressMusculacion } from './progress-musculacion';
-import { ProgressPowerlifting } from './progress-powerlifting';
-import { ProgressCrossfitCardio } from './progress-crossfit-cardio';
-import { ProgressCorporal } from './progress-corporal';
-import { ExerciseProgressChart } from './exercise-progress-chart';
 import { ConsistencyHeatmap } from './consitency-heatmap';
 import type { BodyMeasurementDTO } from './measurements-actions';
 import {
@@ -23,6 +19,38 @@ import {
   Heart,
   Scale,
 } from 'lucide-react';
+
+// Las pestañas pesadas (charts SVG a medida, las más grandes del bundle)
+// se cargan bajo demanda: el usuario en "General" no descarga ~300 KB de charts.
+function TabFallback() {
+  return (
+    <div className="rounded-2xl border border-gray-200 dark:border-gray-700 p-6 space-y-3 animate-pulse">
+      <div className="h-4 w-1/3 rounded bg-gray-200 dark:bg-gray-700" />
+      <div className="h-40 rounded-xl bg-gray-100 dark:bg-gray-800" />
+    </div>
+  );
+}
+
+const ProgressMusculacion = dynamic(
+  () => import('./progress-musculacion').then((m) => m.ProgressMusculacion),
+  { loading: TabFallback }
+);
+const ProgressPowerlifting = dynamic(
+  () => import('./progress-powerlifting').then((m) => m.ProgressPowerlifting),
+  { loading: TabFallback }
+);
+const ProgressCrossfitCardio = dynamic(
+  () => import('./progress-crossfit-cardio').then((m) => m.ProgressCrossfitCardio),
+  { loading: TabFallback }
+);
+const ProgressCorporal = dynamic(
+  () => import('./progress-corporal').then((m) => m.ProgressCorporal),
+  { loading: TabFallback }
+);
+const ExerciseProgressChart = dynamic(
+  () => import('./exercise-progress-chart').then((m) => m.ExerciseProgressChart),
+  { loading: TabFallback }
+);
 
 interface ProgressClientProps {
   advancedData: {
