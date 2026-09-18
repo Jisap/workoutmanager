@@ -573,6 +573,7 @@ export async function getExerciseProgress(userId: string, exerciseId: number) {
       date: workouts.startTime,
       workoutId: workouts.id,
       workoutName: workouts.name,
+      totalTimeSeconds: workouts.totalTimeSeconds,
       weight: sets.weight,
       reps: sets.repCount,
       rpe: sets.rpe,
@@ -598,6 +599,8 @@ export async function getExerciseProgress(userId: string, exerciseId: number) {
     totalVolume: number;
     totalReps: number;
     isBodyweight: boolean;
+    isDraft: boolean;
+    avgRpe: number | null;
     sets: {
       setNumber: number;
       weight: number;
@@ -608,6 +611,8 @@ export async function getExerciseProgress(userId: string, exerciseId: number) {
   }
 
   const sessionsMap: Record<number, ProgressSession> = {};
+  // Acumuladores de RPE por sesión (se promedian al final)
+  const rpeAcc: Record<number, { sum: number; count: number }> = {};
 
   for (const row of exerciseSets) {
     // Permitir sets sin peso (bodyweight): solo necesitamos reps
@@ -633,6 +638,9 @@ export async function getExerciseProgress(userId: string, exerciseId: number) {
         totalVolume: hasWeight ? Math.round(w * r) : 0,
         totalReps: r,
         isBodyweight: !hasWeight,
+        // Borrador = guardado sin finalizar (tiempo 0): contamina la curva si se incluye
+        isDraft: !row.totalTimeSeconds || row.totalTimeSeconds <= 0,
+        avgRpe: null,
         sets: [
           {
             setNumber: 1,
@@ -643,9 +651,18 @@ export async function getExerciseProgress(userId: string, exerciseId: number) {
           },
         ],
       };
+      if (row.rpe != null && row.rpe > 0) {
+        rpeAcc[row.workoutId] = { sum: row.rpe, count: 1 };
+      }
     } else {
       const sess = sessionsMap[row.workoutId];
       sess.totalReps += r;
+      if (row.rpe != null && row.rpe > 0) {
+        const acc = rpeAcc[row.workoutId] || { sum: 0, count: 0 };
+        acc.sum += row.rpe;
+        acc.count += 1;
+        rpeAcc[row.workoutId] = acc;
+      }
       if (hasWeight) {
         sess.totalVolume += Math.round(w * r);
         sess.isBodyweight = false;
@@ -664,8 +681,22 @@ export async function getExerciseProgress(userId: string, exerciseId: number) {
     }
   }
 
-  // Convertir a array ordenado por fecha
+  // Convertir a array ordenado por fecha (con RPE medio por sesión)
+  for (const [wid, sess] of Object.entries(sessionsMap)) {
+    const acc = rpeAcc[Number(wid)];
+    if (acc && acc.count > 0) {
+      sess.avgRpe = Math.round((acc.sum / acc.count) * 10) / 10;
+    }
+  }
   return Object.values(sessionsMap).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+}
+
+// Variedad para cliente: progreso de un ejercicio del usuario autenticado.
+// Se usa desde el comparador A vs B sin exponer userIds en el cliente.
+export async function getExerciseProgressForCurrentUser(exerciseId: number) {
+  const { userId } = await auth();
+  if (!userId) throw new Error('No autorizado');
+  return getExerciseProgress(userId, exerciseId);
 }
 
 export async function getConsistencyData(userId: string) {

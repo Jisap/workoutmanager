@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent } from '@/components/ui/card';
+import { getExerciseProgressForCurrentUser } from '../workouts/actions';
 import {
   Trophy,
   TrendingUp,
@@ -41,6 +42,8 @@ export interface ProgressSessionPoint {
   totalVolume: number;
   totalReps: number;
   isBodyweight: boolean;
+  isDraft: boolean;
+  avgRpe: number | null;
   sets: SetDetail[];
 }
 
@@ -78,6 +81,15 @@ export function ExerciseProgressChart({
   const [metric, setMetric] = useState<MetricType>(() => (data?.every((s) => s.isBodyweight) ? 'reps' : '1rm'));
   const [timeRange, setTimeRange] = useState<TimeRange>('all');
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  // Nuevos: tendencia, volumen en barras, borradores y comparador
+  const [showTrend, setShowTrend] = useState(true);
+  const [showVolumeBars, setShowVolumeBars] = useState(true);
+  const [includeDrafts, setIncludeDrafts] = useState(false);
+  const [isCompareOpen, setIsCompareOpen] = useState(false);
+  const [compareSearch, setCompareSearch] = useState('');
+  const [compareId, setCompareId] = useState<number | null>(null);
+  const [compareData, setCompareData] = useState<ProgressSessionPoint[] | null>(null);
+  const [compareLoading, setCompareLoading] = useState(false);
 
   // Estados del selector
   const [isSelectorOpen, setIsSelectorOpen] = useState(false);
@@ -114,12 +126,22 @@ export function ExerciseProgressChart({
     });
   }, [availableExercises, searchQuery, selectedCategory, onlyWithLogs]);
 
+  // Borradores (guardados sin finalizar) se excluyen por defecto: contaminan la curva
+  const draftCount = useMemo(() => (data || []).filter((s) => s.isDraft).length, [data]);
+  const visibleData = useMemo(() => {
+    if (!data) return [];
+    return includeDrafts ? data : data.filter((s) => !s.isDraft);
+  }, [data, includeDrafts]);
+
+  // Hay datos de RPE para mostrar la columna de esfuerzo
+  const hasRpeData = useMemo(() => visibleData.some((s) => s.avgRpe != null), [visibleData]);
+
   // Filtrado de datos por rango temporal
   const filteredData = useMemo(() => {
-    if (!data || data.length === 0) return [];
+    if (!visibleData || visibleData.length === 0) return [];
 
     const now = new Date().getTime();
-    return data
+    return visibleData
       .filter((session) => {
         if (timeRange === 'all') return true;
         const sessionTime = new Date(session.date).getTime();
@@ -132,7 +154,92 @@ export function ExerciseProgressChart({
         return true;
       })
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-  }, [data, timeRange]);
+  }, [visibleData, timeRange]);
+
+  // Valor de la métrica activa por sesión (se reutiliza en PRs, tendencia y comparador)
+  const metricVal = (s: ProgressSessionPoint): number => {
+    if (metric === '1rm') return s.estimated1RM;
+    if (metric === 'maxWeight') return s.maxWeight;
+    if (metric === 'reps') return s.maxReps;
+    return s.totalVolume;
+  };
+
+  // PRs cronológicos: sesiones que superan todo lo anterior (desde la 2ª en adelante)
+  const chronoPRs = useMemo(() => {
+    const flags = new Array(filteredData.length).fill(false);
+    let best = -Infinity;
+    filteredData.forEach((s, i) => {
+      const v = metricVal(s);
+      if (i === 0) {
+        best = v;
+      } else if (v > best) {
+        flags[i] = true;
+        best = v;
+      }
+    });
+    return flags;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filteredData, metric]);
+
+  // Estado de progresión: días/sesiones desde el último PR
+  const prStatus = useMemo(() => {
+    if (filteredData.length < 2) return null;
+    let lastPRDate = new Date(filteredData[0].date).getTime();
+    let sessionsSincePR = 0;
+    chronoPRs.forEach((isPR, i) => {
+      if (isPR) {
+        lastPRDate = new Date(filteredData[i].date).getTime();
+        sessionsSincePR = 0;
+      } else if (i > 0) {
+        sessionsSincePR++;
+      }
+    });
+    const daysSincePR = Math.max(0, Math.round((new Date().getTime() - lastPRDate) / (1000 * 60 * 60 * 24)));
+    const prCount = chronoPRs.filter(Boolean).length;
+    const status = daysSincePR <= 30 ? 'progressing' : daysSincePR <= 60 ? 'steady' : 'stalled';
+    return { daysSincePR, sessionsSincePR, prCount, status: status as 'progressing' | 'steady' | 'stalled' };
+  }, [filteredData, chronoPRs]);
+
+  // Comparador: cargar el segundo ejercicio bajo demanda
+  const handleSelectCompare = async (exerciseId: number) => {
+    if (exerciseId === selectedExerciseId) return;
+    setCompareId(exerciseId);
+    setIsCompareOpen(false);
+    setCompareLoading(true);
+    try {
+      const res = await getExerciseProgressForCurrentUser(exerciseId);
+      setCompareData(res as ProgressSessionPoint[]);
+    } catch {
+      setCompareData([]);
+    } finally {
+      setCompareLoading(false);
+    }
+  };
+
+  const compareExercise = compareId != null ? availableExercises.find((ex) => ex.id === compareId) : undefined;
+  const compareFiltered = useMemo(() => {
+    if (!compareData) return [];
+    const list = includeDrafts ? compareData : compareData.filter((s) => !s.isDraft);
+    if (timeRange === 'all') return [...list].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const now = new Date().getTime();
+    const limits: Record<TimeRange, number> = { '1m': 30, '3m': 90, '6m': 180, '1y': 365, all: Infinity };
+    return list
+      .filter((s) => (now - new Date(s.date).getTime()) / (1000 * 60 * 60 * 24) <= limits[timeRange])
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  }, [compareData, includeDrafts, timeRange]);
+
+  // Crecimiento % inicio→fin para A y B (misma métrica)
+  const compareGrowth = useMemo(() => {
+    const growthOf = (arr: ProgressSessionPoint[]) => {
+      if (arr.length < 2) return null;
+      const first = metricVal(arr[0]);
+      const last = metricVal(arr[arr.length - 1]);
+      if (first <= 0) return null;
+      return ((last - first) / first) * 100;
+    };
+    return { a: growthOf(filteredData), b: compareFiltered.length > 0 ? growthOf(compareFiltered) : null };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filteredData, compareFiltered, metric]);
 
   const handleSelectExercise = (exerciseId: number) => {
     setIsSelectorOpen(false);
@@ -242,6 +349,82 @@ export function ExerciseProgressChart({
     }
     return `${linePathD} L ${points[points.length - 1].x.toFixed(1)} ${bottomY} L ${points[0].x.toFixed(1)} ${bottomY} Z`;
   }, [linePathD, points, padLeft, padRight, padTop, chartHeight, svgWidth]);
+
+  // Recta de tendencia (mínimos cuadrados sobre el índice de sesión)
+  const trendPathD = useMemo(() => {
+    if (!stats || filteredData.length < 3) return '';
+    const n = filteredData.length;
+    const values = filteredData.map((d) => metricVal(d));
+    const meanX = (n - 1) / 2;
+    const meanY = values.reduce((a, b) => a + b, 0) / n;
+    let num = 0;
+    let den = 0;
+    values.forEach((v, i) => {
+      num += (i - meanX) * (v - meanY);
+      den += (i - meanX) * (i - meanX);
+    });
+    if (den === 0) return '';
+    const slope = num / den;
+    const intercept = meanY - slope * meanX;
+    const min = stats.minVal;
+    const max = stats.peakVal;
+    const range = max - min || (max === 0 ? 10 : max * 0.2 || 1);
+    const yOf = (idx: number) => {
+      const v = intercept + slope * idx;
+      const normalized = (v - min) / range;
+      return padTop + chartHeight - normalized * chartHeight;
+    };
+    const x0 = padLeft;
+    const x1 = padLeft + chartWidth;
+    return `M ${x0.toFixed(1)} ${yOf(0).toFixed(1)} L ${x1.toFixed(1)} ${yOf(n - 1).toFixed(1)}`;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stats, filteredData, metric, chartWidth, chartHeight, padLeft, padTop]);
+
+  // Barras de volumen al fondo (segundo eje implícito, mitad inferior, sutiles)
+  const maxVolume = useMemo(
+    () => filteredData.reduce((m, s) => Math.max(m, s.totalVolume || 0), 0),
+    [filteredData]
+  );
+  const canShowVolumeBars = !isBodyweight && (metric === '1rm' || metric === 'maxWeight') && maxVolume > 0;
+  const volumeBars = useMemo(() => {
+    if (!canShowVolumeBars || filteredData.length === 0) return [];
+    const bottomY = padTop + chartHeight;
+    const maxH = chartHeight * 0.45;
+    const slot = chartWidth / filteredData.length;
+    const barW = Math.max(2, Math.min(26, slot * 0.55));
+    return filteredData.map((s, i) => {
+      const h = maxVolume > 0 ? ((s.totalVolume || 0) / maxVolume) * maxH : 0;
+      const cx = filteredData.length === 1
+        ? padLeft + chartWidth / 2
+        : padLeft + (i / (filteredData.length - 1 || 1)) * chartWidth;
+      return { x: cx - barW / 2, y: bottomY - h, w: barW, h, vol: s.totalVolume || 0 };
+    });
+  }, [canShowVolumeBars, filteredData, maxVolume, chartWidth, chartHeight, padLeft, padTop]);
+
+  // Serie del comparador B proyectada sobre el mismo eje Y (misma métrica y unidades)
+  const comparePoints = useMemo(() => {
+    if (!stats || compareFiltered.length === 0) return [];
+    const min = stats.minVal;
+    const max = stats.peakVal;
+    const range = max - min || (max === 0 ? 10 : max * 0.2 || 1);
+    return compareFiltered.map((d, i) => {
+      const x = compareFiltered.length === 1
+        ? padLeft + chartWidth / 2
+        : padLeft + (i / (compareFiltered.length - 1 || 1)) * chartWidth;
+      const normalized = (metricVal(d) - min) / range;
+      const y = padTop + chartHeight - normalized * chartHeight;
+      return { x, y, val: metricVal(d), session: d };
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stats, compareFiltered, metric, chartWidth, chartHeight, padLeft, padTop]);
+
+  const comparePathD = useMemo(() => {
+    if (comparePoints.length === 0) return '';
+    if (comparePoints.length === 1) {
+      return `M ${padLeft} ${comparePoints[0].y} L ${padLeft + chartWidth} ${comparePoints[0].y}`;
+    }
+    return comparePoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
+  }, [comparePoints, padLeft, chartWidth]);
 
   const activePoint = hoveredIndex !== null && points[hoveredIndex] ? points[hoveredIndex] : points[points.length - 1];
 
@@ -440,6 +623,8 @@ export function ExerciseProgressChart({
             <p className="text-sm text-gray-500 dark:text-gray-400 max-w-md mx-auto">
               {timeRange !== 'all'
                 ? 'Prueba a cambiar el rango temporal a "Todo el histórico" para ver sesiones anteriores.'
+                : draftCount > 0 && !includeDrafts
+                ? `Solo hay ${draftCount} ${draftCount === 1 ? 'sesión guardada sin finalizar (borrador)' : 'sesiones guardadas sin finalizar (borradores)'}. Activa "Borradores" arriba para incluirlas o finaliza la sesión desde Historial.`
                 : `Aún no has registrado series con peso en "${selectedExercise?.name ?? 'este ejercicio'}".`}
             </p>
           </CardContent>
@@ -528,6 +713,151 @@ export function ExerciseProgressChart({
               })}
             </div>
           </div>
+
+          {/* 2b. OPCIONES DE VISTA: tendencia, volumen, borradores y comparador */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button
+              onClick={() => setShowTrend((v) => !v)}
+              className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all border ${
+                showTrend
+                  ? 'bg-gray-900 text-white border-gray-900 dark:bg-gray-700 dark:border-gray-700'
+                  : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50 dark:bg-gray-900 dark:text-gray-400 dark:border-gray-700'
+              }`}
+              title="Recta de tendencia (regresión lineal)"
+            >
+              Tendencia {showTrend ? '· on' : '· off'}
+            </button>
+            {canShowVolumeBars && (
+              <button
+                onClick={() => setShowVolumeBars((v) => !v)}
+                className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all border ${
+                  showVolumeBars
+                    ? 'bg-purple-600 text-white border-purple-600'
+                    : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50 dark:bg-gray-900 dark:text-gray-400 dark:border-gray-700'
+                }`}
+                title="Volumen por sesión como barras de fondo"
+              >
+                Volumen {showVolumeBars ? '· on' : '· off'}
+              </button>
+            )}
+            {draftCount > 0 && (
+              <button
+                onClick={() => setIncludeDrafts((v) => !v)}
+                className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all border ${
+                  includeDrafts
+                    ? 'bg-amber-500 text-white border-amber-500'
+                    : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50 dark:bg-gray-900 dark:text-gray-400 dark:border-gray-700'
+                }`}
+                title="Las sesiones guardadas sin finalizar contaminan la curva"
+              >
+                Borradores ({draftCount}) {includeDrafts ? '· incluidos' : '· excluidos'}
+              </button>
+            )}
+            <button
+              onClick={() => setIsCompareOpen((v) => !v)}
+              className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all border flex items-center gap-1 ${
+                compareId != null
+                  ? 'bg-emerald-600 text-white border-emerald-600'
+                  : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50 dark:bg-gray-900 dark:text-gray-400 dark:border-gray-700'
+              }`}
+              title="Superponer la curva de otro ejercicio (misma métrica y unidades)"
+            >
+              <Filter className="w-3 h-3" />
+              {compareId != null ? `vs ${compareExercise?.name ?? ''}` : 'Comparar'}
+            </button>
+            {compareLoading && <span className="text-xs text-gray-400">Cargando…</span>}
+          </div>
+
+          {/* Panel del comparador */}
+          {isCompareOpen && (
+            <div className="bg-white p-3 rounded-2xl border border-gray-200 space-y-2 dark:bg-gray-900 dark:border-gray-700">
+              <div className="relative">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Buscar segundo ejercicio para comparar…"
+                  value={compareSearch}
+                  onChange={(e) => setCompareSearch(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100"
+                  autoFocus
+                />
+              </div>
+              <div className="max-h-44 overflow-y-auto divide-y divide-gray-100 border border-gray-200 rounded-xl dark:divide-gray-800 dark:border-gray-700">
+                {availableExercises
+                  .filter((ex) => ex.id !== selectedExerciseId && ex.sessionCount > 0)
+                  .filter((ex) => ex.name.toLowerCase().includes(compareSearch.toLowerCase().trim()))
+                  .slice(0, 20)
+                  .map((ex) => (
+                    <button
+                      key={ex.id}
+                      onClick={() => handleSelectCompare(ex.id)}
+                      className="w-full text-left px-4 py-2 text-sm hover:bg-emerald-50 text-gray-800 flex items-center justify-between dark:hover:bg-emerald-950/30 dark:text-gray-200"
+                    >
+                      <span>{ex.name} <span className="text-xs text-gray-400">({ex.categoryName})</span></span>
+                      <span className="text-xs text-gray-400">{ex.sessionCount} sesiones</span>
+                    </button>
+                  ))}
+              </div>
+            </div>
+          )}
+
+          {/* Leyenda del comparador + crecimiento */}
+          {compareId != null && compareData && (
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <span className="flex items-center gap-1.5 font-semibold text-gray-700 dark:text-gray-300">
+                <span className="w-4 h-0.5 bg-purple-600 rounded-full inline-block" />
+                {selectedExercise?.name ?? 'A'}
+                {compareGrowth.a != null && (
+                  <span className={`font-mono ${compareGrowth.a >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                    ({compareGrowth.a >= 0 ? '+' : ''}{compareGrowth.a.toFixed(1)}%)
+                  </span>
+                )}
+              </span>
+              <span className="flex items-center gap-1.5 font-semibold text-gray-700 dark:text-gray-300">
+                <span className="w-4 h-0 border-t-2 border-dashed border-emerald-500 inline-block" />
+                {compareExercise?.name ?? 'B'}
+                {compareGrowth.b != null && (
+                  <span className={`font-mono ${compareGrowth.b >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                    ({compareGrowth.b >= 0 ? '+' : ''}{compareGrowth.b.toFixed(1)}%)
+                  </span>
+                )}
+              </span>
+              <button
+                onClick={() => { setCompareId(null); setCompareData(null); }}
+                className="text-gray-400 hover:text-rose-600 font-bold cursor-pointer"
+                title="Quitar comparación"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
+          {/* 2c. ESTADO DE PROGRESIÓN (racha de PRs) */}
+          {prStatus && (
+            <div className={`flex flex-wrap items-center gap-2 px-3.5 py-2.5 rounded-2xl border text-xs ${
+              prStatus.status === 'progressing'
+                ? 'bg-emerald-50 border-emerald-200 text-emerald-900 dark:bg-emerald-950/30 dark:border-emerald-800 dark:text-emerald-200'
+                : prStatus.status === 'steady'
+                ? 'bg-amber-50 border-amber-200 text-amber-900 dark:bg-amber-950/30 dark:border-amber-800 dark:text-amber-200'
+                : 'bg-rose-50 border-rose-200 text-rose-900 dark:bg-rose-950/30 dark:border-rose-800 dark:text-rose-200'
+            }`}>
+              <span className={`font-black px-2 py-0.5 rounded-lg text-[11px] ${
+                prStatus.status === 'progressing'
+                  ? 'bg-emerald-500 text-white'
+                  : prStatus.status === 'steady'
+                  ? 'bg-amber-500 text-white'
+                  : 'bg-rose-500 text-white'
+              }`}>
+                {prStatus.status === 'progressing' ? 'PROGRESANDO' : prStatus.status === 'steady' ? 'ESTABLE' : 'ESTANCADO'}
+              </span>
+              <span className="font-medium">
+                {prStatus.prCount} {prStatus.prCount === 1 ? 'récord' : 'récords'} superados
+                {prStatus.sessionsSincePR > 0
+                  ? ` · último hace ${prStatus.daysSincePR} ${prStatus.daysSincePR === 1 ? 'día' : 'días'} (${prStatus.sessionsSincePR} ${prStatus.sessionsSincePR === 1 ? 'sesión' : 'sesiones'} sin PR)`
+                  : ' · ¡récord en la última sesión!'}
+              </span>
+            </div>
+          )}
 
           {/* 3. TARJETAS DE IMPACTO ANALÍTICO (KPIs) */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
@@ -691,6 +1021,22 @@ export function ExerciseProgressChart({
                   );
                 })}
 
+                {/* Barras de volumen al fondo (segundo eje implícito) */}
+                {showVolumeBars && volumeBars.map((b, i) => (
+                  <rect
+                    key={`v${i}`}
+                    x={b.x}
+                    y={b.y}
+                    width={b.w}
+                    height={Math.max(0, b.h)}
+                    rx={2}
+                    fill="#8b5cf6"
+                    opacity={0.14}
+                  >
+                    <title>{`Volumen: ${b.vol.toLocaleString('es-ES')} kg`}</title>
+                  </rect>
+                ))}
+
                 {/* Área bajo la curva con gradiente */}
                 <path d={areaPathD} fill="url(#chartGradient)" />
 
@@ -704,6 +1050,42 @@ export function ExerciseProgressChart({
                   strokeLinejoin="round"
                   vectorEffect="non-scaling-stroke"
                 />
+
+                {/* Recta de tendencia */}
+                {showTrend && trendPathD && (
+                  <path
+                    d={trendPathD}
+                    fill="none"
+                    stroke="#9ca3af"
+                    strokeWidth="1.5"
+                    strokeDasharray="6 4"
+                    strokeLinecap="round"
+                    vectorEffect="non-scaling-stroke"
+                    opacity={0.9}
+                  >
+                    <title>Tendencia (regresión lineal)</title>
+                  </path>
+                )}
+
+                {/* Curva del comparador B */}
+                {comparePathD && (
+                  <path
+                    d={comparePathD}
+                    fill="none"
+                    stroke="#10b981"
+                    strokeWidth="2"
+                    strokeDasharray="5 4"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    vectorEffect="non-scaling-stroke"
+                    opacity={0.9}
+                  />
+                )}
+                {comparePoints.map((p, i) => (
+                  <circle key={`c${i}`} cx={p.x} cy={p.y} r="2.5" fill="#10b981" stroke="#ffffff" strokeWidth="1.5">
+                    <title>{`${compareExercise?.name ?? 'B'}: ${formatVal(p.val)} · ${new Date(p.session.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}`}</title>
+                  </circle>
+                ))}
 
                 {/* Línea vertical de guía (Crosshair) */}
                 {hoveredIndex !== null && points[hoveredIndex] && (
@@ -723,6 +1105,7 @@ export function ExerciseProgressChart({
                   const isHovered = hoveredIndex === i;
                   const isLast = i === points.length - 1 && hoveredIndex === null;
                   const isPeak = p.val === stats.peakVal;
+                  const isChronoPR = !!chronoPRs[i];
 
                   return (
                     <g
@@ -755,7 +1138,22 @@ export function ExerciseProgressChart({
                         stroke="#ffffff"
                         strokeWidth="2"
                         className="transition-all duration-150"
-                      />
+                      >
+                        {isChronoPR && <title>🏆 Récord superado en esta sesión</title>}
+                      </circle>
+
+                      {/* Anillo dorado: la sesión batió el récord hasta entonces */}
+                      {isChronoPR && !isHovered && (
+                        <circle
+                          cx={p.x}
+                          cy={p.y}
+                          r="7"
+                          fill="none"
+                          stroke="#f59e0b"
+                          strokeWidth="1.5"
+                          opacity="0.7"
+                        />
+                      )}
                     </g>
                   );
                 })}
@@ -793,6 +1191,11 @@ export function ExerciseProgressChart({
                     <span className="font-semibold text-sm text-gray-900 dark:text-gray-100">
                       {activePoint.session.workoutName}
                     </span>
+                    {activePoint.session.isDraft && (
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800">
+                        BORRADOR
+                      </span>
+                    )}
                     <span className="text-xs text-gray-500 dark:text-gray-400">
                       • {activePoint.date.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
                     </span>
@@ -824,6 +1227,14 @@ export function ExerciseProgressChart({
                       {activePoint.session.totalVolume.toLocaleString('es-ES')} kg
                     </span>
                   </div>
+                  {activePoint.session.avgRpe != null && (
+                    <div className="text-left sm:text-right">
+                      <span className="text-[11px] text-gray-400 dark:text-gray-500 block">Esfuerzo medio</span>
+                      <span className="font-bold text-sm text-orange-600 dark:text-orange-400 tabular-nums">
+                        RPE {activePoint.session.avgRpe}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -889,6 +1300,7 @@ export function ExerciseProgressChart({
                     {!isBodyweight && <th className="text-right px-4 py-3">1RM Est.</th>}
                     {isBodyweight && <th className="text-right px-4 py-3">Máx Reps</th>}
                     <th className="text-right px-4 py-3">{isBodyweight ? 'Total Reps' : 'Volumen'}</th>
+                    {hasRpeData && <th className="text-right px-4 py-3 hidden sm:table-cell">RPE Ø</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 bg-white dark:divide-gray-800 dark:bg-gray-900">
@@ -899,11 +1311,22 @@ export function ExerciseProgressChart({
                       const isPR = !isBodyweight && session.maxWeight === stats.bestMaxWeight;
                       const is1RMPeak = !isBodyweight && session.estimated1RM === stats.best1RM;
                       const isRepsPR = isBodyweight && session.maxReps === stats.bestMaxReps;
+                      // chronoPRs está en orden cronológico; la tabla va al revés
+                      const chronoIdx = filteredData.length - 1 - i;
+                      const isChronoPR = !!chronoPRs[chronoIdx];
 
                       return (
                         <tr key={i} className="hover:bg-purple-50/20 dark:hover:bg-purple-900/20 transition-colors">
                           <td className="px-4 py-3">
-                            <p className="font-semibold text-gray-900 dark:text-gray-100 text-sm">{session.workoutName}</p>
+                            <p className="font-semibold text-gray-900 dark:text-gray-100 text-sm flex items-center gap-1.5 flex-wrap">
+                              {session.workoutName}
+                              {isChronoPR && <span title="Batió el récord hasta entonces">🏆</span>}
+                              {session.isDraft && (
+                                <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 border border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800">
+                                  BORRADOR
+                                </span>
+                              )}
+                            </p>
                             <p className="text-xs text-gray-500 dark:text-gray-400">
                               {new Date(session.date).toLocaleDateString('es-ES', {
                                 day: 'numeric',
@@ -968,6 +1391,19 @@ export function ExerciseProgressChart({
                               ? `${session.totalReps ?? 0} reps`
                               : `${session.totalVolume.toLocaleString('es-ES')} kg`}
                           </td>
+                          {hasRpeData && (
+                            <td className="px-4 py-3 text-right hidden sm:table-cell">
+                              <span className={`font-bold tabular-nums ${
+                                session.avgRpe != null && session.avgRpe >= 8
+                                  ? 'text-rose-600 dark:text-rose-400'
+                                  : session.avgRpe != null
+                                  ? 'text-gray-700 dark:text-gray-300'
+                                  : 'text-gray-300 dark:text-gray-600'
+                              }`}>
+                                {session.avgRpe != null ? session.avgRpe.toFixed(1) : '—'}
+                              </span>
+                            </td>
+                          )}
                         </tr>
                       );
                     })}
