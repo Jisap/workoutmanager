@@ -121,6 +121,13 @@ async function seed() {
         { name: 'Box Jumps', categoryId: getId('Gymnastics') },
         { name: 'Burpees', categoryId: getId('Gymnastics') },
         { name: 'Double-unders', categoryId: getId('Gymnastics') },
+        { name: 'Push-ups (Flexiones)', categoryId: getId('Gymnastics') },
+        { name: 'Air Squats (Sentadilla al aire)', categoryId: getId('Gymnastics') },
+        { name: 'Sit-ups (Abdominales)', categoryId: getId('Gymnastics') },
+        { name: 'Ring Dips (Fondos en anillas)', categoryId: getId('Gymnastics') },
+        { name: 'Rope Climb (Subida de cuerda)', categoryId: getId('Gymnastics') },
+        { name: 'GHD Sit-ups', categoryId: getId('Gymnastics') },
+        { name: 'Hiperextensiones (Back Extension)', categoryId: getId('Gymnastics') },
 
         // === WEIGHTLIFTING (CrossFit) ===
         { name: 'Snatch', categoryId: getId('Weightlifting') },
@@ -130,6 +137,12 @@ async function seed() {
         { name: 'Thrusters', categoryId: getId('Weightlifting') },
         { name: 'Wall Balls', categoryId: getId('Weightlifting') },
         { name: 'Cluster', categoryId: getId('Weightlifting') },
+        { name: 'Push Jerk', categoryId: getId('Weightlifting') },
+        { name: 'Push Press', categoryId: getId('Weightlifting') },
+        { name: 'Hang Power Clean', categoryId: getId('Weightlifting') },
+        { name: 'Squat Clean', categoryId: getId('Weightlifting') },
+        { name: 'Overhead Squat', categoryId: getId('Weightlifting') },
+        { name: 'Sumo Deadlift High Pull', categoryId: getId('Weightlifting') },
 
         // === MONOSTRUCTURAL (Cardio) ===
         { name: 'Running (1000m)', categoryId: getId('Monostructural') },

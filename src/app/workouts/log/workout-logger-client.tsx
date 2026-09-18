@@ -9,13 +9,14 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { ExerciseCombobox, type ExerciseOption } from '@/components/workout/exercise-combobox';
-import { Plus, Trash2, Clock, Check, ChevronDown, ChevronUp, Pencil, RotateCcw, Bookmark, Sparkles, Loader2, Play, Save, Flame, Timer, Activity, TrendingUp, Layers, Zap } from 'lucide-react';
+import { Plus, Trash2, Clock, Check, ChevronDown, ChevronUp, Pencil, RotateCcw, Bookmark, Sparkles, Loader2, Play, Save, Flame, Timer, Activity, TrendingUp, Layers, Zap, Trophy } from 'lucide-react';
 import { saveWorkout, saveAsTemplate as saveAsTemplateAction, createDirectTemplate } from '../actions';
 import { CreateExerciseDialog, type Category } from '@/components/workout/create-exercise-dialog';
 import { type ModalityConfig } from '@/lib/db/schema';
 import { ModalityConfigPanel } from '@/components/workout/modality-config-panel';
 import { formatModalitySummary } from '@/lib/modality-utils';
 import { HyroxRaceBuilder, type HyroxGeneratedExercise } from '@/components/workout/hyrox-race-builder';
+import { CrossfitWodPicker, type WodApplyPayload } from '@/components/workout/crossfit-wod-picker';
 
 export const MODALITY_OPTIONS = [
   { id: 'For Time', label: 'For Time', icon: Timer, desc: 'Completar todo el trabajo en el menor tiempo' },
@@ -299,6 +300,10 @@ export function WorkoutLoggerClient({
   const [showHyroxBuilder, setShowHyroxBuilder] = useState(
     () => (initialExercisesState?.length ?? 0) === 0
   );
+  // Catálogo de WODs oficiales: mismo comportamiento plegable
+  const [showWodPicker, setShowWodPicker] = useState(
+    () => (initialExercisesState?.length ?? 0) === 0
+  );
 
   // Estado para expandir/colapsar desglose individual por ejercicio
   const [expandedExercises, setExpandedExercises] = useState<Record<string, boolean>>({});
@@ -520,6 +525,26 @@ export function WorkoutLoggerClient({
     setTemplateName(uniqueTitle);
     setDirectTemplateName(uniqueTitle);
     setExercises(generatedExercises);
+  };
+
+  // Aplicar WOD oficial desde el catálogo: nombre + modalidad + ejercicios precargados.
+  // Desde aquí el usuario puede entrenarlo directamente o guardarlo como plantilla
+  // con el flujo existente ("Guardar como plantilla"), cubriendo ambos casos.
+  const handleApplyWod = (payload: WodApplyPayload) => {
+    if (exercises.length > 0) {
+      const ok = window.confirm(
+        `Cargar "${payload.title}" sustituirá los ejercicios actuales. ¿Continuar?`
+      );
+      if (!ok) return;
+    }
+    const uniqueTitle = currentWorkoutId ? payload.title : makeUniqueClientName(payload.title);
+    setTypeName(uniqueTitle);
+    setTemplateName(uniqueTitle);
+    setDirectTemplateName(uniqueTitle);
+    setModality(payload.modality);
+    setModalityConfig(payload.modalityConfig);
+    setExercises(payload.exercises);
+    setShowWodPicker(false);
   };
 
   const handleDirectSave = async () => {
@@ -929,6 +954,38 @@ export function WorkoutLoggerClient({
           )}
         </div>
       )}
+
+      {/* ─── CATÁLOGO DE WODs OFICIALES (CrossFit / Funcional) ─── */}
+      {/* Visible en entrenos personalizados de CrossFit/Funcional (también en modo
+          plantilla: desde aquí se puede "Guardar como Plantilla" con el WOD cargado) */}
+      {!isHyroxPage &&
+        (currentTypeNameLower.includes('crossfit') ||
+          currentTypeNameLower.includes('funcional') ||
+          currentTypeNameLower.includes('wod') ||
+          typeName.toLowerCase().includes('crossfit') ||
+          typeName.toLowerCase().includes('funcional')) && (
+          <div className="space-y-2">
+            {exercises.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowWodPicker((v) => !v)}
+                className="w-full flex items-center justify-between px-4 py-2.5 rounded-2xl border border-orange-200 dark:border-orange-800/60 bg-orange-50/60 dark:bg-orange-950/20 text-xs font-bold text-orange-900 dark:text-orange-200 hover:bg-orange-100 dark:hover:bg-orange-950/40 transition-colors cursor-pointer"
+              >
+                <span className="flex items-center gap-2">
+                  <Trophy className="w-3.5 h-3.5 text-orange-500" />
+                  {showWodPicker ? 'Ocultar catálogo de WODs oficiales' : `WODs oficiales (${exercises.length} ejercicios cargados)`}
+                </span>
+                <span className="text-orange-500">{showWodPicker ? '▲' : '▼'}</span>
+              </button>
+            )}
+            {(showWodPicker || exercises.length === 0) && (
+              <CrossfitWodPicker
+                availableExercises={availableExercisesList}
+                onApplyWod={handleApplyWod}
+              />
+            )}
+          </div>
+        )}
 
       {/* Lista de Ejercicios — en Hyrox se unifica en una sola tabla de carrera */}
       <div className="space-y-4">
