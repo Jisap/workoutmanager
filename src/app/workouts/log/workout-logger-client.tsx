@@ -18,6 +18,7 @@ import { formatModalitySummary } from '@/lib/modality-utils';
 import { HyroxRaceBuilder, type HyroxGeneratedExercise } from '@/components/workout/hyrox-race-builder';
 import { CrossfitWodPicker, type WodApplyPayload } from '@/components/workout/crossfit-wod-picker';
 import { OFFICIAL_WODS } from '@/lib/wods-catalog';
+import { notify } from '@/lib/notify';
 
 export const MODALITY_OPTIONS = [
   { id: 'For Time', label: 'For Time', icon: Timer, desc: 'Completar todo el trabajo en el menor tiempo' },
@@ -189,8 +190,6 @@ export function WorkoutLoggerClient({
   // Guardar como plantilla (secundario al finalizar entrenamiento)
   const [saveAsTemplate, setSaveAsTemplate] = useState(false);
   const [templateName, setTemplateName] = useState(initialName);
-  // Error no bloqueante (sustituye a `alert()` para no interrumpir el flujo)
-  const [saveError, setSaveError] = useState<string | null>(null);
 
   // Sincronizar initialName si cambia
   useEffect(() => {
@@ -536,9 +535,8 @@ export function WorkoutLoggerClient({
   };
 
   const handleDirectSave = async () => {
-    setSaveError(null);
     if (exercises.length === 0) {
-      setSaveError('Añade al menos un ejercicio antes de guardar');
+      notify.warning('Sin ejercicios', 'Añade al menos un ejercicio antes de guardar');
       return;
     }
     setIsSaving(true);
@@ -569,17 +567,18 @@ export function WorkoutLoggerClient({
       if (result.workoutId && !currentWorkoutId) {
         setCurrentWorkoutId(result.workoutId);
       }
+      // El toast sobrevive a la navegación (el Toaster vive en el layout raíz)
+      notify.success('Entrenamiento guardado', `"${typeName}"`);
       router.push('/workouts');
     } catch (error) {
       console.error(error);
-      setSaveError(error instanceof Error ? error.message : 'Error al guardar el entrenamiento');
+      notify.errorFrom(error, 'Error al guardar el entrenamiento');
     } finally {
       setIsSaving(false);
     }
   };
 
   const handleFinish = async () => {
-    setSaveError(null);
     setIsSaving(true);
     try {
       // Score AMRAP/EMOM (rondas + reps): solo se adjunta al finalizar, nunca a plantillas
@@ -628,23 +627,23 @@ export function WorkoutLoggerClient({
         });
       }
 
+      notify.success('Sesión finalizada', `"${typeName}" · ¡buen trabajo!`);
       router.push('/dashboard');
     } catch (error) {
       console.error(error);
-      setSaveError(error instanceof Error ? error.message : 'Error al guardar el entrenamiento');
+      notify.errorFrom(error, 'Error al guardar el entrenamiento');
     } finally {
       setIsSaving(false);
     }
   };
 
   const handleSaveDirectTemplate = async (andStartWorkout: boolean = false) => {
-    setSaveError(null);
     if (!directTemplateName.trim()) {
-      setSaveError('Por favor introduce un nombre para la plantilla');
+      notify.warning('Falta el nombre', 'Introduce un nombre para la plantilla');
       return;
     }
     if (exercises.length === 0) {
-      setSaveError('Añade al menos un ejercicio para guardar la plantilla');
+      notify.warning('Sin ejercicios', 'Añade al menos un ejercicio para guardar la plantilla');
       return;
     }
 
@@ -688,6 +687,7 @@ export function WorkoutLoggerClient({
       });
 
       setIsTemplateDialogOpen(false);
+      notify.success('Plantilla guardada', `"${directTemplateName.trim()}"`);
 
       if (andStartWorkout && res.templateId) {
         router.push(`/workouts/log?mode=template&templateId=${res.templateId}`);
@@ -696,7 +696,7 @@ export function WorkoutLoggerClient({
       }
     } catch (error) {
       console.error(error);
-      setSaveError(error instanceof Error ? error.message : 'Error al guardar la plantilla');
+      notify.errorFrom(error, 'Error al guardar la plantilla');
     } finally {
       setIsSavingTemplate(false);
     }
@@ -704,21 +704,6 @@ export function WorkoutLoggerClient({
 
   return (
     <div className="mx-auto w-full max-w-2xl lg:max-w-4xl xl:max-w-5xl space-y-6 pb-32">
-      {saveError && (
-        <div
-          role="alert"
-          className="p-3.5 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/60 rounded-2xl text-xs text-red-800 dark:text-red-200 flex items-center justify-between gap-3"
-        >
-          <span>{saveError}</span>
-          <button
-            type="button"
-            onClick={() => setSaveError(null)}
-            className="font-bold underline underline-offset-2 shrink-0 cursor-pointer"
-          >
-            Cerrar
-          </button>
-        </div>
-      )}
       {/* Barra superior con título y controles */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="space-y-1 min-w-0 flex-1">

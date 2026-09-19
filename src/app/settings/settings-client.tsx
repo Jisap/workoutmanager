@@ -42,6 +42,7 @@ import {
   deleteExerciseCategory,
 } from './actions';
 import { createCustomExercise } from '@/app/workouts/actions';
+import { notify } from '@/lib/notify';
 import { useTheme } from '@/components/ThemeProvider';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -334,21 +335,34 @@ function CustomExercisesSection({
   const handleSaveEdit = (id: number) => {
     if (!editName.trim()) return;
     startTransition(async () => {
-      await renameCustomExercise(id, editName.trim());
-      setExercises((prev) =>
-        prev.map((ex) => (ex.id === id ? { ...ex, name: editName.trim() } : ex))
-      );
-      setEditingId(null);
+      try {
+        await renameCustomExercise(id, editName.trim());
+        setExercises((prev) =>
+          prev.map((ex) => (ex.id === id ? { ...ex, name: editName.trim() } : ex))
+        );
+        setEditingId(null);
+        notify.success('Ejercicio actualizado', `"${editName.trim()}"`);
+      } catch (err) {
+        console.error(err);
+        notify.errorFrom(err, 'Error al renombrar el ejercicio');
+      }
     });
   };
 
   const handleDelete = (id: number) => {
     setDeletingId(id);
     startTransition(async () => {
-      await deleteCustomExercise(id);
-      setExercises((prev) => prev.filter((ex) => ex.id !== id));
-      setDeletingId(null);
-      setConfirmDeleteId(null);
+      try {
+        const target = exercises.find((ex) => ex.id === id);
+        await deleteCustomExercise(id);
+        setExercises((prev) => prev.filter((ex) => ex.id !== id));
+        setDeletingId(null);
+        setConfirmDeleteId(null);
+        notify.success('Ejercicio eliminado', target ? `"${target.name}"` : undefined);
+      } catch (err) {
+        console.error(err);
+        notify.errorFrom(err, 'Error al eliminar el ejercicio');
+      }
     });
   };
 
@@ -374,9 +388,11 @@ function CustomExercisesSection({
         setNewName('');
         setNewCategoryId('');
         setShowNewForm(false);
+        notify.success('Ejercicio creado', `"${result.exercise!.name}"`);
       }
-    } catch {
-      alert('Error al crear el ejercicio');
+    } catch (err) {
+      console.error(err);
+      notify.errorFrom(err, 'Error al crear el ejercicio');
     } finally {
       setIsCreating(false);
     }
@@ -585,8 +601,10 @@ function CategoriesSection({
           prev.map((c) => (c.id === id ? { ...c, name: editName.trim() } : c))
         );
         setEditingId(null);
+        notify.success('Categoría actualizada', `"${editName.trim()}"`);
       } catch (err) {
-        alert('Error al renombrar la categoría');
+        console.error(err);
+        notify.errorFrom(err, 'Error al renombrar la categoría');
       }
     });
   };
@@ -595,12 +613,15 @@ function CategoriesSection({
     setDeletingId(id);
     startTransition(async () => {
       try {
+        const target = categories.find((c) => c.id === id);
         await deleteExerciseCategory(id);
         setCategories((prev) => prev.filter((c) => c.id !== id));
         setDeletingId(null);
         setConfirmDeleteId(null);
+        notify.success('Categoría eliminada', target ? `"${target.name}"` : undefined);
       } catch (err) {
-        alert('Error al eliminar la categoría');
+        console.error(err);
+        notify.errorFrom(err, 'Error al eliminar la categoría');
       }
     });
   };
@@ -618,9 +639,11 @@ function CategoriesSection({
         setNewName('');
         setNewType('Fuerza');
         setShowNewForm(false);
+        notify.success('Categoría creada', `"${result.category.name}"`);
       }
-    } catch {
-      alert('Error al crear la categoría');
+    } catch (err) {
+      console.error(err);
+      notify.errorFrom(err, 'Error al crear la categoría');
     } finally {
       setIsCreating(false);
     }

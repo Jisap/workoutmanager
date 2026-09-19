@@ -24,6 +24,7 @@ import {
   deleteBodyMeasurement,
   type BodyMeasurementDTO,
 } from './measurements-actions';
+import { notify } from '@/lib/notify';
 
 type CorporalMetric =
   | 'weightKg'
@@ -210,8 +211,9 @@ export function ProgressCorporal({
       });
       setIsDialogOpen(false);
       router.refresh();
+      notify.success('Medición guardada');
     } catch (e) {
-      alert(e instanceof Error ? e.message : 'Error al guardar la medición');
+      notify.errorFrom(e, 'Error al guardar la medición');
     } finally {
       setIsSaving(false);
     }
@@ -223,6 +225,9 @@ export function ProgressCorporal({
     try {
       await deleteBodyMeasurement(id);
       router.refresh();
+      notify.success('Medición eliminada');
+    } catch (e) {
+      notify.errorFrom(e, 'Error al eliminar la medición');
     } finally {
       setDeletingId(null);
     }

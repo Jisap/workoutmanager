@@ -7,6 +7,7 @@ import './globals.css';
 import { Oswald, Inter, JetBrains_Mono } from 'next/font/google';
 import Script from 'next/script';
 import { ThemeProvider } from '@/components/ThemeProvider';
+import { Toaster } from '@/components/ui/toast';
 
 const headline = Oswald({
   subsets: ['latin'],
@@ -103,6 +104,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 </main>
               </div>
             )}
+            {/* Notificaciones globales (sobreviven a la navegación: el layout no se desmonta) */}
+            <Toaster />
           </ThemeProvider>
         </ClerkProvider>
       </body>

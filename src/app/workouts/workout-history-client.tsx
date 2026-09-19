@@ -41,6 +41,7 @@ import { deleteWorkout, deleteWorkoutTemplate, saveAsTemplate, updateWorkout, up
 import { type ModalityConfig } from '@/lib/db/schema';
 import { formatModalitySummary } from '@/lib/modality-utils';
 import { formatDurationInput, parseDurationInput } from '@/lib/duration';
+import { notify } from '@/lib/notify';
 
 // ---------- Types ----------
 export interface WorkoutHistoryItem {
@@ -228,7 +229,7 @@ function HyroxRunTimesEditor({
       }
       const parsed = parseMMSS(raw);
       if (parsed === null) {
-        alert(`Formato inválido en "${r.exName}" (usa m:ss, ej. 4:30)`);
+        notify.warning('Formato inválido', `En "${r.exName}" usa m:ss, ej. 4:30`);
         return;
       }
       if (parsed !== r.durationSeconds) updates.push({ setId: r.setId, durationSeconds: parsed });
@@ -239,12 +240,13 @@ function HyroxRunTimesEditor({
       const res = await updateWorkoutSetTimes({ workoutId: workout.id, updates });
       if (res.success) {
         onSaved(updates);
+        notify.success('Tiempos actualizados', `${updates.length} ${updates.length === 1 ? 'tramo actualizado' : 'tramos actualizados'}`);
         setSavedTick(true);
         setTimeout(() => setSavedTick(false), 2500);
       }
     } catch (e) {
       console.error(e);
-      alert('Error al guardar los tiempos');
+      notify.errorFrom(e, 'Error al guardar los tiempos');
     } finally {
       setIsSaving(false);
     }
@@ -1088,7 +1090,7 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
   const handleConfirmConvertToTemplate = async () => {
     if (!convertingWorkout) return;
     if (!templateNameInput.trim()) {
-      alert('Por favor introduce un nombre para la plantilla');
+      notify.warning('Falta el nombre', 'Introduce un nombre para la plantilla');
       return;
     }
 
@@ -1104,6 +1106,7 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
         setTemplates((prev) => [res.template as UserTemplateItem, ...prev]);
         const savedId = convertingWorkout.id;
         setWorkouts((prev) => prev.map((w) => (w.id === savedId ? { ...w, savedAsTemplate: true } : w)));
+        notify.success('Plantilla guardada', `"${res.template.name}" ya está en tus plantillas`);
       }
 
       setConvertingWorkout(null);
@@ -1111,7 +1114,7 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
       setActiveTab('templates');
     } catch (err) {
       console.error(err);
-      alert('Error al guardar la plantilla');
+      notify.errorFrom(err, 'Error al guardar la plantilla');
     } finally {
       setIsConverting(false);
     }
@@ -1120,6 +1123,8 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
   // Confirm delete handler
   const handleConfirmDelete = async () => {
     if (!deletingItem) return;
+    const deletedName = deletingItem.name;
+    const deletedKind = deletingItem.type === 'template' ? 'Plantilla eliminada' : 'Entrenamiento eliminado';
     setIsDeleting(true);
     try {
       if (deletingItem.type === 'template') {
@@ -1133,9 +1138,10 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
         }
       }
       setDeletingItem(null);
+      notify.success(deletedKind, `"${deletedName}"`);
     } catch (err) {
       console.error(err);
-      alert('Error al eliminar');
+      notify.errorFrom(err, 'Error al eliminar');
     } finally {
       setIsDeleting(false);
     }
@@ -1165,9 +1171,10 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
       }
 
       setEditingWorkout(null);
+      notify.success('Entrenamiento actualizado', `"${name}"`);
     } catch (err) {
       console.error(err);
-      alert('Error al actualizar el entrenamiento');
+      notify.errorFrom(err, 'Error al actualizar el entrenamiento');
     } finally {
       setIsSavingWorkoutEdit(false);
     }
@@ -1191,9 +1198,10 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
       );
 
       setEditingTemplate(null);
+      notify.success('Plantilla actualizada', `"${name}"`);
     } catch (err) {
       console.error(err);
-      alert('Error al actualizar la plantilla');
+      notify.errorFrom(err, 'Error al actualizar la plantilla');
     } finally {
       setIsSavingTemplateEdit(false);
     }

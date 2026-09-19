@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { createCustomExercise, createCustomCategory } from '@/app/workouts/actions';
+import { notify } from '@/lib/notify';
 import { Plus, Check, X, FolderPlus } from 'lucide-react';
 
 export interface Category {
@@ -66,10 +67,11 @@ export function CreateExerciseDialog({
         setCategoryId(created.id.toString());
         setNewCategoryName('');
         setIsAddingCategory(false);
+        notify.success('Categoría creada', `"${created.name}"`);
       }
     } catch (err) {
       console.error(err);
-      alert('Error al crear la categoría');
+      notify.errorFrom(err, 'Error al crear la categoría');
     } finally {
       setIsCreatingCategory(false);
     }
@@ -95,10 +97,11 @@ export function CreateExerciseDialog({
         setCategoryId('');
         setIsAddingCategory(false);
         onOpenChange(false);
+        notify.success('Ejercicio creado', `"${result.exercise.name}"`);
       }
     } catch (error) {
       console.error(error);
-      alert('Error al crear el ejercicio');
+      notify.errorFrom(error, 'Error al crear el ejercicio');
     } finally {
       setIsCreating(false);
     }
