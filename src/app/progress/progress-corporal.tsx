@@ -76,6 +76,7 @@ export function ProgressCorporal({
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
 
   // Métricas con al menos un dato (para no ofrecer curvas vacías)
   const availableMetrics = useMemo(
@@ -219,8 +220,10 @@ export function ProgressCorporal({
     }
   };
 
-  const handleDelete = async (id: number) => {
-    if (!window.confirm('¿Eliminar esta medición?')) return;
+  const handleDelete = async () => {
+    if (confirmDeleteId == null) return;
+    const id = confirmDeleteId;
+    setConfirmDeleteId(null);
     setDeletingId(id);
     try {
       await deleteBodyMeasurement(id);
@@ -636,7 +639,7 @@ export function ProgressCorporal({
                         <td className="px-3 py-2.5 text-right">
                           <button
                             type="button"
-                            onClick={() => handleDelete(r.id)}
+                            onClick={() => setConfirmDeleteId(r.id)}
                             disabled={deletingId === r.id}
                             className="p-1.5 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors cursor-pointer disabled:opacity-50"
                             title="Eliminar medición"
@@ -716,6 +719,38 @@ export function ProgressCorporal({
             <Button onClick={handleSave} disabled={isSaving} className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold gap-1.5">
               {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
               {isSaving ? 'Guardando…' : 'Guardar medición'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── DIÁLOGO DE CONFIRMACIÓN DE BORRADO ─── */}
+      <Dialog open={confirmDeleteId !== null} onOpenChange={(open) => { if (!open) setConfirmDeleteId(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-gray-900 dark:text-gray-100">
+              Eliminar medición
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-gray-500 dark:text-gray-400 py-2">
+            ¿Eliminar la medición del{' '}
+            <strong className="text-gray-700 dark:text-gray-200">
+              {(() => {
+                const target = measurements.find((m) => m.id === confirmDeleteId);
+                return target
+                  ? new Date(target.measuredAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })
+                  : '—';
+              })()}
+            </strong>
+            ? Esta acción no se puede deshacer.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmDeleteId(null)} className="text-xs">
+              Cancelar
+            </Button>
+            <Button onClick={handleDelete} className="bg-red-600 hover:bg-red-700 text-white text-xs font-bold gap-1.5">
+              <Trash2 className="w-3.5 h-3.5" />
+              Eliminar
             </Button>
           </DialogFooter>
         </DialogContent>

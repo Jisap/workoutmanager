@@ -514,16 +514,13 @@ export function WorkoutLoggerClient({
     setExercises(generatedExercises);
   };
 
+  // WOD pendiente de confirmación (sustituiría los ejercicios actuales)
+  const [pendingWod, setPendingWod] = useState<WodApplyPayload | null>(null);
+
   // Aplicar WOD oficial desde el catálogo: nombre + modalidad + ejercicios precargados.
   // Desde aquí el usuario puede entrenarlo directamente o guardarlo como plantilla
   // con el flujo existente ("Guardar como plantilla"), cubriendo ambos casos.
-  const handleApplyWod = (payload: WodApplyPayload) => {
-    if (exercises.length > 0) {
-      const ok = window.confirm(
-        `Cargar "${payload.title}" sustituirá los ejercicios actuales. ¿Continuar?`
-      );
-      if (!ok) return;
-    }
+  const applyWodPayload = (payload: WodApplyPayload) => {
     const uniqueTitle = currentWorkoutId ? payload.title : makeUniqueClientName(payload.title);
     setTypeName(uniqueTitle);
     setTemplateName(uniqueTitle);
@@ -532,6 +529,15 @@ export function WorkoutLoggerClient({
     setModalityConfig(payload.modalityConfig);
     setExercises(payload.exercises);
     setShowWodPicker(false);
+    setPendingWod(null);
+  };
+
+  const handleApplyWod = (payload: WodApplyPayload) => {
+    if (exercises.length > 0) {
+      setPendingWod(payload);
+      return;
+    }
+    applyWodPayload(payload);
   };
 
   const handleDirectSave = async () => {
@@ -2026,6 +2032,37 @@ export function WorkoutLoggerClient({
         categories={categories}
         onExerciseCreated={handleExerciseCreated}
       />
+
+      {/* Confirmación al cargar un WOD con ejercicios ya presentes */}
+      <Dialog open={pendingWod !== null} onOpenChange={(open) => { if (!open) setPendingWod(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-gray-900 dark:text-gray-100">
+              Sustituir ejercicios actuales
+            </DialogTitle>
+            <DialogDescription className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+              Cargar "{pendingWod?.title}" sustituirá los {exercises.length} {exercises.length === 1 ? 'ejercicio actual' : 'ejercicios actuales'}. Esta acción no se puede deshacer.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-1.5">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setPendingWod(null)}
+              className="text-xs"
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={() => { if (pendingWod) applyWodPayload(pendingWod); }}
+              className="bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold"
+            >
+              Cargar WOD
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
