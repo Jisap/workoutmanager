@@ -16,6 +16,15 @@ import {
   Sliders,
 } from 'lucide-react';
 
+interface LiftHistoryEntry {
+  date: string;
+  weight: number;
+  reps: number;
+  estimated1RM: number;
+  workoutName: string;
+  workoutType?: string | null;
+}
+
 interface LiftStats {
   name: string;
   maxWeightReal: number;
@@ -23,37 +32,35 @@ interface LiftStats {
   estimated3RM: number;
   estimated5RM: number;
   totalSets: number;
-  history: {
-    date: string;
-    weight: number;
-    reps: number;
-    estimated1RM: number;
-    workoutName: string;
-  }[];
-  dailyHistory: {
-    date: string;
-    weight: number;
-    reps: number;
-    estimated1RM: number;
-    workoutName: string;
-  }[];
+  history: LiftHistoryEntry[];
+  dailyHistory: LiftHistoryEntry[];
+}
+
+interface SbdView {
+  squat: LiftStats;
+  bench: LiftStats;
+  deadlift: LiftStats;
+  sbdTotal: number;
+  sbdRealTotal: number;
+  proportions: {
+    squatPct: number;
+    benchPct: number;
+    deadliftPct: number;
+    idealRatios: { squat: number; bench: number; deadlift: number };
+    balanceStatus: string;
+    balanceMessage: string;
+    balanceType: 'balanced' | 'lagging_bench' | 'lagging_squat' | 'lagging_deadlift' | 'dominant';
+  };
 }
 
 interface ProgressPowerliftingProps {
-  powerlifting: {
-    squat: LiftStats;
-    bench: LiftStats;
-    deadlift: LiftStats;
-    sbdTotal: number;
-    sbdRealTotal: number;
-    proportions: {
-      squatPct: number;
-      benchPct: number;
-      deadliftPct: number;
-      idealRatios: { squat: number; bench: number; deadlift: number };
-      balanceStatus: string;
-      balanceMessage: string;
-      balanceType: 'balanced' | 'lagging_bench' | 'lagging_squat' | 'lagging_deadlift' | 'dominant';
+  powerlifting: SbdView & {
+    allSources?: SbdView;
+    sourceInfo?: {
+      strictMode: boolean;
+      allowedTypes: string[];
+      excludedSets: number;
+      excludedByType: Record<string, number>;
     };
   };
 }
@@ -100,7 +107,12 @@ function getDotsLevel(dots: number): { label: string; color: string; desc: strin
 }
 
 export function ProgressPowerlifting({ powerlifting }: ProgressPowerliftingProps) {
-  const { squat, bench, deadlift, sbdTotal, sbdRealTotal, proportions } = powerlifting;
+  // Vista por defecto: solo fuerza (Powerlifting + Musculación). Opt-in: incluir WODs.
+  const [includeWods, setIncludeWods] = useState(false);
+  const view: SbdView =
+    includeWods && powerlifting.allSources ? powerlifting.allSources : powerlifting;
+  const { squat, bench, deadlift, sbdTotal, sbdRealTotal, proportions } = view;
+  const excludedSets = powerlifting.sourceInfo?.excludedSets ?? 0;
 
   // Estado para la calculadora DOTS
   const [bodyweight, setBodyweight] = useState<number>(75);
@@ -234,6 +246,35 @@ export function ProgressPowerlifting({ powerlifting }: ProgressPowerliftingProps
 
   return (
     <div className="space-y-6">
+      {/* ─── 0. FUENTE DE DATOS: solo fuerza por defecto ─── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-3.5 py-2.5 rounded-xl border border-purple-200/70 dark:border-purple-800/50 bg-purple-50/60 dark:bg-purple-950/20 text-xs">
+        <p className="text-gray-600 dark:text-gray-300">
+          {includeWods ? (
+            <>Incluyendo <strong>todas las modalidades</strong> (fuerza + WODs de CrossFit/Funcional).</>
+          ) : (
+            <>Solo <strong>Powerlifting + Musculación</strong>
+              {excludedSets > 0 && (
+                <> · <span className="text-gray-500">{excludedSets} {excludedSets === 1 ? 'serie' : 'series'} de otras modalidades excluida{excludedSets === 1 ? '' : 's'}</span></>
+              )}
+              .</>
+          )}
+        </p>
+        {powerlifting.allSources && (
+          <button
+            type="button"
+            onClick={() => setIncludeWods((v) => !v)}
+            className={`shrink-0 px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer border ${
+              includeWods
+                ? 'bg-purple-600 text-white border-purple-600'
+                : 'bg-white dark:bg-gray-900 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800 hover:bg-purple-100 dark:hover:bg-purple-900/40'
+            }`}
+            title="Los WODs se hacen bajo fatiga y con técnica distinta; mezclarlos infla el 1RM estimado"
+          >
+            {includeWods ? 'Ver solo fuerza' : 'Incluir WODs'}
+          </button>
+        )}
+      </div>
+
       {/* ─── 1. SBD TOTAL CARD (Hero de Powerlifting) ─── */}
       <Card className="border-purple-200/80 dark:border-purple-800/60 bg-gradient-to-br from-purple-50/60 via-white to-blue-50/40 dark:from-purple-950/20 dark:via-gray-900 dark:to-blue-950/20 shadow-xs">
         <CardContent className="p-5 sm:p-6">
@@ -331,7 +372,9 @@ export function ProgressPowerlifting({ powerlifting }: ProgressPowerliftingProps
         <CardContent className="p-4 sm:p-5 space-y-4">
           {timelineData.dates.length === 0 ? (
             <div className="py-12 text-center text-xs text-gray-400">
-              Registra entrenamientos de Sentadilla, Press de Banca o Peso Muerto para ver la curva de fuerza en el tiempo.
+              {includeWods
+                ? 'Registra entrenamientos de Sentadilla, Press de Banca o Peso Muerto para ver la curva de fuerza en el tiempo.'
+                : 'Sin marcas de fuerza (Powerlifting/Musculación) todavía. Tus series de CrossFit/Funcional no cuentan aquí por defecto — usa “Incluir WODs” si quieres verlas.'}
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -702,12 +745,17 @@ export function ProgressPowerlifting({ powerlifting }: ProgressPowerliftingProps
                       </span>
                       <div className="space-y-1 max-h-28 overflow-y-auto pr-1">
                         {data.history.slice(-4).reverse().map((h, hIdx) => (
-                          <div key={hIdx} className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400">
-                            <span className="text-[11px]">
+                          <div key={hIdx} className="flex items-center justify-between gap-2 text-xs text-gray-600 dark:text-gray-400">
+                            <span className="text-[11px] shrink-0">
                               {new Date(h.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
                             </span>
-                            <span className="font-mono text-[11px] font-semibold text-gray-900 dark:text-gray-200">
+                            <span className="font-mono text-[11px] font-semibold text-gray-900 dark:text-gray-200 text-right">
                               {h.weight}kg × {h.reps} reps (1RM ~{h.estimated1RM}kg)
+                              {h.workoutType && (
+                                <span className="ml-1.5 font-sans font-bold text-[9px] px-1.5 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 align-middle">
+                                  {h.workoutType}
+                                </span>
+                              )}
                             </span>
                           </div>
                         ))}

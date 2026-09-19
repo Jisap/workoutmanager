@@ -56,6 +56,53 @@ function isUniqueViolation(error: unknown): boolean {
   );
 }
 
+// ─── Clasificación por modalidad para la analítica de fuerza ───
+// El Big 3 (SBD) solo es comparable en fuerza máxima fresca (Powerlifting/Musculación).
+// Mezclar series de CrossFit/Funcional (fatiga, high-rep, técnica distinta) inflaba el 1RM
+// estimado y contaminaba Total SBD, proporciones y DOTS. Por eso el modo estricto excluye
+// las modalidades conocidas de acondicionamiento; los tipos desconocidos/personalizados
+// se incluyen para no perder datos históricos.
+const normalizeTypeName = (s?: string | null): string =>
+  (s || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+
+const BIG3_EXCLUDED_KEYWORDS = [
+  'crossfit',
+  'funcional',
+  'hyrox',
+  'cardio',
+  'endurance',
+  'running',
+  'calistenia',
+  'gymnastics',
+  'wod',
+];
+
+const OLYMPIC_EXCLUDED_KEYWORDS = ['hyrox', 'cardio', 'endurance', 'running', 'calistenia'];
+
+function isBig3ExcludedType(typeName?: string | null): boolean {
+  if (!typeName) return false; // Sin tipo (legado) → se incluye para no perder historial
+  const n = normalizeTypeName(typeName);
+  return BIG3_EXCLUDED_KEYWORDS.some((k) => n.includes(k));
+}
+
+function isOlympicExcludedType(typeName?: string | null): boolean {
+  if (!typeName) return false;
+  const n = normalizeTypeName(typeName);
+  return OLYMPIC_EXCLUDED_KEYWORDS.some((k) => n.includes(k));
+}
+
+type StrengthHistoryEntry = {
+  date: string;
+  weight: number;
+  reps: number;
+  estimated1RM: number;
+  workoutName: string;
+  workoutType: string | null;
+};
+
 // Comprueba si el usuario ya tiene un entrenamiento con ese nombre
 // (comparación insensible a mayúsculas, una sola fila como máximo).
 async function workoutNameExists(userId: string, name: string) {
@@ -1565,7 +1612,9 @@ export async function getAdvancedProgressData(userId: string) {
   let totalMusculacionSets = 0;
 
   // 4. ANALÍTICA DE POWERLIFTING (Big 3: Sentadilla, Press Banca, Peso Muerto)
-  const big3Data = {
+  // Modo estricto (por defecto): solo fuerza (Powerlifting/Musculación + tipos
+  // desconocidos). Modo global (opt-in): todo, incluido CrossFit/Funcional.
+  const createBig3 = () => ({
     squat: {
       name: 'Sentadilla (Squat)',
       maxWeightReal: 0,
@@ -1573,7 +1622,7 @@ export async function getAdvancedProgressData(userId: string) {
       estimated3RM: 0,
       estimated5RM: 0,
       totalSets: 0,
-      history: [] as { date: string; weight: number; reps: number; estimated1RM: number; workoutName: string }[],
+      history: [] as StrengthHistoryEntry[],
     },
     bench: {
       name: 'Press de Banca (Bench Press)',
@@ -1582,7 +1631,7 @@ export async function getAdvancedProgressData(userId: string) {
       estimated3RM: 0,
       estimated5RM: 0,
       totalSets: 0,
-      history: [] as { date: string; weight: number; reps: number; estimated1RM: number; workoutName: string }[],
+      history: [] as StrengthHistoryEntry[],
     },
     deadlift: {
       name: 'Peso Muerto (Deadlift)',
@@ -1591,27 +1640,36 @@ export async function getAdvancedProgressData(userId: string) {
       estimated3RM: 0,
       estimated5RM: 0,
       totalSets: 0,
-      history: [] as { date: string; weight: number; reps: number; estimated1RM: number; workoutName: string }[],
+      history: [] as StrengthHistoryEntry[],
     },
-  };
+  });
+  const big3Data = createBig3(); // global (legado, incluye todas las modalidades)
+  const big3Strict = createBig3(); // estricto (solo fuerza)
+  let big3ExcludedSets = 0;
+  const big3ExcludedByType: Record<string, number> = {};
 
   // 4b. HALTEROFILIA / LEVANTAMIENTOS OLÍMPICOS (CrossFit)
-  const olympicData = {
+  // Estricto: CrossFit/Funcional/Powerlifting/Musculación (+desconocidos). Se excluye
+  // cardio puro (Hyrox/Cardio/Running/Calistenia), donde un snatch/C&J es anecdótico.
+  const createOlympic = () => ({
     snatch: {
       name: 'Snatch (Arrancada)',
       maxWeightReal: 0,
       estimated1RM: 0,
       totalSets: 0,
-      history: [] as { date: string; weight: number; reps: number; estimated1RM: number; workoutName: string }[],
+      history: [] as StrengthHistoryEntry[],
     },
     cleanAndJerk: {
       name: 'Clean & Jerk (Dos Tiempos)',
       maxWeightReal: 0,
       estimated1RM: 0,
       totalSets: 0,
-      history: [] as { date: string; weight: number; reps: number; estimated1RM: number; workoutName: string }[],
+      history: [] as StrengthHistoryEntry[],
     },
-  };
+  });
+  const olympicData = createOlympic(); // global (legado)
+  const olympicStrict = createOlympic(); // estricto
+  let olympicExcludedSets = 0;
 
   // 5. CROSSFIT & WODs
   const crossfitWodsList: {
@@ -2291,41 +2349,65 @@ export async function getAdvancedProgressData(userId: string) {
           if (wVal > exObj.maxWeight) exObj.maxWeight = wVal;
         }
 
-        // Añadir a Big 3 si aplica
+        // Añadir a Big 3 si aplica.
+        // Global (legado): todas las modalidades. Estricto: solo fuerza.
         if (big3Category && wVal > 0) {
           const est1RM = rVal === 1 ? wVal : Math.round(wVal * (1 + rVal / 30) * 10) / 10;
-          const target = big3Data[big3Category];
-          target.totalSets += 1;
-          if (wVal > target.maxWeightReal) target.maxWeightReal = wVal;
-          if (est1RM > target.estimated1RM) {
-            target.estimated1RM = est1RM;
-            target.estimated3RM = Math.round((est1RM / 1.08) * 10) / 10;
-            target.estimated5RM = Math.round((est1RM / 1.15) * 10) / 10;
-          }
-
-          target.history.push({
+          const entry: StrengthHistoryEntry = {
             date: new Date(w.startTime).toISOString(),
             weight: wVal,
             reps: rVal,
             estimated1RM: est1RM,
             workoutName: w.name,
-          });
+            workoutType: w.type?.name || null,
+          };
+          const pushToBig3 = (
+            target: (typeof big3Data)[typeof big3Category]
+          ) => {
+            target.totalSets += 1;
+            if (wVal > target.maxWeightReal) target.maxWeightReal = wVal;
+            if (est1RM > target.estimated1RM) {
+              target.estimated1RM = est1RM;
+              target.estimated3RM = Math.round((est1RM / 1.08) * 10) / 10;
+              target.estimated5RM = Math.round((est1RM / 1.15) * 10) / 10;
+            }
+            target.history.push(entry);
+          };
+          pushToBig3(big3Data[big3Category]);
+          if (!isBig3ExcludedType(w.type?.name)) {
+            pushToBig3(big3Strict[big3Category]);
+          } else {
+            big3ExcludedSets++;
+            const t = w.type?.name || 'Sin tipo';
+            big3ExcludedByType[t] = (big3ExcludedByType[t] || 0) + 1;
+          }
         }
 
-        // Añadir a Levantamientos Olímpicos si aplica
+        // Añadir a Levantamientos Olímpicos si aplica (global + estricto sin cardio puro)
         if (olympicCategory && wVal > 0) {
           const est1RM = rVal === 1 ? wVal : Math.round(wVal * (1 + rVal / 30) * 10) / 10;
-          const target = olympicData[olympicCategory];
-          target.totalSets += 1;
-          if (wVal > target.maxWeightReal) target.maxWeightReal = wVal;
-          if (est1RM > target.estimated1RM) target.estimated1RM = est1RM;
-          target.history.push({
+          const entry: StrengthHistoryEntry = {
             date: new Date(w.startTime).toISOString(),
             weight: wVal,
             reps: rVal,
             estimated1RM: est1RM,
             workoutName: w.name,
-          });
+            workoutType: w.type?.name || null,
+          };
+          const pushToOlympic = (
+            target: (typeof olympicData)[typeof olympicCategory]
+          ) => {
+            target.totalSets += 1;
+            if (wVal > target.maxWeightReal) target.maxWeightReal = wVal;
+            if (est1RM > target.estimated1RM) target.estimated1RM = est1RM;
+            target.history.push(entry);
+          };
+          pushToOlympic(olympicData[olympicCategory]);
+          if (!isOlympicExcludedType(w.type?.name)) {
+            pushToOlympic(olympicStrict[olympicCategory]);
+          } else {
+            olympicExcludedSets++;
+          }
         }
       }
     }
@@ -2684,47 +2766,63 @@ export async function getAdvancedProgressData(userId: string) {
     asymmetryList,
   };
 
-  // SBD Total & Proporciones
-  const squatEst = big3Data.squat.estimated1RM;
-  const benchEst = big3Data.bench.estimated1RM;
-  const deadliftEst = big3Data.deadlift.estimated1RM;
-  const sbdTotal = squatEst + benchEst + deadliftEst;
-  const sbdRealTotal =
-    big3Data.squat.maxWeightReal +
-    big3Data.bench.maxWeightReal +
-    big3Data.deadlift.maxWeightReal;
+  // SBD Total & Proporciones (se calculan para modo estricto y global con la misma lógica)
+  const buildSbdStats = (big3: ReturnType<typeof createBig3>) => {
+    const squatEst = big3.squat.estimated1RM;
+    const benchEst = big3.bench.estimated1RM;
+    const deadliftEst = big3.deadlift.estimated1RM;
+    const sbdTotal = squatEst + benchEst + deadliftEst;
+    const sbdRealTotal =
+      big3.squat.maxWeightReal +
+      big3.bench.maxWeightReal +
+      big3.deadlift.maxWeightReal;
 
-  const squatPct = sbdTotal > 0 ? Math.round((squatEst / sbdTotal) * 100) : 0;
-  const benchPct = sbdTotal > 0 ? Math.round((benchEst / sbdTotal) * 100) : 0;
-  const deadliftPct = sbdTotal > 0 ? Math.round((deadliftEst / sbdTotal) * 100) : 0;
+    const squatPct = sbdTotal > 0 ? Math.round((squatEst / sbdTotal) * 100) : 0;
+    const benchPct = sbdTotal > 0 ? Math.round((benchEst / sbdTotal) * 100) : 0;
+    const deadliftPct = sbdTotal > 0 ? Math.round((deadliftEst / sbdTotal) * 100) : 0;
 
-  let balanceStatus = 'Equilibrado';
-  let balanceMessage = 'Proporción armónica en los 3 movimientos según estándares anatómicos de fuerza.';
-  let balanceType: 'balanced' | 'lagging_bench' | 'lagging_squat' | 'lagging_deadlift' | 'dominant' = 'balanced';
+    let balanceStatus = 'Equilibrado';
+    let balanceMessage = 'Proporción armónica en los 3 movimientos según estándares anatómicos de fuerza.';
+    let balanceType: 'balanced' | 'lagging_bench' | 'lagging_squat' | 'lagging_deadlift' | 'dominant' = 'balanced';
 
-  if (sbdTotal > 0) {
-    if (benchPct > 0 && benchPct < 20) {
-      balanceStatus = 'Press de Banca rezagado';
-      balanceMessage = `El Press de Banca representa el ${benchPct}% del total SBD (estándar óptimo: ~25%). Considera aumentar la frecuencia o volumen de empuje.`;
-      balanceType = 'lagging_bench';
-    } else if (squatPct > 0 && squatPct < 28) {
-      balanceStatus = 'Sentadilla rezagada';
-      balanceMessage = `La Sentadilla representa el ${squatPct}% del total SBD (estándar óptimo: ~35%). Mayor volumen o frecuencia de pierna recomendado.`;
-      balanceType = 'lagging_squat';
-    } else if (deadliftPct > 0 && deadliftPct < 32) {
-      balanceStatus = 'Peso Muerto rezagado';
-      balanceMessage = `El Peso Muerto representa el ${deadliftPct}% del total SBD (estándar óptimo: ~40%). Recomendado priorizar tracción pesada y cadena posterior.`;
-      balanceType = 'lagging_deadlift';
-    } else if (benchPct > 32 || squatPct > 44 || deadliftPct > 50) {
-      balanceStatus = 'Especialización marcada';
-      balanceMessage = 'Existe una marcada dominancia en uno de los tres movimientos respecto a la media de powerlifting.';
-      balanceType = 'dominant';
+    if (sbdTotal > 0) {
+      if (benchPct > 0 && benchPct < 20) {
+        balanceStatus = 'Press de Banca rezagado';
+        balanceMessage = `El Press de Banca representa el ${benchPct}% del total SBD (estándar óptimo: ~25%). Considera aumentar la frecuencia o volumen de empuje.`;
+        balanceType = 'lagging_bench';
+      } else if (squatPct > 0 && squatPct < 28) {
+        balanceStatus = 'Sentadilla rezagada';
+        balanceMessage = `La Sentadilla representa el ${squatPct}% del total SBD (estándar óptimo: ~35%). Mayor volumen o frecuencia de pierna recomendado.`;
+        balanceType = 'lagging_squat';
+      } else if (deadliftPct > 0 && deadliftPct < 32) {
+        balanceStatus = 'Peso Muerto rezagado';
+        balanceMessage = `El Peso Muerto representa el ${deadliftPct}% del total SBD (estándar óptimo: ~40%). Recomendado priorizar tracción pesada y cadena posterior.`;
+        balanceType = 'lagging_deadlift';
+      } else if (benchPct > 32 || squatPct > 44 || deadliftPct > 50) {
+        balanceStatus = 'Especialización marcada';
+        balanceMessage = 'Existe una marcada dominancia en uno de los tres movimientos respecto a la media de powerlifting.';
+        balanceType = 'dominant';
+      }
     }
-  }
+
+    return {
+      sbdTotal,
+      sbdRealTotal,
+      proportions: {
+        squatPct,
+        benchPct,
+        deadliftPct,
+        idealRatios: { squat: 35, bench: 25, deadlift: 40 },
+        balanceStatus,
+        balanceMessage,
+        balanceType,
+      },
+    };
+  };
 
   // Evolución temporal consolidada para gráficas (mejor marca de cada día)
-  const getDailyBestHistory = (history: typeof big3Data.squat.history) => {
-    const dailyMap: Record<string, { date: string; weight: number; reps: number; estimated1RM: number; workoutName: string }> = {};
+  const getDailyBestHistory = (history: StrengthHistoryEntry[]) => {
+    const dailyMap: Record<string, StrengthHistoryEntry> = {};
     for (const h of history) {
       const dayKey = h.date.split('T')[0];
       if (!dailyMap[dayKey] || h.estimated1RM > dailyMap[dayKey].estimated1RM) {
@@ -2734,13 +2832,31 @@ export async function getAdvancedProgressData(userId: string) {
     return Object.values(dailyMap).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   };
 
-  const squatDailyHistory = getDailyBestHistory(big3Data.squat.history);
-  const benchDailyHistory = getDailyBestHistory(big3Data.bench.history);
-  const deadliftDailyHistory = getDailyBestHistory(big3Data.deadlift.history);
+  const strictSbd = buildSbdStats(big3Strict);
+  const allSbd = buildSbdStats(big3Data);
 
+  const withDaily = (
+    big3: ReturnType<typeof createBig3>,
+    sbd: ReturnType<typeof buildSbdStats>
+  ) => ({
+    squat: { ...big3.squat, dailyHistory: getDailyBestHistory(big3.squat.history) },
+    bench: { ...big3.bench, dailyHistory: getDailyBestHistory(big3.bench.history) },
+    deadlift: { ...big3.deadlift, dailyHistory: getDailyBestHistory(big3.deadlift.history) },
+    sbdTotal: sbd.sbdTotal,
+    sbdRealTotal: sbd.sbdRealTotal,
+    proportions: sbd.proportions,
+  });
 
-  const snatchDailyHistory = getDailyBestHistory(olympicData.snatch.history);
-  const cleanAndJerkDailyHistory = getDailyBestHistory(olympicData.cleanAndJerk.history);
+  const powerliftingStrict = withDaily(big3Strict, strictSbd);
+  const powerliftingAll = withDaily(big3Data, allSbd);
+
+  const olympicWithDaily = (olympic: ReturnType<typeof createOlympic>) => ({
+    snatch: { ...olympic.snatch, dailyHistory: getDailyBestHistory(olympic.snatch.history) },
+    cleanAndJerk: { ...olympic.cleanAndJerk, dailyHistory: getDailyBestHistory(olympic.cleanAndJerk.history) },
+    totalOlympic: olympic.snatch.estimated1RM + olympic.cleanAndJerk.estimated1RM,
+  });
+  const olympicStrictWithDaily = olympicWithDaily(olympicStrict);
+  const olympicAllWithDaily = olympicWithDaily(olympicData);
 
   // Lista de Benchmarks oficiales de CrossFit (The Girls, Heroes, etc.)
   const officialBenchmarks = new Set([
@@ -2846,19 +2962,14 @@ export async function getAdvancedProgressData(userId: string) {
       avanzado: musculacionAvanzado,
     },
     powerlifting: {
-      squat: { ...big3Data.squat, dailyHistory: squatDailyHistory },
-      bench: { ...big3Data.bench, dailyHistory: benchDailyHistory },
-      deadlift: { ...big3Data.deadlift, dailyHistory: deadliftDailyHistory },
-      sbdTotal,
-      sbdRealTotal,
-      proportions: {
-        squatPct,
-        benchPct,
-        deadliftPct,
-        idealRatios: { squat: 35, bench: 25, deadlift: 40 },
-        balanceStatus,
-        balanceMessage,
-        balanceType,
+      ...powerliftingStrict,
+      // Vista global opt-in (incluye CrossFit/Funcional). La UI la usa con el toggle.
+      allSources: powerliftingAll,
+      sourceInfo: {
+        strictMode: true,
+        allowedTypes: ['Powerlifting', 'Musculación'],
+        excludedSets: big3ExcludedSets,
+        excludedByType: big3ExcludedByType,
       },
     },
     crossfit: {
@@ -2876,9 +2987,12 @@ export async function getAdvancedProgressData(userId: string) {
         capSuccessRate,
       },
       olympic: {
-        snatch: { ...olympicData.snatch, dailyHistory: snatchDailyHistory },
-        cleanAndJerk: { ...olympicData.cleanAndJerk, dailyHistory: cleanAndJerkDailyHistory },
-        totalOlympic: olympicData.snatch.estimated1RM + olympicData.cleanAndJerk.estimated1RM,
+        ...olympicStrictWithDaily,
+        allSources: olympicAllWithDaily,
+        sourceInfo: {
+          strictMode: true,
+          excludedSets: olympicExcludedSets,
+        },
       },
       benchmarks: benchmarksList,
       cardioPBs: cardioPBsList,

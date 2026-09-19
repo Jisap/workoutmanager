@@ -36,6 +36,7 @@ async function seed() {
         // CrossFit / Funcional
         { name: 'Gymnastics', type: 'CrossFit' },
         { name: 'Weightlifting', type: 'CrossFit' },
+        { name: 'Dumbbell', type: 'CrossFit' },
         { name: 'Monostructural', type: 'Cardio' },
         { name: 'Kettlebell', type: 'Funcional' },
         { name: 'Strongman', type: 'Funcional' },
@@ -64,6 +65,8 @@ async function seed() {
         { name: 'Fondos en Paralelas', categoryId: getId('Pecho') },
         { name: 'Press de Pecho en Máquina', categoryId: getId('Pecho') },
         { name: 'Crossover en Polea', categoryId: getId('Pecho') },
+        { name: 'Press Declinado con Barra', categoryId: getId('Pecho') },
+        { name: 'Press con Agarre Estrecho', categoryId: getId('Pecho') },
 
         // === ESPALDA ===
         { name: 'Dominadas (Pull-ups)', categoryId: getId('Espalda') },
@@ -73,7 +76,11 @@ async function seed() {
         { name: 'Remo con Mancuerna', categoryId: getId('Espalda') },
         { name: 'Remo en Polea Baja', categoryId: getId('Espalda') },
         { name: 'Peso Muerto', categoryId: getId('Espalda') },
+        { name: 'Peso Muerto Sumo', categoryId: getId('Espalda') },
+        { name: 'Peso Muerto con Trap Bar', categoryId: getId('Espalda') },
         { name: 'Pull-overs', categoryId: getId('Espalda') },
+        { name: 'Remo T-Bar', categoryId: getId('Espalda') },
+        { name: 'Dominadas Supinas', categoryId: getId('Espalda') },
 
         // === PIERNAS ===
         { name: 'Sentadilla Trasera', categoryId: getId('Piernas') },
@@ -86,6 +93,10 @@ async function seed() {
         { name: 'Elevación de Gemelos', categoryId: getId('Piernas') },
         { name: 'Hip Thrust', categoryId: getId('Piernas') },
         { name: 'Bulgarian Split Squat', categoryId: getId('Piernas') },
+        { name: 'Sentadilla Búlgara', categoryId: getId('Piernas') },
+        { name: 'Sentadilla Cosaca', categoryId: getId('Piernas') },
+        { name: 'Sentadilla Hack', categoryId: getId('Piernas') },
+        { name: 'Sentadilla Overhead con Mancuerna', categoryId: getId('Piernas') },
 
         // === HOMBROS ===
         { name: 'Press Militar con Barra', categoryId: getId('Hombros') },
@@ -95,6 +106,8 @@ async function seed() {
         { name: 'Elevaciones Frontales', categoryId: getId('Hombros') },
         { name: 'Pájaros (Rear Delt Fly)', categoryId: getId('Hombros') },
         { name: 'Face Pull', categoryId: getId('Hombros') },
+        { name: 'Push Press con Mancuernas', categoryId: getId('Hombros') },
+        { name: 'Press Arnold', categoryId: getId('Hombros') },
 
         // === BRAZOS ===
         { name: 'Curl de Bíceps con Barra', categoryId: getId('Brazos') },
@@ -103,31 +116,63 @@ async function seed() {
         { name: 'Press Francés', categoryId: getId('Brazos') },
         { name: 'Extensiones de Tríceps en Polea', categoryId: getId('Brazos') },
         { name: 'Fondos en Banco', categoryId: getId('Brazos') },
+        { name: 'Curl Concentrado con Mancuerna', categoryId: getId('Brazos') },
+        { name: 'Curl de Bíceps en Banco Scott', categoryId: getId('Brazos') },
+        { name: 'Patada de Tríceps con Mancuerna', categoryId: getId('Brazos') },
 
         // === CORE ===
         { name: 'Crunch en Máquina', categoryId: getId('Core') },
         { name: 'Plancha', categoryId: getId('Core') },
+        { name: 'Plancha Lateral', categoryId: getId('Core') },
         { name: 'Russian Twist', categoryId: getId('Core') },
         { name: 'Elevación de Piernas Colgado', categoryId: getId('Core') },
+        { name: 'Elevación de Rodillas Colgado', categoryId: getId('Core') },
+        { name: 'Hollow Rocks', categoryId: getId('Core') },
+        { name: 'Superman Hold', categoryId: getId('Core') },
         { name: 'Ab Wheel Rollout', categoryId: getId('Core') },
 
         // === GYMNASTICS (CrossFit) ===
         { name: 'Toes to Bar', categoryId: getId('Gymnastics') },
         { name: 'Kipping Pull-ups', categoryId: getId('Gymnastics') },
+        { name: 'Strict Pull-ups', categoryId: getId('Gymnastics') },
+        { name: 'Jumping Pull-ups', categoryId: getId('Gymnastics') },
         { name: 'Chest to Bar Pull-ups', categoryId: getId('Gymnastics') },
         { name: 'Muscle-ups', categoryId: getId('Gymnastics') },
+        { name: 'Bar Muscle-ups', categoryId: getId('Gymnastics') },
+        { name: 'Ring Muscle-ups', categoryId: getId('Gymnastics') },
         { name: 'Handstand Push-ups', categoryId: getId('Gymnastics') },
+        { name: 'Handstand Walk', categoryId: getId('Gymnastics') },
+        { name: 'Handstand Hold', categoryId: getId('Gymnastics') },
         { name: 'Pistol Squats', categoryId: getId('Gymnastics') },
         { name: 'Box Jumps', categoryId: getId('Gymnastics') },
+        { name: 'Box Jump Over', categoryId: getId('Gymnastics') },
+        { name: 'Box Step-ups', categoryId: getId('Gymnastics') },
         { name: 'Burpees', categoryId: getId('Gymnastics') },
         { name: 'Double-unders', categoryId: getId('Gymnastics') },
+        { name: 'Triple-unders', categoryId: getId('Gymnastics') },
+        { name: 'Saltos Simples de Comba', categoryId: getId('Gymnastics') },
         { name: 'Push-ups (Flexiones)', categoryId: getId('Gymnastics') },
+        { name: 'Flexiones con Palmada', categoryId: getId('Gymnastics') },
+        { name: 'Flexiones Diamante', categoryId: getId('Gymnastics') },
+        { name: 'Flexiones Pike', categoryId: getId('Gymnastics') },
         { name: 'Air Squats (Sentadilla al aire)', categoryId: getId('Gymnastics') },
         { name: 'Sit-ups (Abdominales)', categoryId: getId('Gymnastics') },
+        { name: 'Abdominales en AbMat', categoryId: getId('Gymnastics') },
+        { name: 'Knees to Elbows', categoryId: getId('Gymnastics') },
+        { name: 'V-ups', categoryId: getId('Gymnastics') },
         { name: 'Ring Dips (Fondos en anillas)', categoryId: getId('Gymnastics') },
+        { name: 'Ring Dips con Lastre', categoryId: getId('Gymnastics') },
         { name: 'Rope Climb (Subida de cuerda)', categoryId: getId('Gymnastics') },
+        { name: 'Legless Rope Climb', categoryId: getId('Gymnastics') },
         { name: 'GHD Sit-ups', categoryId: getId('Gymnastics') },
+        { name: 'GHD Back Extension', categoryId: getId('Gymnastics') },
         { name: 'Hiperextensiones (Back Extension)', categoryId: getId('Gymnastics') },
+        { name: 'L-Sit', categoryId: getId('Gymnastics') },
+        { name: 'Front Lever', categoryId: getId('Gymnastics') },
+        { name: 'Back Lever', categoryId: getId('Gymnastics') },
+        // NOTA: no se añaden variantes 'Burpee X' (Burpee Broad Jump, Box Jump Over...):
+        // los WODs resuelven 'burpee' en singular y cualquier 'Burpee ...' ordenaría
+        // antes que 'Burpees' y robaría el mapeo (Kalsu, Filthy Fifty).
 
         // === WEIGHTLIFTING (CrossFit) ===
         { name: 'Snatch', categoryId: getId('Weightlifting') },
@@ -138,38 +183,86 @@ async function seed() {
         { name: 'Wall Balls', categoryId: getId('Weightlifting') },
         { name: 'Cluster', categoryId: getId('Weightlifting') },
         { name: 'Push Jerk', categoryId: getId('Weightlifting') },
+        { name: 'Split Jerk', categoryId: getId('Weightlifting') },
         { name: 'Push Press', categoryId: getId('Weightlifting') },
         { name: 'Hang Power Clean', categoryId: getId('Weightlifting') },
         { name: 'Squat Clean', categoryId: getId('Weightlifting') },
+        { name: 'Cargada Colgada (Hang Clean)', categoryId: getId('Weightlifting') },
+        { name: 'Power Clean desde Bloques', categoryId: getId('Weightlifting') },
         { name: 'Overhead Squat', categoryId: getId('Weightlifting') },
+        { name: 'Snatch Balance', categoryId: getId('Weightlifting') },
+        { name: 'Muscle Snatch', categoryId: getId('Weightlifting') },
+        { name: 'Snatch Pull (Tirón de Arrancada)', categoryId: getId('Weightlifting') },
+        { name: 'Clean Pull (Tirón de Cargada)', categoryId: getId('Weightlifting') },
+        { name: 'Arrancada Colgada (Hang Snatch)', categoryId: getId('Weightlifting') },
         { name: 'Sumo Deadlift High Pull', categoryId: getId('Weightlifting') },
+        // NOTA: no 'Hang Power Snatch' ni variantes con 'Thruster' en singular:
+        // contienen la primera query de Isabel/Randy ('power snatch') y Fran
+        // ('thruster') y ordenarían antes que el objetivo actual.
+
+        // === DUMBBELL (CrossFit) ===
+        { name: 'Dumbbell Snatch', categoryId: getId('Dumbbell') },
+        { name: 'Dumbbell Clean', categoryId: getId('Dumbbell') },
+        { name: 'Dos Tiempos con Mancuernas', categoryId: getId('Dumbbell') },
+        { name: 'Thrusters con Mancuernas', categoryId: getId('Dumbbell') },
+        { name: 'Devil Press', categoryId: getId('Dumbbell') },
+        { name: 'Dumbbell Box Step-up', categoryId: getId('Dumbbell') },
+        { name: 'Zancadas con Mancuernas', categoryId: getId('Dumbbell') },
+        { name: 'Sentadilla Goblet con Mancuerna', categoryId: getId('Dumbbell') },
+        { name: 'Arrancada con Mancuerna', categoryId: getId('Dumbbell') },
 
         // === MONOSTRUCTURAL (Cardio) ===
         { name: 'Running (1000m)', categoryId: getId('Monostructural') },
         { name: 'Running (400m)', categoryId: getId('Monostructural') },
         { name: 'Running (200m)', categoryId: getId('Monostructural') },
         { name: 'Running (100m)', categoryId: getId('Monostructural') },
+        { name: 'Running (800m)', categoryId: getId('Monostructural') },
+        { name: 'Running (1600m)', categoryId: getId('Monostructural') },
+        { name: 'Running (5000m)', categoryId: getId('Monostructural') },
+        { name: 'Running en Cinta', categoryId: getId('Monostructural') },
+        { name: 'Shuttle Run', categoryId: getId('Monostructural') },
         { name: 'Remo (500m)', categoryId: getId('Monostructural') },
         { name: 'Remo (1000m)', categoryId: getId('Monostructural') },
         { name: 'Remo (2000m)', categoryId: getId('Monostructural') },
+        { name: 'Remo (5000m)', categoryId: getId('Monostructural') },
+        { name: 'Remo (Calorías)', categoryId: getId('Monostructural') },
         { name: 'SkiErg (500m)', categoryId: getId('Monostructural') },
         { name: 'SkiErg (1000m)', categoryId: getId('Monostructural') },
+        { name: 'SkiErg (2000m)', categoryId: getId('Monostructural') },
         { name: 'Bike (Calorías)', categoryId: getId('Monostructural') },
         { name: 'Assault Bike (Calorías)', categoryId: getId('Monostructural') },
+        { name: 'Echo Bike (Calorías)', categoryId: getId('Monostructural') },
 
         // === KETTLEBELL ===
         { name: 'Kettlebell Swing', categoryId: getId('Kettlebell') },
+        { name: 'Kettlebell Swing Americano', categoryId: getId('Kettlebell') },
         { name: 'Kettlebell Goblet Squat', categoryId: getId('Kettlebell') },
+        { name: 'Kettlebell Front Squat', categoryId: getId('Kettlebell') },
         { name: 'Turkish Get-up', categoryId: getId('Kettlebell') },
         { name: 'Kettlebell Snatch', categoryId: getId('Kettlebell') },
         { name: 'Kettlebell Clean', categoryId: getId('Kettlebell') },
+        { name: 'Kettlebell Clean and Jerk', categoryId: getId('Kettlebell') },
+        { name: 'Kettlebell Strict Press', categoryId: getId('Kettlebell') },
+        { name: 'Kettlebell Deadlift', categoryId: getId('Kettlebell') },
 
         // === STRONGMAN ===
         { name: 'Farmer Carry', categoryId: getId('Strongman') },
         { name: 'Sandbag Lunges', categoryId: getId('Strongman') },
+        { name: 'Sandbag Carry', categoryId: getId('Strongman') },
+        { name: 'Sandbag Clean', categoryId: getId('Strongman') },
+        { name: 'Sandbag Over Shoulder', categoryId: getId('Strongman') },
+        { name: 'Sandbag Squat', categoryId: getId('Strongman') },
         { name: 'Sled Push', categoryId: getId('Strongman') },
         { name: 'Sled Pull', categoryId: getId('Strongman') },
+        { name: 'Yoke Carry (Yugo)', categoryId: getId('Strongman') },
+        { name: 'Tire Flip (Volteo de Neumático)', categoryId: getId('Strongman') },
         { name: 'Atlas Stones', categoryId: getId('Strongman') },
+
+        // === GLÚTEOS (estaba vacía: sin ejercicios su volumen nunca se registraba) ===
+        { name: 'Puente de Glúteos', categoryId: getId('Gluteos') },
+        { name: 'Hip Thrust a una Pierna', categoryId: getId('Gluteos') },
+        { name: 'Patada de Glúteo en Polea', categoryId: getId('Gluteos') },
+        { name: 'Abducción de Cadera en Máquina', categoryId: getId('Gluteos') },
     ];
 
     // 3. Catálogo Completo de Ejercicios

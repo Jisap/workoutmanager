@@ -39,6 +39,7 @@ interface LiftStats {
     reps: number;
     estimated1RM: number;
     workoutName: string;
+    workoutType?: string | null;
   }[];
   dailyHistory: {
     date: string;
@@ -46,7 +47,17 @@ interface LiftStats {
     reps: number;
     estimated1RM: number;
     workoutName: string;
+    workoutType?: string | null;
   }[];
+  allSources?: {
+    snatch: Omit<LiftStats, 'allSources' | 'sourceInfo'>;
+    cleanAndJerk: Omit<LiftStats, 'allSources' | 'sourceInfo'>;
+    totalOlympic: number;
+  };
+  sourceInfo?: {
+    strictMode: boolean;
+    excludedSets: number;
+  };
 }
 
 interface BenchmarkItem {
@@ -146,6 +157,15 @@ interface ProgressCrossfitCardioProps {
       snatch: LiftStats;
       cleanAndJerk: LiftStats;
       totalOlympic: number;
+      allSources?: {
+        snatch: LiftStats;
+        cleanAndJerk: LiftStats;
+        totalOlympic: number;
+      };
+      sourceInfo?: {
+        strictMode: boolean;
+        excludedSets: number;
+      };
     };
     benchmarks?: BenchmarkItem[];
     cardioPBs?: CardioPB[];
@@ -1138,10 +1158,15 @@ export function ProgressCrossfitCardio({ crossfit, hyroxCardio }: ProgressCrossf
                     <div className="pt-2 border-t border-gray-100 dark:border-gray-800 space-y-1 text-xs text-gray-500">
                       <span className="text-[10px] font-bold text-gray-400 uppercase">Últimos levantamientos:</span>
                       {olympic.snatch.history.slice(-3).reverse().map((h, i) => (
-                        <div key={i} className="flex items-center justify-between text-[11px]">
+                        <div key={i} className="flex items-center justify-between gap-2 text-[11px]">
                           <span>{new Date(h.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}</span>
-                          <span className="font-mono font-semibold text-gray-800 dark:text-gray-200">
+                          <span className="font-mono font-semibold text-gray-800 dark:text-gray-200 text-right">
                             {h.weight}kg × {h.reps} reps (1RM ~{h.estimated1RM}kg)
+                            {h.workoutType && (
+                              <span className="ml-1.5 font-sans font-bold text-[9px] px-1.5 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 align-middle">
+                                {h.workoutType}
+                              </span>
+                            )}
                           </span>
                         </div>
                       ))}
@@ -1178,10 +1203,15 @@ export function ProgressCrossfitCardio({ crossfit, hyroxCardio }: ProgressCrossf
                     <div className="pt-2 border-t border-gray-100 dark:border-gray-800 space-y-1 text-xs text-gray-500">
                       <span className="text-[10px] font-bold text-gray-400 uppercase">Últimos levantamientos:</span>
                       {olympic.cleanAndJerk.history.slice(-3).reverse().map((h, i) => (
-                        <div key={i} className="flex items-center justify-between text-[11px]">
+                        <div key={i} className="flex items-center justify-between gap-2 text-[11px]">
                           <span>{new Date(h.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}</span>
-                          <span className="font-mono font-semibold text-gray-800 dark:text-gray-200">
+                          <span className="font-mono font-semibold text-gray-800 dark:text-gray-200 text-right">
                             {h.weight}kg × {h.reps} reps (1RM ~{h.estimated1RM}kg)
+                            {h.workoutType && (
+                              <span className="ml-1.5 font-sans font-bold text-[9px] px-1.5 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 align-middle">
+                                {h.workoutType}
+                              </span>
+                            )}
                           </span>
                         </div>
                       ))}
