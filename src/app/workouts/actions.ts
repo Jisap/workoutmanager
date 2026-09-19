@@ -2910,12 +2910,10 @@ export async function getAdvancedProgressData(userId: string) {
     'jt'
   ]);
 
-  // Benchmarks formateados con deltas de mejora (solo oficiales o con 2+ intentos)
+  // Benchmarks formateados con deltas de mejora (oficiales + funcionales;
+  // los de 1 intento también entran como tarjetas para que el último
+  // entrenamiento siempre sea visible; los deltas/sparklines requieren 2+)
   const benchmarksList = Object.values(benchmarksMap)
-    .filter((b) => {
-      const norm = b.name.toLowerCase().trim();
-      return officialBenchmarks.has(norm) || b.attempts >= 2;
-    })
     .map((b) => {
       const norm = b.name.toLowerCase().trim();
       const isOfficial = officialBenchmarks.has(norm);
@@ -2938,7 +2936,15 @@ export async function getAdvancedProgressData(userId: string) {
         history: sortedH,
       };
     })
-    .sort((a, b) => (b.isOfficial ? 1 : 0) - (a.isOfficial ? 1 : 0) || b.attempts - a.attempts);
+    .sort((a, b) => {
+      const aLast = a.history[a.history.length - 1]?.date ?? 0;
+      const bLast = b.history[b.history.length - 1]?.date ?? 0;
+      return (
+        (b.isOfficial ? 1 : 0) - (a.isOfficial ? 1 : 0) ||
+        b.attempts - a.attempts ||
+        new Date(bLast).getTime() - new Date(aLast).getTime()
+      );
+    });
 
   // Lista de eventos y simuladores Hyrox formateados con deltas
   const hyroxEventsList = Object.values(hyroxEventsMap)

@@ -22,8 +22,10 @@ async function seed() {
     ]).onConflictDoNothing().returning();
     console.log(`✅ ${types.length} tipos de entrenamiento procesados.`);
 
-    // 2. Categorías de Ejercicios
-    await db.insert(exerciseCategories).values([
+    // 2. Categorías de Ejercicios (idempotente: solo crea las globales que faltan;
+    // un simple onConflictDoNothing no basta porque `name` no tiene constraint único
+    // y cada ejecución duplicaría las categorías)
+    const seedCategories = [
         // Fuerza / Musculación
         { name: 'Pecho', type: 'Fuerza' },
         { name: 'Espalda', type: 'Fuerza' },
@@ -45,7 +47,21 @@ async function seed() {
         { name: 'Running', type: 'Cardio' },
         { name: 'Cycling', type: 'Cardio' },
         { name: 'Rowing', type: 'Cardio' },
-    ]).onConflictDoNothing();
+    ];
+    const existingGlobalCategories = await db.select().from(exerciseCategories).where(isNull(exerciseCategories.userId));
+    const missingCategories = seedCategories.filter(sc => !existingGlobalCategories.some(ec => ec.name === sc.name));
+    if (missingCategories.length > 0) {
+        await db.insert(exerciseCategories).values(missingCategories);
+        console.log(`✅ ${missingCategories.length} categorías nuevas creadas.`);
+    }
+    // Sincronizar el `type` si el seed lo cambió (solo globales; las del usuario no se tocan)
+    for (const sc of seedCategories) {
+        const current = existingGlobalCategories.find(ec => ec.name === sc.name);
+        if (current && (current.type ?? null) !== sc.type) {
+            await db.update(exerciseCategories).set({ type: sc.type }).where(eq(exerciseCategories.id, current.id));
+            console.log(`🔄 Categoría '${sc.name}': type '${current.type}' -> '${sc.type}'.`);
+        }
+    }
 
     // Obtener TODAS las categorías de la base de datos (tanto nuevas como existentes)
     const allCategories = await db.select().from(exerciseCategories);

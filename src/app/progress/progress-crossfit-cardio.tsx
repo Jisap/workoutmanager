@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -24,6 +24,8 @@ import {
   Repeat,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { type ModalityConfig } from '@/lib/db/schema';
 import { formatModalitySummary } from '@/lib/modality-utils';
@@ -298,6 +300,47 @@ export function ProgressCrossfitCardio({ crossfit, hyroxCardio }: ProgressCrossf
     if (benchmarkCategory === 'custom') return benchmarks.filter((b) => !b.isOfficial);
     return benchmarks;
   }, [benchmarks, benchmarkCategory]);
+
+  // Paginación de tarjetas: 6 por página en desktop, 3 en móvil.
+  const [benchmarkPage, setBenchmarkPage] = useState(1);
+  const [isMobileView, setIsMobileView] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches
+  );
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)');
+    const onChange = (e: MediaQueryListEvent) => setIsMobileView(e.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+  const benchmarkVisibleLimit = isMobileView ? 3 : 6;
+  const benchmarkTotalPages = Math.max(1, Math.ceil(filteredBenchmarks.length / benchmarkVisibleLimit));
+  const benchmarkSafePage = Math.min(benchmarkPage, benchmarkTotalPages);
+  const visibleBenchmarks = filteredBenchmarks.slice(
+    (benchmarkSafePage - 1) * benchmarkVisibleLimit,
+    benchmarkSafePage * benchmarkVisibleLimit
+  );
+  // Números de página con ventana (1 … 4 5 6 … 12)
+  const benchmarkPageItems: (number | string)[] = (() => {
+    if (benchmarkTotalPages <= 7) {
+      return Array.from({ length: benchmarkTotalPages }, (_, i) => i + 1);
+    }
+    const pages = new Set<number>([
+      1, 2,
+      benchmarkSafePage - 1, benchmarkSafePage, benchmarkSafePage + 1,
+      benchmarkTotalPages - 1, benchmarkTotalPages,
+    ]);
+    const sorted = [...pages]
+      .filter((p) => p >= 1 && p <= benchmarkTotalPages)
+      .sort((a, b) => a - b);
+    const items: (number | string)[] = [];
+    let prev = 0;
+    for (const p of sorted) {
+      if (p - prev > 1) items.push('…');
+      items.push(p);
+      prev = p;
+    }
+    return items;
+  })();
 
   // Filtrado de WODs por modalidad (solo CrossFit)
   const filteredWods = useMemo(() => {
@@ -749,7 +792,7 @@ export function ProgressCrossfitCardio({ crossfit, hyroxCardio }: ProgressCrossf
                 <div className="flex items-center gap-1.5">
                   <button
                     type="button"
-                    onClick={() => setBenchmarkCategory('all')}
+                    onClick={() => { setBenchmarkCategory('all'); setBenchmarkPage(1); }}
                     className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                       benchmarkCategory === 'all'
                         ? 'bg-orange-600 text-white shadow-2xs'
@@ -761,7 +804,7 @@ export function ProgressCrossfitCardio({ crossfit, hyroxCardio }: ProgressCrossf
                   {officialCount > 0 && (
                     <button
                       type="button"
-                      onClick={() => setBenchmarkCategory('official')}
+                      onClick={() => { setBenchmarkCategory('official'); setBenchmarkPage(1); }}
                       className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
                         benchmarkCategory === 'official'
                           ? 'bg-amber-500 text-amber-950 shadow-2xs'
@@ -774,7 +817,7 @@ export function ProgressCrossfitCardio({ crossfit, hyroxCardio }: ProgressCrossf
                   {customCount > 0 && (
                     <button
                       type="button"
-                      onClick={() => setBenchmarkCategory('custom')}
+                      onClick={() => { setBenchmarkCategory('custom'); setBenchmarkPage(1); }}
                       className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
                         benchmarkCategory === 'custom'
                           ? 'bg-orange-600 text-white shadow-2xs'
@@ -799,8 +842,8 @@ export function ProgressCrossfitCardio({ crossfit, hyroxCardio }: ProgressCrossf
                     {benchmarkCategory === 'official'
                       ? 'No hay Benchmarks oficiales de CrossFit registrados todavía (Fran, Cindy, Murph, etc.).'
                       : benchmarkCategory === 'custom'
-                      ? 'No hay entrenamientos funcionales repetidos 2 o más veces.'
-                      : 'Aún no has registrado Benchmarks oficiales ni entrenamientos funcionales repetidos.'}
+                      ? 'No hay entrenamientos funcionales registrados todavía.'
+                      : 'Aún no has registrado Benchmarks oficiales ni entrenamientos funcionales.'}
                   </p>
                   <p className="text-[11px] text-gray-400">
                     Al repetir un WOD o sesión funcional con el mismo nombre, el sistema analizará automáticamente tu mejora de tiempo.
@@ -809,7 +852,7 @@ export function ProgressCrossfitCardio({ crossfit, hyroxCardio }: ProgressCrossf
               </Card>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {filteredBenchmarks.map((bm) => {
+                {visibleBenchmarks.map((bm) => {
                   const isExpanded = !!expandedBenchmarks[bm.name];
                   const timedAttempts = bm.history.filter((h) => h.timeSeconds != null && h.timeSeconds > 0);
                   const lastWorkoutId = bm.history.length > 0 ? bm.history[bm.history.length - 1].workoutId : undefined;
@@ -961,6 +1004,53 @@ export function ProgressCrossfitCardio({ crossfit, hyroxCardio }: ProgressCrossf
                   </Card>
                   );
                 })}
+                {filteredBenchmarks.length > 0 && (
+                  <div className="col-span-full flex items-center justify-center gap-1.5 pt-1 flex-wrap">
+                    <button
+                      type="button"
+                      disabled={benchmarkSafePage <= 1}
+                      onClick={() => setBenchmarkPage((p) => Math.max(1, p - 1))}
+                      className="h-7 w-7 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 flex items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                      title="Página anterior"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+                    {benchmarkPageItems.map((item, idx) =>
+                      typeof item === 'number' ? (
+                        <button
+                          key={item}
+                          type="button"
+                          onClick={() => setBenchmarkPage(item)}
+                          className={`h-7 min-w-7 px-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                            item === benchmarkSafePage
+                              ? 'bg-orange-600 text-white shadow-2xs'
+                              : 'border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                          }`}
+                        >
+                          {item}
+                        </button>
+                      ) : (
+                        <span key={`gap-${idx}`} className="text-xs text-gray-400 px-0.5">
+                          {item}
+                        </span>
+                      )
+                    )}
+                    <button
+                      type="button"
+                      disabled={benchmarkSafePage >= benchmarkTotalPages}
+                      onClick={() => setBenchmarkPage((p) => Math.min(benchmarkTotalPages, p + 1))}
+                      className="h-7 w-7 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 flex items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                      title="Página siguiente"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                    <span className="text-[11px] text-gray-400 font-mono w-full text-center">
+                      Mostrando {(benchmarkSafePage - 1) * benchmarkVisibleLimit + 1}
+                      –{Math.min(benchmarkSafePage * benchmarkVisibleLimit, filteredBenchmarks.length)}
+                      {' '}de {filteredBenchmarks.length}
+                    </span>
+                  </div>
+                )}
               </div>
             )}
           </div>

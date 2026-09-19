@@ -36,6 +36,31 @@ export const MODALITY_OPTIONS = [
 import { formatDurationInput, parseDurationInput } from '@/lib/duration';
 export { formatDurationInput, parseDurationInput };
 
+// ─── Detección de ejercicios de comba ───
+// La comba (saltos simples, dobles, triples...) no encaja en fuerza ni en
+// cardio puro: se cuantifica por saltos (reps) y/o por tiempo, sin distancia
+// ni carga. Se detecta por nombre para cubrir también ejercicios personalizados.
+const ROPE_INCLUDE = [
+  'comba',
+  'doble',
+  'double',
+  'triple',
+  'single under',
+  'single-under',
+  'jump rope',
+  'skipping',
+];
+// 'Rope Climb / Subida de cuerda' es trepa (fuerza), no comba.
+const ROPE_EXCLUDE = ['climb', 'subida', 'trepa'];
+
+export function isRopeExerciseName(name: string): boolean {
+  const n = (name || '').toLowerCase();
+  if (!n) return false;
+  if (ROPE_EXCLUDE.some((k) => n.includes(k))) return false;
+  if (n.includes('cuerda')) return true;
+  return ROPE_INCLUDE.some((k) => n.includes(k));
+}
+
 // Tipos locales para el estado
 export type LocalSet = {
   id: string;
@@ -1193,12 +1218,13 @@ export function WorkoutLoggerClient({
             ex.name.toLowerCase().includes('remo') ||
             ex.name.toLowerCase().includes('row');
 
-          // Perfil cardio: ejercicios de categoría Cardio (bike, run, remo...).
-          // Solo Distancia + Tiempo; Reps/Kg se ocultan en ambas vistas.
-          const isCardio = isCardioProfile(ex.exerciseId);
+          // Perfil comba: prioridad sobre cardio (una "Comba" en categoría
+          // Cardio sigue siendo comba: saltos + tiempo, sin distancia ni carga).
+          const isRope = isRopeExerciseName(ex.name);
+          const isCardio = !isRope && isCardioProfile(ex.exerciseId);
 
           // En Hyrox mostramos siempre el campo Tiempo (1000m runs + estaciones),
-          // en el resto solo cuando hay distancia (o el ejercicio es de cardio)
+          // en el resto solo cuando hay distancia (o el ejercicio es de cardio/comba)
           const isHyroxContext =
             typeName.toLowerCase().includes('hyrox') ||
             currentTypeNameLower.includes('hyrox');
@@ -1206,6 +1232,7 @@ export function WorkoutLoggerClient({
             hasDistance ||
             isHyroxContext ||
             isCardio ||
+            isRope ||
             ex.sets.some((s) => s.durationSeconds != null);
 
           return (
@@ -1219,18 +1246,21 @@ export function WorkoutLoggerClient({
                     onChange={(val) => {
                       const selected = exerciseOptions.find((o) => o.value === val);
                       const newExerciseId = parseInt(val, 10);
-                      const newIsCardio = isCardioProfile(newExerciseId);
+                      const newName = selected?.label || `Ejercicio ${val}`;
+                      const newIsRope = isRopeExerciseName(newName);
+                      const newIsCardio = !newIsRope && isCardioProfile(newExerciseId);
                       setExercises((prev) =>
                         prev.map((e) =>
                           e.id === ex.id
                             ? {
                                 ...e,
                                 exerciseId: newExerciseId,
-                                name: selected?.label || `Ejercicio ${val}`,
-                                // Al cambiar a un ejercicio de cardio, las reps/cargas
-                                // previas no tienen sentido: se limpian para no
-                                // persistir datos invisibles.
-                                sets: newIsCardio
+                                name: newName,
+                                // Al cambiar de perfil se limpian los campos que
+                                // quedan ocultos para no persistir datos invisibles.
+                                sets: newIsRope
+                                  ? e.sets.map((s) => ({ ...s, weight: null, distance: null }))
+                                  : newIsCardio
                                   ? e.sets.map((s) => ({ ...s, repCount: 0, weight: null }))
                                   : e.sets,
                               }
@@ -1308,8 +1338,8 @@ export function WorkoutLoggerClient({
                         />
                       </div>
 
-                      {/* Metros (m) si el ejercicio maneja distancia o es de cardio */}
-                      {(hasDistance || primaryDistance != null || isCardio) && (
+                      {/* Metros (m) si el ejercicio maneja distancia o es de cardio (nunca comba) */}
+                      {(hasDistance || primaryDistance != null || isCardio) && !isRope && (
                         <div className="flex flex-col flex-1 min-w-[75px]">
                           <span className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">
                             Metros (m)
@@ -1350,8 +1380,8 @@ export function WorkoutLoggerClient({
                         </div>
                       )}
 
-                      {/* Kcal (opcional, solo cardio: bike, run...) */}
-                      {isCardio && (
+                      {/* Kcal (opcional, cardio y comba: bike, run...) */}
+                      {(isCardio || isRope) && (
                         <div className="flex flex-col flex-1 min-w-[70px]">
                           <span className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">
                             Kcal
@@ -1371,7 +1401,7 @@ export function WorkoutLoggerClient({
                         </div>
                       )}
 
-                      {/* Reps (solo fuerza/mixto: en cardio no tiene sentido) */}
+                      {/* Reps (fuerza/mixto y comba; en cardio puro no tiene sentido) */}
                       {!isCardio && (
                         <div className="flex flex-col flex-1 min-w-[65px]">
                           <span className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">
@@ -1391,8 +1421,8 @@ export function WorkoutLoggerClient({
                         </div>
                       )}
 
-                      {/* Peso (Kg) (solo fuerza/mixto) */}
-                      {!isCardio && (
+                      {/* Peso (Kg) (fuerza/mixto; ni cardio ni comba usan carga) */}
+                      {!isCardio && !isRope && (
                         <div className="flex flex-col flex-1 min-w-[70px]">
                           <span className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">
                             Kg
@@ -1439,7 +1469,97 @@ export function WorkoutLoggerClient({
                 ) : (
                   /* VISTA DETALLADA (Serie a Serie) */
                   <div>
-                    {isCardio ? (
+                    {isRope ? (
+                      <>
+                        <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase border-b dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50">
+                          <div className="col-span-1 text-center">Serie</div>
+                          <div className="col-span-3 text-center">Saltos</div>
+                          <div className="col-span-4 text-center">Tiempo (m:ss)</div>
+                          <div className="col-span-2 text-center">Kcal</div>
+                          <div className="col-span-2 text-center">✓</div>
+                        </div>
+
+                        {ex.sets.map((set, setIndex) => (
+                          <div
+                            key={set.id}
+                            className={`grid grid-cols-12 gap-2 px-4 py-2 items-center border-b last:border-0 transition-colors ${
+                              set.isCompleted ? 'bg-green-50/50 dark:bg-green-900/10' : 'hover:bg-gray-50/30 dark:hover:bg-gray-800/50'
+                            }`}
+                          >
+                            <div className="col-span-1 flex items-center justify-center gap-1">
+                              <span className="font-semibold text-xs text-gray-600 dark:text-gray-400">{setIndex + 1}</span>
+                              {ex.sets.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => removeSet(ex.id, set.id)}
+                                  className="text-gray-300 hover:text-red-500 p-0.5 transition-colors cursor-pointer"
+                                  title="Eliminar serie"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              )}
+                            </div>
+
+                            <div className="col-span-3">
+                              <Input
+                                type="number"
+                                min="0"
+                                placeholder="0"
+                                className="text-center h-8 text-sm tabular-nums px-1"
+                                value={set.repCount || ''}
+                                onChange={(e) =>
+                                  updateSet(ex.id, set.id, 'repCount', e.target.value ? parseInt(e.target.value, 10) : 0)
+                                }
+                              />
+                            </div>
+
+                            <div className="col-span-4">
+                              <Input
+                                type="text"
+                                inputMode="numeric"
+                                placeholder="1:00"
+                                className="text-center h-8 text-sm tabular-nums font-mono px-1 border-purple-200 bg-purple-50/50 dark:bg-purple-950/20"
+                                value={formatDurationInput(set.durationSeconds)}
+                                onChange={(e) => {
+                                  if (e.target.value.trim() === '') {
+                                    updateSet(ex.id, set.id, 'durationSeconds', null);
+                                  } else {
+                                    const val = parseDurationInput(e.target.value);
+                                    if (val !== null) updateSet(ex.id, set.id, 'durationSeconds', val);
+                                  }
+                                }}
+                              />
+                            </div>
+
+                            <div className="col-span-2">
+                              <Input
+                                type="number"
+                                min="0"
+                                step="1"
+                                placeholder="0"
+                                className="text-center h-8 text-sm tabular-nums px-1 border-orange-200 bg-orange-50/50 dark:bg-orange-950/20"
+                                value={set.calories ?? ''}
+                                onChange={(e) =>
+                                  updateSet(ex.id, set.id, 'calories', e.target.value ? parseFloat(e.target.value) : null)
+                                }
+                              />
+                            </div>
+
+                            <div className="col-span-2 flex justify-center">
+                              <button
+                                type="button"
+                                onClick={() => updateSet(ex.id, set.id, 'isCompleted', !set.isCompleted)}
+                                className={`w-7 h-7 rounded-md flex items-center justify-center transition-colors cursor-pointer ${
+                                  set.isCompleted ? 'bg-green-500 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                                }`}
+                              >
+                                <Check className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </>
+                    ) : isCardio ? (
                       <>
                         <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase border-b dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50">
                           <div className="col-span-1 text-center">Serie</div>
