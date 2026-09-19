@@ -37,6 +37,7 @@ function assertValidWorkoutInput(data: SaveWorkoutInput) {
         ['peso', s.weight, 1000],
         ['distancia', s.distance, 100000],
         ['duración', s.durationSeconds, 5 * 3600],
+        ['calorías', s.calories, 100000],
         ['RPE', s.rpe, 10],
       ] as const) {
         if (v != null && (typeof v !== 'number' || Number.isNaN(v) || v < 0 || v > max)) {
@@ -270,6 +271,7 @@ export async function saveWorkout(data: SaveWorkoutInput) {
           weight: set.weight,
           distance: set.distance,
           durationSeconds: set.durationSeconds,
+          calories: set.calories,
           rpe: set.rpe,
           isRx: set.isRx,
         }));
@@ -296,7 +298,7 @@ export async function saveWorkout(data: SaveWorkoutInput) {
     // Los errores de validación/origen conocido se propagan tal cual;
     // el resto se enmascara para no filtrar detalles de BD.
     if (error instanceof Error && error.message !== 'No se pudo generar un nombre único') {
-      const known = /vacío|inválid|añade|demasiados|ejercicio|orden|series|modalidad|duración|reps|peso|distancia|RPE|nombre único/i;
+      const known = /vacío|inválid|añade|demasiados|ejercicio|orden|series|modalidad|duración|reps|peso|distancia|calorías|RPE|nombre único/i;
       if (known.test(error.message)) throw error;
     }
     throw new Error('No se pudo guardar el entrenamiento');
@@ -318,6 +320,7 @@ export async function getAvailableExercises(userIdParam?: string) {
         name: exercises.name,
         categoryId: exercises.categoryId,
         categoryName: exerciseCategories.name,
+        categoryType: exerciseCategories.type,
       })
       .from(exercises)
       .leftJoin(exerciseCategories, eq(exercises.categoryId, exerciseCategories.id))
@@ -342,6 +345,8 @@ export async function getAvailableExercises(userIdParam?: string) {
   return exerciseList.map((ex) => ({
     ...ex,
     categoryName: ex.categoryName ?? 'General',
+    // Perfil de métricas del ejercicio (fuerza vs cardio). Sin categoría -> fuerza.
+    categoryType: ex.categoryType ?? 'Fuerza',
     sessionCount: statsMap.get(ex.id) ?? 0,
   }));
 }
@@ -531,6 +536,7 @@ export async function saveAsTemplate(data: {
             targetReps: s.repCount || ex.targetReps || null,
             targetWeight: s.weight ? Number(s.weight) : (ex.targetWeight ? Number(ex.targetWeight) : null),
             targetDistance: s.distance || ex.targetDistance || null,
+            targetCalories: s.calories ? Number(s.calories) : null,
             targetDurationSeconds: s.durationSeconds || ex.targetDurationSeconds || null,
           });
         }
@@ -542,6 +548,7 @@ export async function saveAsTemplate(data: {
           targetReps: ex.targetReps || null,
           targetWeight: ex.targetWeight ? Number(ex.targetWeight) : null,
           targetDistance: ex.targetDistance || null,
+          targetCalories: null,
           targetDurationSeconds: ex.targetDurationSeconds || null,
         });
       }
@@ -560,19 +567,27 @@ export async function saveAsTemplate(data: {
     const firstSet = e.sets?.[0];
     const targetReps = e.targetReps ?? firstSet?.repCount ?? null;
     const targetWeight = e.targetWeight ?? (firstSet?.weight ? Number(firstSet.weight) : null);
+    const targetDistance = e.targetDistance ?? firstSet?.distance ?? null;
+    const targetCalories = firstSet?.calories ? Number(firstSet.calories) : null;
+    const targetDurationSeconds = e.targetDurationSeconds ?? firstSet?.durationSeconds ?? null;
 
     const parts: string[] = [];
     parts.push(setsCount > 1 ? `${setsCount} series` : '1 serie');
     if (targetReps) parts.push(`× ${targetReps} reps`);
     if (targetWeight) parts.push(`@ ${targetWeight}kg`);
-    if (!targetReps && !targetWeight) parts.push(`(Libre)`);
+    if (targetDistance) parts.push(`· ${targetDistance}m`);
+    if (targetCalories) parts.push(`· ${targetCalories}kcal`);
+    if (targetDurationSeconds) parts.push(`· ${targetDurationSeconds}s`);
+    if (!targetReps && !targetWeight && !targetDistance && !targetCalories && !targetDurationSeconds) parts.push(`(Libre)`);
 
     return {
       name: e.exercise.name,
       setsCount,
       targetReps,
       targetWeight,
-      targetDurationSeconds: e.targetDurationSeconds ?? firstSet?.durationSeconds ?? null,
+      targetDistance,
+      targetCalories,
+      targetDurationSeconds,
       formattedSummary: parts.join(' '),
     };
   });
@@ -609,6 +624,7 @@ export async function createDirectTemplate(data: {
     orderIndex: number;
     targetReps?: number | null;
     targetWeight?: number | null;
+    targetDistance?: number | null;
     targetDurationSeconds?: number | null;
   }[];
 }) {
@@ -635,6 +651,7 @@ export async function createDirectTemplate(data: {
         orderIndex: ex.orderIndex ?? idx,
         targetReps: ex.targetReps ?? null,
         targetWeight: ex.targetWeight ?? null,
+        targetDistance: ex.targetDistance ?? null,
         targetDurationSeconds: ex.targetDurationSeconds ?? null,
       }))
     );
@@ -1043,6 +1060,7 @@ function mapHistoryItems(
           rpe: s.rpe,
           distance: s.distance,
           durationSeconds: s.durationSeconds,
+          calories: s.calories ? Number(s.calories) : null,
           formatted: weight > 0
             ? `${reps} reps @ ${weight}kg`
             : reps > 0
@@ -1189,6 +1207,8 @@ async function mapTemplateItems(
       allReps: (number | null)[];
       allWeights: (number | null)[];
       allDurations: (number | null)[];
+      allDistances: (number | null)[];
+      allCalories: (number | null)[];
     }>();
 
     const sw = t.sourceWorkoutId ? sourceWorkoutsMap.get(t.sourceWorkoutId) : null;
@@ -1201,6 +1221,8 @@ async function mapTemplateItems(
         const repsList = we.sets.map((s: { repCount: number | null }) => s.repCount ?? null);
         const weightsList = we.sets.map((s: { weight: number | string | null }) => (s.weight != null ? Number(s.weight) : null));
         const durationsList = we.sets.map((s: { durationSeconds: number | null }) => s.durationSeconds ?? null);
+        const distancesList = we.sets.map((s: { distance: number | null }) => s.distance ?? null);
+        const caloriesList = we.sets.map((s: { calories: number | string | null }) => (s.calories != null ? Number(s.calories) : null));
 
         exerciseMap.set(we.exerciseId, {
           exerciseId: we.exerciseId,
@@ -1208,6 +1230,8 @@ async function mapTemplateItems(
           allReps: repsList.length > 0 ? repsList : [null],
           allWeights: weightsList.length > 0 ? weightsList : [null],
           allDurations: durationsList.length > 0 ? durationsList : [null],
+          allDistances: distancesList.length > 0 ? distancesList : [null],
+          allCalories: caloriesList.length > 0 ? caloriesList : [null],
         });
       }
     } else {
@@ -1217,6 +1241,8 @@ async function mapTemplateItems(
           existing.allReps.push(te.targetReps ?? null);
           existing.allWeights.push(te.targetWeight ? Number(te.targetWeight) : null);
           existing.allDurations.push(te.targetDurationSeconds ?? null);
+          existing.allDistances.push(te.targetDistance ?? null);
+          existing.allCalories.push(te.targetCalories ? Number(te.targetCalories) : null);
         } else {
           exerciseMap.set(te.exerciseId, {
             exerciseId: te.exerciseId,
@@ -1224,6 +1250,8 @@ async function mapTemplateItems(
             allReps: [te.targetReps ?? null],
             allWeights: [te.targetWeight ? Number(te.targetWeight) : null],
             allDurations: [te.targetDurationSeconds ?? null],
+            allDistances: [te.targetDistance ?? null],
+            allCalories: [te.targetCalories ? Number(te.targetCalories) : null],
           });
         }
       }
@@ -1240,6 +1268,9 @@ async function mapTemplateItems(
       const firstReps = validReps[0] ?? null;
       const allSameReps = validReps.length > 0 && validReps.every((r) => r === firstReps);
       const firstDuration = g.allDurations.find((d) => d !== null) ?? null;
+      const firstDistance = g.allDistances.find((d) => d !== null && d > 0) ?? null;
+      const validCalories = g.allCalories.filter((c): c is number => c !== null && c > 0);
+      const firstCalories = validCalories[0] ?? null;
 
       let formattedSummary = '';
       if (validReps.length > 0) {
@@ -1251,8 +1282,16 @@ async function mapTemplateItems(
           const repsList = validReps.join(', ');
           formattedSummary = `${setsCount} ser. (${repsList} reps)${maxWeight ? ` · máx ${maxWeight}kg` : ''}`;
         }
-      } else if (firstDuration) {
-        formattedSummary = `${setsCount > 1 ? `${setsCount} series` : '1 serie'} · ${firstDuration}s`;
+      } else if (firstDistance || firstDuration || firstCalories) {
+        const range = `${setsCount > 1 ? `${setsCount} series` : '1 serie'}`;
+        const metrics = [
+          firstDistance ? `${firstDistance}m` : null,
+          firstDuration ? `${firstDuration}s` : null,
+          firstCalories ? `${firstCalories}kcal` : null,
+        ]
+          .filter(Boolean)
+          .join(' · ');
+        formattedSummary = `${range} · ${metrics}`;
       } else if (maxWeight) {
         formattedSummary = `${setsCount > 1 ? `${setsCount} series` : '1 serie'} @ ${maxWeight}kg`;
       } else {
@@ -1264,6 +1303,8 @@ async function mapTemplateItems(
         setsCount,
         targetReps: firstReps,
         targetWeight: maxWeight,
+        targetDistance: firstDistance,
+        targetCalories: firstCalories,
         targetDurationSeconds: firstDuration,
         formattedSummary,
       };

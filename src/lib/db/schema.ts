@@ -98,6 +98,7 @@ export const templateExercises = pgTable('template_exercises', {
   targetReps: integer('target_reps'),
   targetWeight: real('target_weight'),
   targetDistance: integer('target_distance'),
+  targetCalories: real('target_calories'),
   targetDurationSeconds: integer('time_cap_seconds'),
 }, (t) => [
   index('template_exercises_template_id_idx').on(t.templateId),
@@ -150,6 +151,7 @@ export const sets = pgTable('sets', {
   weight: real('weight'),
   distance: integer('distance'),
   durationSeconds: integer('duration_seconds'),
+  calories: real('calories'),
   rpe: integer('rpe'),
   isRx: boolean('is_rx').default(true),
   notes: text('notes'),

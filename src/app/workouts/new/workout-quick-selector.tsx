@@ -36,6 +36,7 @@ export interface SetDetailPreview {
   rpe: number | null;
   distance: number | null;
   durationSeconds: number | null;
+  calories: number | null;
 }
 
 export interface WorkoutExercisePreview {
@@ -52,6 +53,7 @@ export interface TemplateExercisePreview {
   targetReps: number | null;
   targetWeight: number | null;
   targetDistance: number | null;
+  targetCalories: number | null;
   timeCapSeconds: number | null;
   formattedSummary?: string;
 }
@@ -771,6 +773,7 @@ export function WorkoutQuickSelector({
                           <strong className="text-gray-400 mr-1 text-[10px]">S{s.setNumber}:</strong>
                           {s.weight ? `${s.weight}kg × ` : ''}
                           {s.repCount ? `${s.repCount} reps` : s.distance ? `${s.distance}m` : `${s.durationSeconds}s`}
+                          {s.calories ? ` · ${s.calories}kcal` : ''}
                           {s.rpe ? <span className="text-gray-400 text-[10px]"> @RPE{s.rpe}</span> : ''}
                         </span>
                       ))}
@@ -799,6 +802,10 @@ export function WorkoutQuickSelector({
                         <span className="text-purple-700 dark:text-purple-300 font-semibold">{ex.targetWeight} kg</span>
                       ) : ex.targetReps ? (
                         <span className="text-purple-700 dark:text-purple-300">{ex.targetReps} reps</span>
+                      ) : ex.targetDistance ? (
+                        <span className="text-purple-700 dark:text-purple-300">{ex.targetDistance} m</span>
+                      ) : ex.targetCalories ? (
+                        <span className="text-purple-700 dark:text-purple-300">{ex.targetCalories} kcal</span>
                       ) : ex.timeCapSeconds ? (
                         <span className="text-gray-500 dark:text-gray-400">Cap: {ex.timeCapSeconds}s</span>
                       ) : (

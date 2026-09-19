@@ -33,6 +33,13 @@ import {
 } from 'lucide-react';
 import { InteractiveHeroShowcase } from '@/components/landing/interactive-hero-showcase';
 import { LandingFAQ } from '@/components/landing/landing-faq';
+import { Magnet } from '@/components/reactbits/magnet';
+import { StarBorder } from '@/components/reactbits/star-border';
+import { ClickSpark } from '@/components/reactbits/click-spark';
+import { SpotlightCard } from '@/components/reactbits/spotlight-card';
+import { GlareHover } from '@/components/reactbits/glare-hover';
+import { BorderGlow } from '@/components/reactbits/border-glow';
+import { Waves } from '@/components/reactbits/waves';
 
 export default async function Home() {
   const { userId } = await auth();
@@ -96,24 +103,55 @@ export default async function Home() {
           {/* CTA Button Group */}
           <div className="flex flex-col items-center gap-3.5 pt-2 sm:flex-row">
             <SignUpButton mode="modal">
-              <Button 
-                size="lg" 
-                className="h-13 cursor-pointer rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 px-8 text-base font-semibold text-white shadow-[0_0_30px_-5px_rgba(37,99,235,0.5)] transition-all hover:from-blue-500 hover:to-blue-400 hover:shadow-[0_0_40px_-5px_rgba(37,99,235,0.7)] hover:scale-[1.02] active:scale-[0.98]"
+              <Magnet
+                padding={70}
+                magnetStrength={2}
+                activeTransition="transform 0.3s ease-out"
+                inactiveTransition="transform 0.5s ease-in-out"
               >
-                <Sparkles className="mr-2 h-4 w-4" />
-                Comenzar gratis
-              </Button>
+                <ClickSpark
+                  sparkColor="#60a5fa"
+                  sparkSize={10}
+                  sparkRadius={26}
+                  sparkCount={8}
+                  duration={450}
+                  easing="ease-out"
+                >
+                  <StarBorder
+                    as="button"
+                    thickness={2}
+                    speed="6s"
+                    color="#93c5fd"
+                    backgroundColor="#2563eb"
+                    textColor="#ffffff"
+                    borderColor="#3b82f6"
+                    className="cursor-pointer shadow-[0_0_30px_-5px_rgba(37,99,235,0.5)] transition-transform hover:scale-[1.03] active:scale-[0.97]"
+                  >
+                    <span className="flex items-center justify-center gap-2">
+                      <Sparkles className="h-4 w-4" />
+                      Comenzar gratis
+                    </span>
+                  </StarBorder>
+                </ClickSpark>
+              </Magnet>
             </SignUpButton>
             
             <SignInButton mode="modal">
-              <Button
-                size="lg"
-                variant="ghost"
-                className="h-13 cursor-pointer rounded-xl border border-zinc-800 bg-zinc-900/60 px-7 text-base font-medium text-zinc-300 backdrop-blur-md transition-all hover:border-zinc-700 hover:bg-zinc-800 hover:text-white"
+              <Magnet
+                padding={70}
+                magnetStrength={2}
+                activeTransition="transform 0.3s ease-out"
+                inactiveTransition="transform 0.5s ease-in-out"
               >
-                Acceder a mi cuenta
-                <ChevronRight className="ml-2 h-4 w-4" />
-              </Button>
+                <Button
+                  size="lg"
+                  variant="ghost"
+                  className="h-13 cursor-pointer rounded-xl border border-zinc-800 bg-zinc-900/60 px-7 text-base font-medium text-zinc-300 backdrop-blur-md transition-all hover:border-zinc-700 hover:bg-zinc-800 hover:text-white"
+                >
+                  Acceder a mi cuenta
+                  <ChevronRight className="ml-2 h-4 w-4" />
+                </Button>
+              </Magnet>
             </SignInButton>
           </div>
 
@@ -153,27 +191,36 @@ export default async function Home() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="relative group rounded-2xl border border-zinc-800/80 bg-zinc-900/40 p-6 backdrop-blur-sm transition-all duration-300 hover:border-blue-500/40 hover:bg-zinc-900/70">
+            <SpotlightCard
+              className="group border-zinc-800/80 bg-zinc-900/40 p-6 backdrop-blur-sm transition-colors hover:border-blue-500/40"
+              spotlightColor="rgba(59, 130, 246, 0.22)"
+            >
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 mb-4 group-hover:scale-110 transition-transform">
                 <Target className="h-6 w-6" />
               </div>
               <h3 className="text-xl font-bold text-zinc-100 mb-2">Precisión Biomecánica</h3>
               <p className="text-sm text-zinc-400 leading-relaxed">
-                Registra variables reales: tempo bajo tensión (ej. 3-1-X-0), RPE, escala RIR y cálculo de 1RM dinámico al instante.
+                Registra variables reales: RPE, intensidad relativa (% de tu 1RM) y cálculo de 1RM dinámico al instante.
               </p>
-            </div>
+            </SpotlightCard>
 
-            <div className="relative group rounded-2xl border border-zinc-800/80 bg-zinc-900/40 p-6 backdrop-blur-sm transition-all duration-300 hover:border-cyan-500/40 hover:bg-zinc-900/70">
+            <SpotlightCard
+              className="group border-zinc-800/80 bg-zinc-900/40 p-6 backdrop-blur-sm transition-colors hover:border-cyan-500/40"
+              spotlightColor="rgba(34, 211, 238, 0.22)"
+            >
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 mb-4 group-hover:scale-110 transition-transform">
                 <Zap className="h-6 w-6" />
               </div>
               <h3 className="text-xl font-bold text-zinc-100 mb-2">Cero Fricción en Sala</h3>
               <p className="text-sm text-zinc-400 leading-relaxed">
-                Interfaz táctil optimizada para registrar series con una sola mano, búsqueda rápida en el catálogo y auto-completado de cargas previas.
+                Interfaz táctil optimizada para registrar series con una sola mano y búsqueda rápida en el catálogo de ejercicios.
               </p>
-            </div>
+            </SpotlightCard>
 
-            <div className="relative group rounded-2xl border border-zinc-800/80 bg-zinc-900/40 p-6 backdrop-blur-sm transition-all duration-300 hover:border-emerald-500/40 hover:bg-zinc-900/70">
+            <SpotlightCard
+              className="group border-zinc-800/80 bg-zinc-900/40 p-6 backdrop-blur-sm transition-colors hover:border-emerald-500/40"
+              spotlightColor="rgba(16, 185, 129, 0.22)"
+            >
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 mb-4 group-hover:scale-110 transition-transform">
                 <TrendingUp className="h-6 w-6" />
               </div>
@@ -181,7 +228,7 @@ export default async function Home() {
               <p className="text-sm text-zinc-400 leading-relaxed">
                 Mapea el tonelaje acumulado y el volumen por grupo muscular semana a semana para garantizar avances continuos sin estancamiento.
               </p>
-            </div>
+            </SpotlightCard>
           </div>
         </section>
 
@@ -214,14 +261,14 @@ export default async function Home() {
                   </Badge>
                 </div>
                 <CardDescription className="text-zinc-400 text-sm leading-relaxed">
-                  No te limites a registrar peso y repeticiones. Controla RPE, cadencia de movimiento, notas técnicas y cálculo de 1RM dinámico en cada levantamiento.
+                  No te limites a registrar peso y repeticiones. Controla RPE, intensidad relativa, notas técnicas y cálculo de 1RM dinámico en cada levantamiento.
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-800/60 pb-3 text-xs font-mono">
                     <span className="text-zinc-400">Ejercicio: <strong className="text-zinc-200">Sentadilla Trasera</strong></span>
-                    <span className="text-blue-400">Tempo: 3-0-1-0</span>
+                    <span className="text-blue-400">RPE: 8.5</span>
                     <span className="text-emerald-400">1RM Est: 165 kg</span>
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2">
@@ -236,7 +283,19 @@ export default async function Home() {
             </Card>
 
             {/* Feature 2: Analytics & Trends */}
-            <Card className="group border-zinc-800/80 bg-zinc-900/40 hover:bg-zinc-900/70 hover:border-zinc-700 transition-all duration-300 backdrop-blur-sm">
+            <GlareHover
+              className="group"
+              width="100%"
+              height="100%"
+              background="rgb(24 24 27 / 0.4)"
+              borderRadius="16px"
+              borderColor="rgb(63 63 70 / 0.8)"
+              glareColor="#60a5fa"
+              glareOpacity={0.35}
+              glareSize={200}
+              glareAngle={-45}
+              transitionDuration={650}
+            >
               <CardHeader>
                 <div className="mb-3 flex items-center gap-2.5">
                   <div className="p-2 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400">
@@ -259,7 +318,7 @@ export default async function Home() {
                   </div>
                 </div>
               </CardContent>
-            </Card>
+            </GlareHover>
 
             {/* Feature 3: Routine Engine */}
             <Card className="group border-zinc-800/80 bg-zinc-900/40 hover:bg-zinc-900/70 hover:border-zinc-700 transition-all duration-300 backdrop-blur-sm">
@@ -424,7 +483,7 @@ export default async function Home() {
                       apps: 'Limitado / De pago',
                     },
                     {
-                      feature: 'Registro de RPE, Tempo (3-1-X-0) y RIR',
+                      feature: 'Registro de RPE',
                       wm: true,
                       notes: 'Manual y desordenado',
                       apps: false,
@@ -527,7 +586,28 @@ export default async function Home() {
         {/* FINAL PREMIUM CALL TO ACTION (CTA) */}
         {/* ========================================================================= */}
         <section className="mx-auto max-w-4xl px-4">
-          <div className="relative rounded-3xl border border-blue-500/30 bg-gradient-to-b from-zinc-900/90 via-zinc-900/70 to-zinc-950 p-8 sm:p-14 text-center overflow-hidden shadow-2xl backdrop-blur-xl">
+          <BorderGlow
+            backgroundColor="#0b0f19"
+            glowColor="217 91 60"
+            colors={["#3b82f6", "#22d3ee", "#10b981"]}
+            fillOpacity={0.45}
+            borderRadius={28}
+            glowIntensity={1.1}
+            animated
+            className="shadow-2xl"
+          >
+            <Waves
+              lineColor="rgb(59 130 246 / 0.09)"
+              waveSpeedX={0.02}
+              waveSpeedY={0.01}
+              waveAmpX={40}
+              waveAmpY={20}
+              xGap={12}
+              yGap={36}
+              className="opacity-50"
+            />
+
+            <div className="relative w-full p-8 sm:p-14 text-center">
             {/* Top gradient glowing border light */}
             <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3/4 h-px bg-gradient-to-r from-transparent via-blue-400 to-transparent" />
             <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-96 h-96 bg-blue-600/20 blur-[100px] rounded-full pointer-events-none" />
@@ -578,7 +658,8 @@ export default async function Home() {
                 </Button>
               </SignInButton>
             </div>
-          </div>
+            </div>
+          </BorderGlow>
         </section>
       </main>
 

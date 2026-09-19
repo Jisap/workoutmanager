@@ -111,7 +111,7 @@ export function InteractiveHeroShowcase() {
                         Pecho · Hipertrofia
                       </Badge>
                     </div>
-                    <p className="text-xs text-zinc-400 font-mono mt-0.5">Tempo: 3-1-X-0 · Barra Olímpica · RPE @8.5</p>
+                    <p className="text-xs text-zinc-400 font-mono mt-0.5">Barra Olímpica · RPE @8.5</p>
                   </div>
                 </div>
 

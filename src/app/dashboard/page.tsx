@@ -10,6 +10,8 @@ import { Calendar, Dumbbell, TrendingUp, Plus, Activity, Scale } from 'lucide-re
 import { getConsistencyData } from '../workouts/actions';
 import { getBodySummary } from '../progress/measurements-actions';
 import { ConsistencyHeatmap } from '../progress/consitency-heatmap';
+import { CountUp } from '@/components/reactbits/count-up';
+import { AnimatedList } from '@/components/reactbits/animated-list';
 
 export default async function DashboardPage() {
     const { userId } = await auth();
@@ -40,6 +42,15 @@ export default async function DashboardPage() {
     // Stats básicas
     const totalWorkouts = consistencyData.totalWorkouts;
 
+    const recentItems = recentWorkouts.map((workout) => ({
+        id: String(workout.id),
+        title: workout.name,
+        subtitle: workout.typeName ?? 'Sin tipo',
+        meta: `${workout.totalTimeSeconds
+            ? `${Math.round(workout.totalTimeSeconds / 60)} min`
+            : 'Sin tiempo'} · ${new Date(workout.startTime).toLocaleDateString('es-ES')}`
+    }));
+
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">
@@ -63,7 +74,9 @@ export default async function DashboardPage() {
                         <Dumbbell className="w-4 h-4 text-gray-400 dark:text-gray-500" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold dark:text-gray-100">{totalWorkouts}</div>
+                        <div className="text-2xl font-bold dark:text-gray-100">
+                            <CountUp to={totalWorkouts} duration={1500} />
+                        </div>
                         <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Días activos registrados</p>
                     </CardContent>
                 </Card>
@@ -74,7 +87,9 @@ export default async function DashboardPage() {
                         <Activity className="w-4 h-4 text-gray-400 dark:text-gray-500" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold dark:text-gray-100">{consistencyData.currentStreak} días</div>
+                        <div className="text-2xl font-bold dark:text-gray-100">
+                            <CountUp to={consistencyData.currentStreak} duration={1300} /> días
+                        </div>
                         <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Récord: {consistencyData.longestStreak} días</p>
                     </CardContent>
                 </Card>
@@ -85,7 +100,9 @@ export default async function DashboardPage() {
                         <TrendingUp className="w-4 h-4 text-gray-400 dark:text-gray-500" />
                     </CardHeader>
                 <CardContent>
-                    <div className="text-2xl font-bold dark:text-gray-100">{consistencyData.avgPerWeek} días</div>
+                    <div className="text-2xl font-bold dark:text-gray-100">
+                        <CountUp to={consistencyData.avgPerWeek} duration={1300} /> días
+                    </div>
                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Promedio por semana</p>
                 </CardContent>
             </Card>
@@ -99,7 +116,7 @@ export default async function DashboardPage() {
                     {bodySummary.latestWeight != null ? (
                         <>
                             <div className="text-2xl font-bold dark:text-gray-100">
-                                {bodySummary.latestWeight.toFixed(1)} kg
+                                <CountUp to={bodySummary.latestWeight} duration={1800} delay={300} /> kg
                                 {bodySummary.delta30d != null && bodySummary.delta30d !== 0 && (
                                     <span className={`ml-2 text-sm font-bold ${bodySummary.delta30d > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
                                         {bodySummary.delta30d > 0 ? `+${bodySummary.delta30d}` : bodySummary.delta30d} kg
@@ -153,29 +170,12 @@ export default async function DashboardPage() {
                             </Link>
                         </div>
                     ) : (
-                        <div className="space-y-3">
-                            {recentWorkouts.map((workout) => (
-                                <div
-                                    key={workout.id}
-                                    className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg hover:bg-gray-100/80 dark:hover:bg-gray-800 transition-colors"
-                                >
-                                    <div>
-                                        <p className="font-medium text-gray-900 dark:text-gray-100">{workout.name}</p>
-                                        <p className="text-sm text-gray-500 dark:text-gray-400">{workout.typeName}</p>
-                                    </div>
-                                    <div className="text-right">
-                                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                                            {workout.totalTimeSeconds
-                                                ? `${Math.round(workout.totalTimeSeconds / 60)} min`
-                                                : 'Sin tiempo'}
-                                        </p>
-                                        <p className="text-xs text-gray-500 dark:text-gray-400">
-                                            {new Date(workout.startTime).toLocaleDateString('es-ES')}
-                                        </p>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
+                        <AnimatedList
+                            items={recentItems}
+                            delay={120}
+                            className="space-y-3"
+                            itemClassName="bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100/80 dark:hover:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-700"
+                        />
                     )}
                 </CardContent>
             </Card>

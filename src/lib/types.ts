@@ -15,6 +15,9 @@ export interface AvailableExercise {
   name: string;
   categoryId: number | null;
   categoryName?: string;
+  // Tipo de la categoría ('Fuerza' | 'Cardio' | ...). Define el perfil de
+  // métricas del ejercicio en el logger (cardio -> distancia/tiempo).
+  categoryType?: string | null;
   sessionCount?: number;
 }
 
@@ -34,6 +37,7 @@ export interface PersistedSetInput {
   weight: number | null;
   distance: number | null;
   durationSeconds: number | null;
+  calories: number | null;
   rpe: number | null;
   isRx: boolean;
 }
@@ -58,7 +62,9 @@ export interface SaveWorkoutInput {
 export interface TemplateSourceWorkoutSet {
   repCount: number | null;
   weight: number | null;
+  distance: number | null;
   durationSeconds: number | null;
+  calories: number | null;
 }
 
 export interface TemplateSourceWorkout {

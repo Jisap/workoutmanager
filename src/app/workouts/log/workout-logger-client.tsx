@@ -43,6 +43,7 @@ export type LocalSet = {
   weight: number | null;
   distance?: number | null;
   durationSeconds?: number | null;
+  calories?: number | null;
   rpe?: number | null;
   isRx?: boolean;
   isCompleted: boolean;
@@ -239,6 +240,20 @@ export function WorkoutLoggerClient({
     [availableExercisesList, categoryMap]
   );
 
+  // ─── Perfil de métricas por ejercicio ───
+  // Los ejercicios de categoría Cardio (Running, Cycling, Rowing, Monostructural...)
+  // se registran con Distancia + Tiempo y SIN Reps/Kg. El resto usa fuerza
+  // (Reps + Kg) con los matices existentes de distancia/tiempo por nombre.
+  const categoryTypeByExerciseId = useMemo(
+    () =>
+      new Map(
+        availableExercisesList.map((a) => [a.id, (a.categoryType || 'Fuerza').toLowerCase()])
+      ),
+    [availableExercisesList]
+  );
+  const isCardioProfile = (exerciseId: number) =>
+    categoryTypeByExerciseId.get(exerciseId) === 'cardio';
+
 
 
   const addExercise = () => {
@@ -390,6 +405,7 @@ export function WorkoutLoggerClient({
           weight: lastSet ? lastSet.weight : null,
           distance: lastSet ? lastSet.distance : null,
           durationSeconds: lastSet ? lastSet.durationSeconds : null,
+          calories: lastSet ? lastSet.calories : null,
           rpe: lastSet ? lastSet.rpe : null,
           isRx: lastSet ? lastSet.isRx : true,
           isCompleted: false,
@@ -399,10 +415,10 @@ export function WorkoutLoggerClient({
     );
   };
 
-  // Actualizar un campo (reps, peso, distancia) en todas las series del ejercicio
+  // Actualizar un campo (reps, peso, distancia, calorías...) en todas las series del ejercicio
   const updateAllSetsField = (
     exerciseId: string,
-    field: 'repCount' | 'weight' | 'distance' | 'durationSeconds',
+    field: 'repCount' | 'weight' | 'distance' | 'durationSeconds' | 'calories',
     value: number | null
   ) => {
     setExercises((prev) =>
@@ -455,6 +471,7 @@ export function WorkoutLoggerClient({
             weight: lastSet ? lastSet.weight : null,
             distance: lastSet ? lastSet.distance : null,
             durationSeconds: lastSet ? lastSet.durationSeconds : null,
+            calories: lastSet ? lastSet.calories : null,
             rpe: lastSet ? lastSet.rpe : null,
             isRx: lastSet ? lastSet.isRx : true,
             isCompleted: false,
@@ -563,6 +580,7 @@ export function WorkoutLoggerClient({
             weight: s.weight,
             distance: s.distance ?? null,
             durationSeconds: s.durationSeconds ?? null,
+            calories: s.calories ?? null,
             rpe: s.rpe ?? null,
             isRx: s.isRx ?? true,
           })),
@@ -616,6 +634,7 @@ export function WorkoutLoggerClient({
             weight: s.weight,
             distance: s.distance ?? null,
             durationSeconds: s.durationSeconds ?? null,
+            calories: s.calories ?? null,
             rpe: s.rpe ?? null,
             isRx: s.isRx ?? true,
           })),
@@ -660,6 +679,9 @@ export function WorkoutLoggerClient({
         orderIndex: number;
         targetReps?: number | null;
         targetWeight?: number | null;
+        targetDistance?: number | null;
+        targetCalories?: number | null;
+        targetDurationSeconds?: number | null;
       }[] = [];
 
       let orderCounter = 0;
@@ -671,6 +693,9 @@ export function WorkoutLoggerClient({
               orderIndex: orderCounter++,
               targetReps: s.repCount || null,
               targetWeight: s.weight || null,
+              targetDistance: s.distance ?? null,
+              targetCalories: s.calories ?? null,
+              targetDurationSeconds: s.durationSeconds ?? null,
             });
           }
         } else {
@@ -679,6 +704,9 @@ export function WorkoutLoggerClient({
             orderIndex: orderCounter++,
             targetReps: null,
             targetWeight: null,
+            targetDistance: null,
+            targetCalories: null,
+            targetDurationSeconds: null,
           });
         }
       }
@@ -1151,6 +1179,7 @@ export function WorkoutLoggerClient({
           const primaryWeight = ex.sets[0]?.weight;
           const primaryDistance = ex.sets[0]?.distance;
           const primaryDuration = ex.sets[0]?.durationSeconds ?? null;
+          const primaryCalories = ex.sets[0]?.calories;
 
           const hasDistance =
             ex.sets.some((s) => s.distance != null) ||
@@ -1164,14 +1193,19 @@ export function WorkoutLoggerClient({
             ex.name.toLowerCase().includes('remo') ||
             ex.name.toLowerCase().includes('row');
 
+          // Perfil cardio: ejercicios de categoría Cardio (bike, run, remo...).
+          // Solo Distancia + Tiempo; Reps/Kg se ocultan en ambas vistas.
+          const isCardio = isCardioProfile(ex.exerciseId);
+
           // En Hyrox mostramos siempre el campo Tiempo (1000m runs + estaciones),
-          // en el resto solo cuando hay distancia
+          // en el resto solo cuando hay distancia (o el ejercicio es de cardio)
           const isHyroxContext =
             typeName.toLowerCase().includes('hyrox') ||
             currentTypeNameLower.includes('hyrox');
           const showTimeField =
             hasDistance ||
             isHyroxContext ||
+            isCardio ||
             ex.sets.some((s) => s.durationSeconds != null);
 
           return (
@@ -1184,10 +1218,22 @@ export function WorkoutLoggerClient({
                     value={ex.exerciseId.toString()}
                     onChange={(val) => {
                       const selected = exerciseOptions.find((o) => o.value === val);
+                      const newExerciseId = parseInt(val, 10);
+                      const newIsCardio = isCardioProfile(newExerciseId);
                       setExercises((prev) =>
                         prev.map((e) =>
                           e.id === ex.id
-                            ? { ...e, exerciseId: parseInt(val, 10), name: selected?.label || `Ejercicio ${val}` }
+                            ? {
+                                ...e,
+                                exerciseId: newExerciseId,
+                                name: selected?.label || `Ejercicio ${val}`,
+                                // Al cambiar a un ejercicio de cardio, las reps/cargas
+                                // previas no tienen sentido: se limpian para no
+                                // persistir datos invisibles.
+                                sets: newIsCardio
+                                  ? e.sets.map((s) => ({ ...s, repCount: 0, weight: null }))
+                                  : e.sets,
+                              }
                             : e
                         )
                       );
@@ -1262,8 +1308,8 @@ export function WorkoutLoggerClient({
                         />
                       </div>
 
-                      {/* Metros (m) si el ejercicio maneja distancia */}
-                      {(hasDistance || primaryDistance != null) && (
+                      {/* Metros (m) si el ejercicio maneja distancia o es de cardio */}
+                      {(hasDistance || primaryDistance != null || isCardio) && (
                         <div className="flex flex-col flex-1 min-w-[75px]">
                           <span className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">
                             Metros (m)
@@ -1304,41 +1350,66 @@ export function WorkoutLoggerClient({
                         </div>
                       )}
 
-                      {/* Reps */}
-                      <div className="flex flex-col flex-1 min-w-[65px]">
-                        <span className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">
-                          Reps
-                        </span>
-                        <Input
-                          type="number"
-                          min="0"
-                          placeholder="0"
-                          value={primaryReps || ''}
-                          onChange={(e) => {
-                            const reps = parseInt(e.target.value, 10) || 0;
-                            updateAllSetsField(ex.id, 'repCount', reps);
-                          }}
-                          className="h-9 text-center font-bold text-sm tabular-nums bg-gray-50/50 dark:bg-gray-800/50 dark:text-gray-100 dark:border-gray-700"
-                        />
-                      </div>
+                      {/* Kcal (opcional, solo cardio: bike, run...) */}
+                      {isCardio && (
+                        <div className="flex flex-col flex-1 min-w-[70px]">
+                          <span className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">
+                            Kcal
+                          </span>
+                          <Input
+                            type="number"
+                            min="0"
+                            step="1"
+                            placeholder="0"
+                            value={primaryCalories ?? ''}
+                            onChange={(e) => {
+                              const val = e.target.value ? parseFloat(e.target.value) : null;
+                              updateAllSetsField(ex.id, 'calories', val);
+                            }}
+                            className="h-9 text-center font-bold text-sm tabular-nums bg-orange-50/50 dark:bg-orange-950/20 dark:text-gray-100 dark:border-gray-700 border-orange-200"
+                          />
+                        </div>
+                      )}
 
-                      {/* Peso (Kg) */}
-                      <div className="flex flex-col flex-1 min-w-[70px]">
-                        <span className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">
-                          Kg
-                        </span>
-                        <Input
-                          type="number"
-                          step="0.5"
-                          placeholder="0"
-                          value={primaryWeight ?? ''}
-                          onChange={(e) => {
-                            const val = e.target.value ? parseFloat(e.target.value) : null;
-                            updateAllSetsField(ex.id, 'weight', val);
-                          }}
-                          className="h-9 text-center font-bold text-sm tabular-nums bg-gray-50/50 dark:bg-gray-800/50 dark:text-gray-100 dark:border-gray-700"
-                        />
-                      </div>
+                      {/* Reps (solo fuerza/mixto: en cardio no tiene sentido) */}
+                      {!isCardio && (
+                        <div className="flex flex-col flex-1 min-w-[65px]">
+                          <span className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">
+                            Reps
+                          </span>
+                          <Input
+                            type="number"
+                            min="0"
+                            placeholder="0"
+                            value={primaryReps || ''}
+                            onChange={(e) => {
+                              const reps = parseInt(e.target.value, 10) || 0;
+                              updateAllSetsField(ex.id, 'repCount', reps);
+                            }}
+                            className="h-9 text-center font-bold text-sm tabular-nums bg-gray-50/50 dark:bg-gray-800/50 dark:text-gray-100 dark:border-gray-700"
+                          />
+                        </div>
+                      )}
+
+                      {/* Peso (Kg) (solo fuerza/mixto) */}
+                      {!isCardio && (
+                        <div className="flex flex-col flex-1 min-w-[70px]">
+                          <span className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">
+                            Kg
+                          </span>
+                          <Input
+                            type="number"
+                            step="0.5"
+                            placeholder="0"
+                            value={primaryWeight ?? ''}
+                            onChange={(e) => {
+                              const val = e.target.value ? parseFloat(e.target.value) : null;
+                              updateAllSetsField(ex.id, 'weight', val);
+                            }}
+                            className="h-9 text-center font-bold text-sm tabular-nums bg-gray-50/50 dark:bg-gray-800/50 dark:text-gray-100 dark:border-gray-700"
+                          />
+                        </div>
+                      )}
                     </div>
 
                     {/* Botón rápido de completado */}
@@ -1368,7 +1439,96 @@ export function WorkoutLoggerClient({
                 ) : (
                   /* VISTA DETALLADA (Serie a Serie) */
                   <div>
-                    {hasDistance || primaryDistance != null ? (
+                    {isCardio ? (
+                      <>
+                        <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase border-b dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50">
+                          <div className="col-span-1 text-center">Serie</div>
+                          <div className="col-span-3 text-center">Dist. (m)</div>
+                          <div className="col-span-4 text-center">Tiempo (m:ss)</div>
+                          <div className="col-span-2 text-center">Kcal</div>
+                          <div className="col-span-2 text-center">✓</div>
+                        </div>
+
+                        {ex.sets.map((set, setIndex) => (
+                          <div
+                            key={set.id}
+                            className={`grid grid-cols-12 gap-2 px-4 py-2 items-center border-b last:border-0 transition-colors ${
+                              set.isCompleted ? 'bg-green-50/50 dark:bg-green-900/10' : 'hover:bg-gray-50/30 dark:hover:bg-gray-800/50'
+                            }`}
+                          >
+                            <div className="col-span-1 flex items-center justify-center gap-1">
+                              <span className="font-semibold text-xs text-gray-600 dark:text-gray-400">{setIndex + 1}</span>
+                              {ex.sets.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => removeSet(ex.id, set.id)}
+                                  className="text-gray-300 hover:text-red-500 p-0.5 transition-colors cursor-pointer"
+                                  title="Eliminar serie"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              )}
+                            </div>
+
+                            <div className="col-span-3">
+                              <Input
+                                type="number"
+                                placeholder="0 m"
+                                className="text-center h-8 text-sm tabular-nums px-1"
+                                value={set.distance ?? ''}
+                                onChange={(e) =>
+                                  updateSet(ex.id, set.id, 'distance', e.target.value ? parseInt(e.target.value, 10) : null)
+                                }
+                              />
+                            </div>
+
+                            <div className="col-span-4">
+                              <Input
+                                type="text"
+                                inputMode="numeric"
+                                placeholder="4:30"
+                                className="text-center h-8 text-sm tabular-nums font-mono px-1 border-purple-200 bg-purple-50/50 dark:bg-purple-950/20"
+                                value={formatDurationInput(set.durationSeconds)}
+                                onChange={(e) => {
+                                  if (e.target.value.trim() === '') {
+                                    updateSet(ex.id, set.id, 'durationSeconds', null);
+                                  } else {
+                                    const val = parseDurationInput(e.target.value);
+                                    if (val !== null) updateSet(ex.id, set.id, 'durationSeconds', val);
+                                  }
+                                }}
+                              />
+                            </div>
+
+                            <div className="col-span-2">
+                              <Input
+                                type="number"
+                                min="0"
+                                step="1"
+                                placeholder="0"
+                                className="text-center h-8 text-sm tabular-nums px-1 border-orange-200 bg-orange-50/50 dark:bg-orange-950/20"
+                                value={set.calories ?? ''}
+                                onChange={(e) =>
+                                  updateSet(ex.id, set.id, 'calories', e.target.value ? parseFloat(e.target.value) : null)
+                                }
+                              />
+                            </div>
+
+                            <div className="col-span-2 flex justify-center">
+                              <button
+                                type="button"
+                                onClick={() => updateSet(ex.id, set.id, 'isCompleted', !set.isCompleted)}
+                                className={`w-7 h-7 rounded-md flex items-center justify-center transition-colors cursor-pointer ${
+                                  set.isCompleted ? 'bg-green-500 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                                }`}
+                              >
+                                <Check className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </>
+                    ) : hasDistance || primaryDistance != null ? (
                       <>
                         <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase border-b dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50">
                           <div className="col-span-1 text-center">Serie</div>

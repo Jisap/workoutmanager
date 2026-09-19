@@ -760,6 +760,9 @@ type ExerciseDetailItem = {
     setNumber: number;
     weight: number | null;
     repCount: number | null;
+    distance?: number | null;
+    durationSeconds?: number | null;
+    calories?: number | null;
   }[];
   repsSummary?: string;
 };
@@ -856,8 +859,17 @@ function ExerciseDetailModal({
                                 className="px-2 py-0.5 text-[11px] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md font-mono text-gray-800 dark:text-gray-200 shadow-2xs"
                               >
                                 <strong className="text-gray-400 dark:text-gray-500 mr-1 text-[10px]">S{s.setNumber}:</strong>
-                                <span className="font-bold text-blue-700 dark:text-blue-400">{s.repCount ?? 0} reps</span>
+                                {s.distance ? (
+                                  <span className="font-bold text-purple-700 dark:text-purple-300 mr-1">{s.distance}m</span>
+                                ) : null}
+                                {s.durationSeconds != null ? (
+                                  <span className="font-bold text-emerald-700 dark:text-emerald-300 mr-1">⏱ {formatMMSS(s.durationSeconds)}</span>
+                                ) : null}
+                                {(s.repCount ?? 0) > 0 || (s.distance == null && s.durationSeconds == null) ? (
+                                  <span className="font-bold text-blue-700 dark:text-blue-400">{s.repCount ?? 0} reps</span>
+                                ) : null}
                                 {s.weight ? <span className="text-gray-600 dark:text-gray-400"> @ {s.weight}kg</span> : ''}
+                                {s.calories ? <span className="text-orange-600 dark:text-orange-400"> · {s.calories}kcal</span> : ''}
                               </span>
                             ))}
                           </div>

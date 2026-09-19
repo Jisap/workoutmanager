@@ -12,7 +12,7 @@ interface FAQItem {
 const faqs: FAQItem[] = [
   {
     question: '¿En qué se diferencia Workout Manager de una app convencional o un bloc de notas?',
-    answer: 'La mayoría de apps se limitan a guardar números aislados. Workout Manager está estructurado con precisión biomecánica: calcula tu 1RM estimado en tiempo real con la fórmula Epley, registra RPE/RIR, tempo bajo tensión (ej. 3-1-X-0), cataloga ejercicios por grupo muscular y proyecta tus curvas de sobrecarga progresiva sin publicidad ni fricción.',
+    answer: 'La mayoría de apps se limitan a guardar números aislados. Workout Manager está estructurado con precisión biomecánica: calcula tu 1RM estimado en tiempo real con la fórmula Epley, registra RPE, controla la intensidad relativa de cada levantamiento, cataloga ejercicios por grupo muscular y proyecta tus curvas de sobrecarga progresiva sin publicidad ni fricción.',
     icon: Zap,
   },
   {

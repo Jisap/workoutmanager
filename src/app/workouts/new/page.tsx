@@ -62,6 +62,7 @@ export default async function NewWorkoutPage() {
           rpe: s.rpe,
           distance: s.distance,
           durationSeconds: s.durationSeconds,
+          calories: s.calories,
         };
       });
 
@@ -108,7 +109,8 @@ export default async function NewWorkoutPage() {
       orderIndex: idx,
       targetReps: e.targetReps,
       targetWeight: e.targetWeight,
-      targetDistance: null,
+      targetDistance: e.targetDistance ?? null,
+      targetCalories: e.targetCalories ?? null,
       timeCapSeconds: e.targetDurationSeconds,
       formattedSummary: e.formattedSummary,
     })),

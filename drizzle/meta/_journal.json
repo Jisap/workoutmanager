@@ -29,6 +29,13 @@
       "when": 1789800932776,
       "tag": "0003_white_warhawk",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1789839667655,
+      "tag": "0004_broken_doctor_doom",
+      "breakpoints": true
     }
   ]
 }

@@ -13,13 +13,14 @@ import { Plus, Check, X, FolderPlus } from 'lucide-react';
 export interface Category {
   id: number;
   name: string;
+  type?: string | null;
 }
 
 interface CreateExerciseDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   categories: Category[];
-  onExerciseCreated: (exercise: { id: number; name: string; categoryId: number | null }) => void;
+  onExerciseCreated: (exercise: { id: number; name: string; categoryId: number | null; categoryType?: string | null }) => void;
 }
 
 export function CreateExerciseDialog({
@@ -88,10 +89,12 @@ export function CreateExerciseDialog({
       });
 
       if (result.success && result.exercise) {
+        const newCategoryId = result.exercise.categoryId;
         onExerciseCreated({
           id: result.exercise.id,
           name: result.exercise.name,
-          categoryId: result.exercise.categoryId,
+          categoryId: newCategoryId,
+          categoryType: initialCategories.find((c) => c.id === newCategoryId)?.type ?? null,
         });
         setName('');
         setCategoryId('');
