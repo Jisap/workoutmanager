@@ -40,6 +40,7 @@ import { Button } from '@/components/ui/button';
 import { deleteWorkout, deleteWorkoutTemplate, saveAsTemplate, updateWorkout, updateWorkoutTemplate, updateWorkoutSetTimes } from './actions';
 import { type ModalityConfig } from '@/lib/db/schema';
 import { formatModalitySummary } from '@/lib/modality-utils';
+import { formatDurationInput, parseDurationInput } from '@/lib/duration';
 
 // ---------- Types ----------
 export interface WorkoutHistoryItem {
@@ -142,29 +143,13 @@ function groupByMonth(items: WorkoutHistoryItem[]): Map<string, WorkoutHistoryIt
   return map;
 }
 
+// En el historial el vacío se muestra como '—' (el logger usa '' para inputs).
 function formatMMSS(totalSeconds: number | null | undefined): string {
-  if (totalSeconds == null || isNaN(totalSeconds) || totalSeconds < 0) return '—';
-  const m = Math.floor(totalSeconds / 60);
-  const s = Math.round(totalSeconds % 60);
-  return `${m}:${String(s).padStart(2, '0')}`;
+  if (totalSeconds == null) return '—';
+  return formatDurationInput(totalSeconds) || '—';
 }
 
-function parseMMSS(value: string): number | null {
-  const v = value.trim();
-  if (!v) return null;
-  if (v.includes(':')) {
-    const parts = v.split(':').map((p) => p.trim());
-    if (parts.length !== 2) return null;
-    const m = parseInt(parts[0], 10);
-    const s = parseInt(parts[1], 10);
-    if (isNaN(m) || isNaN(s) || m < 0 || s < 0 || s >= 60) return null;
-    return m * 60 + s;
-  }
-  const num = parseFloat(v.replace(',', '.'));
-  if (isNaN(num) || num < 0) return null;
-  if (num >= 30) return Math.round(num);
-  return Math.round(num * 60);
-}
+const parseMMSS = parseDurationInput;
 
 function isRunExerciseName(name: string): boolean {
   const n = name.toLowerCase();

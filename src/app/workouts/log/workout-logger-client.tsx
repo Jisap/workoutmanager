@@ -30,33 +30,10 @@ export const MODALITY_OPTIONS = [
   { id: 'Ladder', label: 'Ladder / Escalera', icon: TrendingUp, desc: 'Escalada progresiva de repeticiones' },
 ];
 
-// Helpers para Tiempo (mm:ss <-> segundos) — usado en Hyrox/Cardio para los 1000m y estaciones
-export function formatDurationInput(totalSeconds: number | null | undefined): string {
-  if (totalSeconds == null || isNaN(totalSeconds) || totalSeconds < 0) return '';
-  const m = Math.floor(totalSeconds / 60);
-  const s = Math.round(totalSeconds % 60);
-  return `${m}:${String(s).padStart(2, '0')}`;
-}
-
-export function parseDurationInput(value: string): number | null {
-  const v = value.trim();
-  if (!v) return null;
-  // Formatos aceptados: "4:30", "04:30", "270" (segundos), "4.5" (minutos decimales)
-  if (v.includes(':')) {
-    const parts = v.split(':').map((p) => p.trim());
-    if (parts.length !== 2) return null;
-    const m = parseInt(parts[0], 10);
-    const s = parseInt(parts[1], 10);
-    if (isNaN(m) || isNaN(s) || m < 0 || s < 0 || s >= 60) return null;
-    return m * 60 + s;
-  }
-  const num = parseFloat(v.replace(',', '.'));
-  if (isNaN(num) || num < 0) return null;
-  // Si es un número grande (>= 30) lo interpretamos como segundos, si no como minutos decimales
-  // Ej: "270" -> 270s (4:30) · "4.5" -> 4.5min = 270s
-  if (num >= 30) return Math.round(num);
-  return Math.round(num * 60);
-}
+// Helpers para Tiempo (mm:ss <-> segundos) — implementación única en `@/lib/duration`.
+// Se reexportan aquí para no romper imports existentes.
+import { formatDurationInput, parseDurationInput } from '@/lib/duration';
+export { formatDurationInput, parseDurationInput };
 
 // Tipos locales para el estado
 export type LocalSet = {
@@ -77,16 +54,10 @@ export type LocalExercise = {
   sets: LocalSet[];
 };
 
-export type AvailableExercise = {
-  id: number;
-  name: string;
-  categoryId: number | null;
-};
-
-export type WorkoutTypeOption = {
-  id: number;
-  name: string;
-};
+import type { AvailableExercise, WorkoutTypeOption } from '@/lib/types';
+// Reexport para no romper `hyrox-race-builder` / `crossfit-wod-picker`, que
+// importan estos tipos desde aquí.
+export type { AvailableExercise, WorkoutTypeOption };
 
 interface WorkoutLoggerClientProps {
   availableExercises: AvailableExercise[];
@@ -94,7 +65,7 @@ interface WorkoutLoggerClientProps {
   workoutTypes?: WorkoutTypeOption[];
   mode: string;
   typeId?: string;
-  initialExercisesState?: any[];
+  initialExercisesState?: LocalExercise[];
   initialName?: string;
   initialNotes?: string;
   initialModality?: string | null;
@@ -218,6 +189,8 @@ export function WorkoutLoggerClient({
   // Guardar como plantilla (secundario al finalizar entrenamiento)
   const [saveAsTemplate, setSaveAsTemplate] = useState(false);
   const [templateName, setTemplateName] = useState(initialName);
+  // Error no bloqueante (sustituye a `alert()` para no interrumpir el flujo)
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // Sincronizar initialName si cambia
   useEffect(() => {
@@ -512,11 +485,11 @@ export function WorkoutLoggerClient({
     setExercises((prev) => prev.filter((ex) => ex.id !== exerciseId));
   };
 
-  // Nombres ocupados (minúsculas) para uniquificar en cliente sin roundtrip
+  // Nombres ocupados (minúsculas) para uniquificar en cliente sin roundtrip.
+  // Se resincroniza si la prop cambia (antes se congelaba con deps `[]`).
   const takenNamesRef = useMemo(
     () => new Set(existingWorkoutNames.map((n) => n.toLowerCase())),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    []
+    [existingWorkoutNames]
   );
   const makeUniqueClientName = (base: string): string => {
     const clean = base.trim() || 'Entrenamiento';
@@ -563,8 +536,9 @@ export function WorkoutLoggerClient({
   };
 
   const handleDirectSave = async () => {
+    setSaveError(null);
     if (exercises.length === 0) {
-      alert('Añade al menos un ejercicio antes de guardar');
+      setSaveError('Añade al menos un ejercicio antes de guardar');
       return;
     }
     setIsSaving(true);
@@ -598,13 +572,14 @@ export function WorkoutLoggerClient({
       router.push('/workouts');
     } catch (error) {
       console.error(error);
-      alert('Error al guardar el entrenamiento');
+      setSaveError(error instanceof Error ? error.message : 'Error al guardar el entrenamiento');
     } finally {
       setIsSaving(false);
     }
   };
 
   const handleFinish = async () => {
+    setSaveError(null);
     setIsSaving(true);
     try {
       // Score AMRAP/EMOM (rondas + reps): solo se adjunta al finalizar, nunca a plantillas
@@ -656,19 +631,20 @@ export function WorkoutLoggerClient({
       router.push('/dashboard');
     } catch (error) {
       console.error(error);
-      alert('Error al guardar el entrenamiento');
+      setSaveError(error instanceof Error ? error.message : 'Error al guardar el entrenamiento');
     } finally {
       setIsSaving(false);
     }
   };
 
   const handleSaveDirectTemplate = async (andStartWorkout: boolean = false) => {
+    setSaveError(null);
     if (!directTemplateName.trim()) {
-      alert('Por favor introduce un nombre para la plantilla');
+      setSaveError('Por favor introduce un nombre para la plantilla');
       return;
     }
     if (exercises.length === 0) {
-      alert('Añade al menos un ejercicio para guardar la plantilla');
+      setSaveError('Añade al menos un ejercicio para guardar la plantilla');
       return;
     }
 
@@ -720,7 +696,7 @@ export function WorkoutLoggerClient({
       }
     } catch (error) {
       console.error(error);
-      alert('Error al guardar la plantilla');
+      setSaveError(error instanceof Error ? error.message : 'Error al guardar la plantilla');
     } finally {
       setIsSavingTemplate(false);
     }
@@ -728,6 +704,21 @@ export function WorkoutLoggerClient({
 
   return (
     <div className="mx-auto w-full max-w-2xl lg:max-w-4xl xl:max-w-5xl space-y-6 pb-32">
+      {saveError && (
+        <div
+          role="alert"
+          className="p-3.5 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/60 rounded-2xl text-xs text-red-800 dark:text-red-200 flex items-center justify-between gap-3"
+        >
+          <span>{saveError}</span>
+          <button
+            type="button"
+            onClick={() => setSaveError(null)}
+            className="font-bold underline underline-offset-2 shrink-0 cursor-pointer"
+          >
+            Cerrar
+          </button>
+        </div>
+      )}
       {/* Barra superior con título y controles */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="space-y-1 min-w-0 flex-1">

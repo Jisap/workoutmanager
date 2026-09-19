@@ -2,10 +2,59 @@
 
 import { db } from '@/lib/db';
 import { workoutTemplates, templateExercises, workouts, workoutExercises, sets, exercises, exerciseCategories, type ModalityConfig } from '@/lib/db/schema';
+import { isModality } from '@/lib/db/schema';
+import type { SaveWorkoutInput, TemplateSourceWorkout } from '@/lib/types';
 import { auth } from '@clerk/nextjs/server';
 import { eq, or, isNull, desc, asc, and, sql, inArray } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { cache } from 'react';
+import { calculateStreaks, normalizeDay } from '@/lib/streak';
+
+// ─── Validación de servidor (los Server Actions no pueden confiar en el cliente) ───
+function assertValidWorkoutInput(data: SaveWorkoutInput) {
+  const name = data.name?.trim();
+  if (!name) throw new Error('El nombre del entrenamiento no puede estar vacío');
+  if (!Number.isInteger(data.typeId) || data.typeId <= 0) throw new Error('Tipo de entrenamiento inválido');
+  if (!Number.isInteger(data.totalTimeSeconds) || data.totalTimeSeconds < 0 || data.totalTimeSeconds > 12 * 3600) {
+    throw new Error('Duración total inválida');
+  }
+  if (data.modality != null && data.modality !== '' && !isModality(data.modality)) {
+    throw new Error(`Modalidad inválida: ${data.modality}`);
+  }
+  if (!Array.isArray(data.exercises) || data.exercises.length === 0) {
+    throw new Error('Añade al menos un ejercicio');
+  }
+  if (data.exercises.length > 100) throw new Error('Demasiados ejercicios (máx 100)');
+  for (const ex of data.exercises) {
+    if (!Number.isInteger(ex.exerciseId) || ex.exerciseId <= 0) throw new Error('Ejercicio inválido');
+    if (!Number.isInteger(ex.orderIndex) || ex.orderIndex < 0) throw new Error('Orden de ejercicio inválido');
+    if (!Array.isArray(ex.sets) || ex.sets.length === 0 || ex.sets.length > 50) {
+      throw new Error('Cada ejercicio debe tener entre 1 y 50 series');
+    }
+    for (const s of ex.sets) {
+      if (!Number.isInteger(s.repCount) || s.repCount < 0 || s.repCount > 10000) throw new Error('Reps inválidas');
+      for (const [k, v, max] of [
+        ['peso', s.weight, 1000],
+        ['distancia', s.distance, 100000],
+        ['duración', s.durationSeconds, 5 * 3600],
+        ['RPE', s.rpe, 10],
+      ] as const) {
+        if (v != null && (typeof v !== 'number' || Number.isNaN(v) || v < 0 || v > max)) {
+          throw new Error(`${k} inválido`);
+        }
+      }
+    }
+  }
+}
+
+function isUniqueViolation(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code?: unknown }).code === '23505'
+  );
+}
 
 // Comprueba si el usuario ya tiene un entrenamiento con ese nombre
 // (comparación insensible a mayúsculas, una sola fila como máximo).
@@ -44,32 +93,17 @@ export const getUserAnalyticsDataset = cache(async (userId: string) => {
   });
 });
 
-export async function saveWorkout(data: {
-  workoutId?: number | null;
-  typeId: number;
-  name: string;
-  modality?: string | null;
-  modalityConfig?: ModalityConfig | null;
-  totalTimeSeconds: number;
-  notes: string;
-  exercises: {
-    exerciseId: number;
-    orderIndex: number;
-    sets: {
-      repCount: number;
-      weight: number | null;
-      distance: number | null;
-      durationSeconds: number | null;
-      rpe: number | null;
-      isRx: boolean;
-    }[];
-  }[];
-}) {
+export async function saveWorkout(data: SaveWorkoutInput) {
   const { userId } = await auth();
   if (!userId) throw new Error('No autorizado');
+  assertValidWorkoutInput(data);
 
   try {
     let targetWorkoutId: number;
+    // Si creamos el workout y luego falla el insert de ejercicios/series,
+    // lo eliminamos para no dejar un workout huérfano (neon-http no soporta
+    // transacciones interactivas, así que se compensa manualmente).
+    let createdWorkoutId: number | null = null;
 
     if (data.workoutId) {
       // 1a. Verificar pertenencia y actualizar entrenamiento existente
@@ -118,67 +152,91 @@ export async function saveWorkout(data: {
         finalName = `${baseName} (${n++})`;
       }
 
-      const [newWorkout] = await db
-        .insert(workouts)
-        .values({
-          userId,
-          typeId: data.typeId,
-          name: finalName,
-          modality: data.modality || null,
-          modalityConfig: data.modalityConfig || null,
-          totalTimeSeconds: data.totalTimeSeconds,
-          notes: data.notes,
-          startTime: new Date(Date.now() - data.totalTimeSeconds * 1000), // Calculamos start time hacia atrás
-          endTime: new Date(),
-        })
-        .returning();
+      // Inserción con reintento ante 23505 (índice único user+lower(nombre)):
+      // cubre la carrera entre el pre-chequeo y el insert (dos pestañas).
+      let newWorkout: { id: number } | undefined;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          [newWorkout] = await db
+            .insert(workouts)
+            .values({
+              userId,
+              typeId: data.typeId,
+              name: finalName,
+              modality: data.modality || null,
+              modalityConfig: data.modalityConfig || null,
+              totalTimeSeconds: data.totalTimeSeconds,
+              notes: data.notes,
+              startTime: new Date(Date.now() - data.totalTimeSeconds * 1000), // Calculamos start time hacia atrás
+              endTime: new Date(),
+            })
+            .returning({ id: workouts.id });
+          break;
+        } catch (e) {
+          if (isUniqueViolation(e)) {
+            finalName = `${baseName} (${n++})`;
+            continue;
+          }
+          throw e;
+        }
+      }
+      if (!newWorkout) throw new Error('No se pudo generar un nombre único');
 
       targetWorkoutId = newWorkout.id;
+      createdWorkoutId = newWorkout.id;
     }
 
-    // 2. Insertar ejercicios y sus series en 2 únicas consultas
-    // (1 round-trip por tabla en lugar de 2×N en serie; con neon-http
-    // cada await es un viaje de red independiente).
-    const insertedExercises =
-      data.exercises.length > 0
-        ? await db
-            .insert(workoutExercises)
-            .values(
-              data.exercises.map((ex) => ({
-                workoutId: targetWorkoutId,
-                exerciseId: ex.exerciseId,
-                orderIndex: ex.orderIndex,
-              }))
-            )
-            .returning()
-        : [];
+    try {
+      // 2. Insertar ejercicios y sus series en 2 únicas consultas
+      // (1 round-trip por tabla en lugar de 2×N en serie; con neon-http
+      // cada await es un viaje de red independiente).
+      const insertedExercises =
+        data.exercises.length > 0
+          ? await db
+              .insert(workoutExercises)
+              .values(
+                data.exercises.map((ex) => ({
+                  workoutId: targetWorkoutId,
+                  exerciseId: ex.exerciseId,
+                  orderIndex: ex.orderIndex,
+                }))
+              )
+              .returning()
+          : [];
 
-    // Asignar cada tanda de series a su ejercicio (cola por clave para
-    // tolerar duplicados de exerciseId/orderIndex).
-    const idsByKey = new Map<string, number[]>();
-    for (const we of insertedExercises) {
-      const key = `${we.exerciseId}:${we.orderIndex}`;
-      const queue = idsByKey.get(key) ?? [];
-      queue.push(we.id);
-      idsByKey.set(key, queue);
-    }
+      // Asignar cada tanda de series a su ejercicio (cola por clave para
+      // tolerar duplicados de exerciseId/orderIndex).
+      const idsByKey = new Map<string, number[]>();
+      for (const we of insertedExercises) {
+        const key = `${we.exerciseId}:${we.orderIndex}`;
+        const queue = idsByKey.get(key) ?? [];
+        queue.push(we.id);
+        idsByKey.set(key, queue);
+      }
 
-    const allSets = data.exercises.flatMap((ex) => {
-      const workoutExerciseId = idsByKey.get(`${ex.exerciseId}:${ex.orderIndex}`)?.shift();
-      if (workoutExerciseId == null) return [];
-      return ex.sets.map((set) => ({
-        workoutExerciseId,
-        repCount: set.repCount,
-        weight: set.weight,
-        distance: set.distance,
-        durationSeconds: set.durationSeconds,
-        rpe: set.rpe,
-        isRx: set.isRx,
-      }));
-    });
+      const allSets = data.exercises.flatMap((ex) => {
+        const workoutExerciseId = idsByKey.get(`${ex.exerciseId}:${ex.orderIndex}`)?.shift();
+        if (workoutExerciseId == null) return [];
+        return ex.sets.map((set) => ({
+          workoutExerciseId,
+          repCount: set.repCount,
+          weight: set.weight,
+          distance: set.distance,
+          durationSeconds: set.durationSeconds,
+          rpe: set.rpe,
+          isRx: set.isRx,
+        }));
+      });
 
-    if (allSets.length > 0) {
-      await db.insert(sets).values(allSets);
+      if (allSets.length > 0) {
+        await db.insert(sets).values(allSets);
+      }
+    } catch (e) {
+      // Compensación: si el workout es nuevo y falló el detalle, borrarlo.
+      if (createdWorkoutId != null) {
+        await db.delete(workouts).where(and(eq(workouts.id, createdWorkoutId), eq(workouts.userId, userId)));
+      }
+      throw e;
     }
 
     revalidatePath('/workouts');
@@ -188,17 +246,23 @@ export async function saveWorkout(data: {
     return { success: true, workoutId: targetWorkoutId };
   } catch (error) {
     console.error('Error guardando entrenamiento:', error);
+    // Los errores de validación/origen conocido se propagan tal cual;
+    // el resto se enmascara para no filtrar detalles de BD.
+    if (error instanceof Error && error.message !== 'No se pudo generar un nombre único') {
+      const known = /vacío|inválid|añade|demasiados|ejercicio|orden|series|modalidad|duración|reps|peso|distancia|RPE|nombre único/i;
+      if (known.test(error.message)) throw error;
+    }
     throw new Error('No se pudo guardar el entrenamiento');
   }
 }
 
 export async function getAvailableExercises(userIdParam?: string) {
-  let userId = userIdParam;
-  if (!userId) {
-    const authData = await auth();
-    userId = authData.userId ?? undefined;
-  }
-  if (!userId) throw new Error('No autorizado');
+  const { userId: authedUserId } = await auth();
+  if (!authedUserId) throw new Error('No autorizado');
+  // Si se pasa un userId explícito debe ser el propio (las Server Actions son
+  // invocables desde el cliente: nunca confiar en un id ajeno).
+  if (userIdParam && userIdParam !== authedUserId) throw new Error('No autorizado');
+  const userId = userIdParam ?? authedUserId;
 
   const [exerciseList, userExerciseStats] = await Promise.all([
     db
@@ -294,12 +358,10 @@ export async function createCustomCategory(data: {
 }
 
 export async function getAvailableCategories(userIdParam?: string) {
-  let userId = userIdParam;
-  if (!userId) {
-    const authData = await auth();
-    userId = authData.userId ?? undefined;
-  }
-  if (!userId) throw new Error('No autorizado');
+  const { userId: authedUserId } = await auth();
+  if (!authedUserId) throw new Error('No autorizado');
+  if (userIdParam && userIdParam !== authedUserId) throw new Error('No autorizado');
+  const userId = userIdParam ?? authedUserId;
 
   return db
     .select({
@@ -313,10 +375,10 @@ export async function getAvailableCategories(userIdParam?: string) {
     .orderBy(asc(exerciseCategories.name));
 }
 
-// Obtener datos de una plantilla
-export async function getTemplateData(templateId: number) {
+// Obtener datos de una plantilla (con scope al usuario: el id viene de la URL).
+export async function getTemplateData(templateId: number, userId: string) {
   const template = await db.query.workoutTemplates.findFirst({
-    where: eq(workoutTemplates.id, templateId),
+    where: and(eq(workoutTemplates.id, templateId), eq(workoutTemplates.userId, userId)),
     with: {
       exercises: {
         with: {
@@ -330,9 +392,10 @@ export async function getTemplateData(templateId: number) {
 }
 
 // Obtener datos de un entrenamiento específico para repetirlo
-export async function getWorkoutData(workoutId: number) {
+// (con scope al usuario: el id viene de la URL).
+export async function getWorkoutData(workoutId: number, userId: string) {
   const workout = await db.query.workouts.findFirst({
-    where: eq(workouts.id, workoutId),
+    where: and(eq(workouts.id, workoutId), eq(workouts.userId, userId)),
     with: {
       exercises: {
         with: {
@@ -408,7 +471,7 @@ export async function saveAsTemplate(data: {
 
   // 3. Copiar los ejercicios a la plantilla (guardando cada serie para preservar repeticiones y pesos)
   if (workout.exercises.length > 0) {
-    const rowsToInsert: any[] = [];
+    const rowsToInsert: typeof templateExercises.$inferInsert[] = [];
     let orderCounter = 0;
 
     for (const ex of workout.exercises) {
@@ -421,7 +484,7 @@ export async function saveAsTemplate(data: {
             targetReps: s.repCount || ex.targetReps || null,
             targetWeight: s.weight ? Number(s.weight) : (ex.targetWeight ? Number(ex.targetWeight) : null),
             targetDistance: s.distance || ex.targetDistance || null,
-            timeCapSeconds: s.durationSeconds || ex.targetDurationSeconds || null,
+            targetDurationSeconds: s.durationSeconds || ex.targetDurationSeconds || null,
           });
         }
       } else {
@@ -432,7 +495,7 @@ export async function saveAsTemplate(data: {
           targetReps: ex.targetReps || null,
           targetWeight: ex.targetWeight ? Number(ex.targetWeight) : null,
           targetDistance: ex.targetDistance || null,
-          timeCapSeconds: ex.targetDurationSeconds || null,
+          targetDurationSeconds: ex.targetDurationSeconds || null,
         });
       }
     }
@@ -483,7 +546,7 @@ export async function saveAsTemplate(data: {
   };
 }
 
-function rowsCount(exercises: any[]) {
+function rowsCount(exercises: { sets?: { length: number } | null }[]): number {
   return exercises.reduce((acc, e) => acc + (e.sets?.length || 1), 0);
 }
 
@@ -525,7 +588,7 @@ export async function createDirectTemplate(data: {
         orderIndex: ex.orderIndex ?? idx,
         targetReps: ex.targetReps ?? null,
         targetWeight: ex.targetWeight ?? null,
-        timeCapSeconds: ex.targetDurationSeconds ?? null,
+        targetDurationSeconds: ex.targetDurationSeconds ?? null,
       }))
     );
   }
@@ -769,48 +832,40 @@ export async function getConsistencyData(userId: string) {
 
   // 1. Mapa de calor: contar entrenamientos por día (formato "YYYY-MM-DD")
   const dailyCounts: Record<string, number> = {};
-  const workoutsByDate: Record<string, any[]> = {};
-  let currentStreak = 0;
-  let longestStreak = 0;
-  let tempStreak = 0;
-
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  // Ordenar fechas únicas para calcular rachas
-  const uniqueDates = [...new Set(allWorkouts.map(w => {
-    const d = new Date(w.startTime);
-    d.setHours(0, 0, 0, 0);
-    return d.getTime();
-  }))].sort((a, b) => a - b);
-
-  // Calcular rachas
-  for (let i = 0; i < uniqueDates.length; i++) {
-    const currentDate = new Date(uniqueDates[i]);
-    const prevDate = i > 0 ? new Date(uniqueDates[i - 1]) : null;
-
-    if (prevDate) {
-      const diffDays = Math.round((currentDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24));
-      if (diffDays === 1) {
-        tempStreak++;
-      } else {
-        if (tempStreak > longestStreak) longestStreak = tempStreak;
-        tempStreak = 1;
-      }
-    } else {
-      tempStreak = 1;
-    }
+  interface HeatmapWorkout {
+    id: number;
+    name: string;
+    notes: string | null;
+    modality: string | null;
+    modalityConfig: ModalityConfig | null;
+    startTime: Date;
+    totalTimeSeconds: number | null;
+    typeId: number;
+    typeName: string;
+    totalVolume: number;
+    totalSetsCount: number;
+    exercises: {
+      name: string;
+      orderIndex: number;
+      sets: {
+        setNumber: number;
+        weight: number | null;
+        repCount: number | null;
+        rpe: number | null;
+        distance: number | null;
+        durationSeconds: number | null;
+      }[];
+      maxWeight: number;
+      volume: number;
+    }[];
   }
-  if (tempStreak > longestStreak) longestStreak = tempStreak;
+  const workoutsByDate: Record<string, HeatmapWorkout[]> = {};
 
-  // Calcular racha actual (si el último entrenamiento fue hoy o ayer)
-  if (uniqueDates.length > 0) {
-    const lastWorkoutDate = new Date(uniqueDates[uniqueDates.length - 1]);
-    const diffFromToday = Math.round((today.getTime() - lastWorkoutDate.getTime()) / (1000 * 60 * 60 * 24));
-    if (diffFromToday <= 1) {
-      currentStreak = tempStreak;
-    }
-  }
+  // Rachas vía helper único (antes lógica duplicada con getAdvancedProgressData).
+  const uniqueDates = [...new Set(allWorkouts.map((w) => normalizeDay(new Date(w.startTime))))].sort(
+    (a, b) => a - b
+  );
+  const { currentStreak, longestStreak } = calculateStreaks(uniqueDates);
 
   // Llenar dailyCounts y workoutsByDate para el heatmap interactivo
   for (const w of allWorkouts) {
@@ -1010,18 +1065,8 @@ export async function getWorkoutHistory(userId: string, limit: number = 200) {
 }
 
 // Workout fuente mínimo necesario para resolver plantillas creadas desde sesiones.
-export interface TemplateSourceWorkout {
-  id: number;
-  exercises: {
-    exerciseId: number;
-    exercise: { name: string };
-    sets: {
-      repCount: number | null;
-      weight: number | null;
-      durationSeconds: number | null;
-    }[];
-  }[];
-}
+// (Tipo canónico en `@/lib/types`; se reexporta para compatibilidad.)
+export type { TemplateSourceWorkout } from '@/lib/types';
 
 // Resuelve los workouts fuente de las plantillas reutilizando los ya cargados
 // (p. ej. el historial de la página) y trayendo solo los ausentes con un único
@@ -1032,7 +1077,7 @@ async function resolveSourceWorkoutsMap(
   sourceWorkoutIds: number[],
   preloaded: TemplateSourceWorkout[]
 ) {
-  const sourceWorkoutsMap = new Map<number, any>();
+  const sourceWorkoutsMap = new Map<number, TemplateSourceWorkout>();
   for (const w of preloaded) sourceWorkoutsMap.set(w.id, w);
 
   const missingIds = sourceWorkoutIds.filter((id) => !sourceWorkoutsMap.has(id));
@@ -1106,9 +1151,9 @@ async function mapTemplateItems(
     // usar las series reales del workout fuente
     if (sw && sw.exercises && sw.exercises.length > 0 && !hasExplicitTemplateReps) {
       for (const we of sw.exercises) {
-        const repsList = we.sets.map((s: any) => s.repCount ?? null);
-        const weightsList = we.sets.map((s: any) => s.weight ? Number(s.weight) : null);
-        const durationsList = we.sets.map((s: any) => s.durationSeconds ?? null);
+        const repsList = we.sets.map((s: { repCount: number | null }) => s.repCount ?? null);
+        const weightsList = we.sets.map((s: { weight: number | string | null }) => (s.weight != null ? Number(s.weight) : null));
+        const durationsList = we.sets.map((s: { durationSeconds: number | null }) => s.durationSeconds ?? null);
 
         exerciseMap.set(we.exerciseId, {
           exerciseId: we.exerciseId,
@@ -1124,14 +1169,14 @@ async function mapTemplateItems(
         if (existing) {
           existing.allReps.push(te.targetReps ?? null);
           existing.allWeights.push(te.targetWeight ? Number(te.targetWeight) : null);
-          existing.allDurations.push(te.timeCapSeconds ?? null);
+          existing.allDurations.push(te.targetDurationSeconds ?? null);
         } else {
           exerciseMap.set(te.exerciseId, {
             exerciseId: te.exerciseId,
             name: te.exercise.name,
             allReps: [te.targetReps ?? null],
             allWeights: [te.targetWeight ? Number(te.targetWeight) : null],
-            allDurations: [te.timeCapSeconds ?? null],
+            allDurations: [te.targetDurationSeconds ?? null],
           });
         }
       }
@@ -1367,10 +1412,14 @@ export async function deleteWorkoutTemplate(templateId: number) {
 // ==========================================
 export async function getAdvancedProgressData(userId: string) {
   // El dataset de workouts se reutiliza memoizado por request
-  // (ver getUserAnalyticsDataset); las categorías van en paralelo.
+  // (ver getUserAnalyticsDataset); las categorías van en paralelo,
+  // con scope al usuario (globales + propias).
   const [allWorkouts, allCategories] = await Promise.all([
     getUserAnalyticsDataset(userId),
-    db.select().from(exerciseCategories),
+    db
+      .select()
+      .from(exerciseCategories)
+      .where(or(isNull(exerciseCategories.userId), eq(exerciseCategories.userId, userId))),
   ]);
 
   const categoryNameMap = new Map<number, string>(
@@ -1414,45 +1463,15 @@ export async function getAdvancedProgressData(userId: string) {
     dayCountsByIndex[dayIndex] = (dayCountsByIndex[dayIndex] || 0) + 1;
 
     // Registrar fecha única normalizada para racha
-    const normalized = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+    const normalized = normalizeDay(d);
     if (!uniqueDateTimes.includes(normalized)) {
       uniqueDateTimes.push(normalized);
     }
   }
 
-  // Ordenar fechas para racha
+  // Rachas vía helper único (misma lógica que getConsistencyData).
   uniqueDateTimes.sort((a, b) => a - b);
-  let currentStreak = 0;
-  let longestStreak = 0;
-  let tempStreak = 0;
-
-  const todayNormalized = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-
-  for (let i = 0; i < uniqueDateTimes.length; i++) {
-    const current = uniqueDateTimes[i];
-    const prev = i > 0 ? uniqueDateTimes[i - 1] : null;
-
-    if (prev) {
-      const diffDays = Math.round((current - prev) / (1000 * 60 * 60 * 24));
-      if (diffDays === 1) {
-        tempStreak++;
-      } else {
-        if (tempStreak > longestStreak) longestStreak = tempStreak;
-        tempStreak = 1;
-      }
-    } else {
-      tempStreak = 1;
-    }
-  }
-  if (tempStreak > longestStreak) longestStreak = tempStreak;
-
-  if (uniqueDateTimes.length > 0) {
-    const lastDate = uniqueDateTimes[uniqueDateTimes.length - 1];
-    const diffFromToday = Math.round((todayNormalized - lastDate) / (1000 * 60 * 60 * 24));
-    if (diffFromToday <= 1) {
-      currentStreak = tempStreak;
-    }
-  }
+  const { currentStreak, longestStreak } = calculateStreaks(uniqueDateTimes, now);
 
   // Formatear distribución semanal empezando en Lunes (1 a 6, luego 0)
   const mondayToSundayIndices = [1, 2, 3, 4, 5, 6, 0];
@@ -1916,7 +1935,11 @@ export async function getAdvancedProgressData(userId: string) {
       else scaledWodsCount++;
 
       // Comprobar time cap si existe en la configuración de la modalidad
-      const capMins = w.modalityConfig?.timeCapMinutes || (w.modalityConfig as any)?.timeCap;
+      // (se tolera la clave legada `timeCap` de configs antiguas guardadas en jsonb)
+      const legacyCap = (w.modalityConfig as { timeCap?: unknown } | null)?.timeCap;
+      const capMins =
+        w.modalityConfig?.timeCapMinutes ??
+        (typeof legacyCap === 'number' ? legacyCap : undefined);
       if (capMins && typeof capMins === 'number' && capMins > 0) {
         wodsWithCapCount++;
         const totalSecs = w.totalTimeSeconds || (w.totalTimeSeconds ? w.totalTimeSeconds : 0);
@@ -2018,7 +2041,7 @@ export async function getAdvancedProgressData(userId: string) {
         totalTimeSeconds: w.totalTimeSeconds || null,
         notes: w.notes || null,
         segments: orderedExercises.flatMap((we) =>
-          (we.sets || []).map((s: any) => ({
+          (we.sets || []).map((s: { distance: number | null; durationSeconds: number | null; weight: number | string | null; repCount: number | null }) => ({
             name: we.exercise?.name || 'Tramo',
             orderIndex: we.orderIndex ?? 0,
             distance: s.distance ?? null,

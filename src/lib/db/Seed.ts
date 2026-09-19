@@ -180,12 +180,13 @@ async function seed() {
     let updatedCount = 0;
     let removedDuplicatesCount = 0;
 
+    const toCreate: { name: string; categoryId: number | undefined; isCustom: boolean; userId: null }[] = [];
     for (const ex of allExercises) {
         const matches = existingExercises.filter(e => e.name === ex.name);
 
         if (matches.length === 0) {
-            // No existe -> crearlo
-            await db.insert(exercises).values({
+            // No existe -> se acumula para un único insert por lotes
+            toCreate.push({
                 name: ex.name,
                 categoryId: ex.categoryId,
                 isCustom: false,
@@ -215,6 +216,11 @@ async function seed() {
                 }
             }
         }
+    }
+
+    // Un único round-trip para todas las creaciones (antes: 1 insert por ejercicio).
+    if (toCreate.length > 0) {
+        await db.insert(exercises).values(toCreate);
     }
 
     console.log(`✅ Ejercicios: ${createdCount} creados, ${updatedCount} actualizados, ${removedDuplicatesCount} duplicados eliminados.`);

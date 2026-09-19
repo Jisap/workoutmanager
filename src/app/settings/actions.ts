@@ -90,11 +90,9 @@ export async function getWorkoutTypes() {
 
 /** Obtener todas las categorías de ejercicios (Globales + Personalizadas del usuario) con conteo de ejercicios */
 export async function getExerciseCategories(userIdParam?: string) {
-  let userId = userIdParam;
-  if (!userId) {
-    const authData = await auth();
-    userId = authData.userId ?? undefined;
-  }
+  const { userId: authedUserId } = await auth();
+  if (userIdParam && userIdParam !== authedUserId) throw new Error('No autorizado');
+  const userId = userIdParam ?? authedUserId;
 
   // Lista y conteo son independientes: se lanzan en paralelo.
   const [categoryList, exerciseCounts] = await Promise.all([

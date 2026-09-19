@@ -1,5 +1,8 @@
 import { clerkMiddleware } from '@clerk/nextjs/server';
 
+// Sin cheques de auth por ruta aquí (createRouteMatcher está deprecado en
+// Clerk): cada página/layout/Server Action que toca datos protegidos verifica
+// `auth()` por sí misma (resource-based auth).
 export default clerkMiddleware();
 
 export const config = {

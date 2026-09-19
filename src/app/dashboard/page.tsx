@@ -2,6 +2,7 @@ import { db } from '@/lib/db';
 import { workouts, workoutTypes } from '@/lib/db/schema';
 import { eq, desc } from 'drizzle-orm';
 import { auth } from '@clerk/nextjs/server';
+import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,7 +15,7 @@ export default async function DashboardPage() {
     const { userId } = await auth();
 
     if (!userId) {
-        return <div>No autenticado</div>;
+        redirect('/sign-in');
     }
 
     // Obtener últimos entrenamientos y datos de consistencia en paralelo

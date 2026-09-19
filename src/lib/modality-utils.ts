@@ -1,7 +1,7 @@
-import { ModalityConfig } from './db/schema';
+import { ModalityConfig, type Modality } from './db/schema';
 
 export function formatModalitySummary(
-  modality: string | null | undefined,
+  modality: Modality | string | null | undefined,
   config: ModalityConfig | null | undefined
 ): string | null {
   if (!modality) return null;
@@ -45,7 +45,7 @@ export function formatModalitySummary(
 }
 
 export function calculateModalityEstimatedDuration(
-  modality: string | null | undefined,
+  modality: Modality | string | null | undefined,
   config: ModalityConfig | null | undefined
 ): number | null {
   if (!modality || !config) return null;

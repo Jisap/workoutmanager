@@ -71,7 +71,7 @@ export default async function WorkoutLogPage({
   }
 
   if (mode === 'template' && templateId) {
-    const template = await getTemplateData(templateId);
+    const template = await getTemplateData(templateId, userId);
     if (template) {
       workoutName = makeUniqueName(`${template.name} · ${todayStr}`);
       currentTypeId = template.typeId || 1;
@@ -113,7 +113,7 @@ export default async function WorkoutLogPage({
     }
   } else if (mode === 'repeat' || mode === 'resume' || mode === 'edit') {
     const targetWorkout = workoutId
-      ? await getWorkoutData(workoutId)
+      ? await getWorkoutData(workoutId, userId)
       : await getLastWorkoutData(userId);
 
     if (targetWorkout) {

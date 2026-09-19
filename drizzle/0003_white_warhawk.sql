@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "workouts_user_id_lower_name_uniq" ON "workouts" USING btree ("user_id",lower("name"));

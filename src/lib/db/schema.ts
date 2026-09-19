@@ -1,5 +1,23 @@
-import { pgTable, serial, text, integer, timestamp, boolean, real, jsonb, index } from 'drizzle-orm/pg-core';
-import { relations } from 'drizzle-orm';
+import { pgTable, serial, text, integer, timestamp, boolean, real, jsonb, index, uniqueIndex } from 'drizzle-orm/pg-core';
+import { relations, sql } from 'drizzle-orm';
+
+// ─── Modalidades soportadas (única fuente de verdad a nivel DB) ───
+export const MODALITIES = [
+  'For Time',
+  'AMRAP',
+  'EMOM',
+  'AFAP',
+  'TABATA',
+  'HIIT',
+  'Chipper',
+  'Ladder',
+] as const;
+
+export type Modality = (typeof MODALITIES)[number];
+
+export function isModality(value: unknown): value is Modality {
+  return typeof value === 'string' && (MODALITIES as readonly string[]).includes(value);
+}
 
 export interface ModalityConfig {
   timeCapMinutes?: number;
@@ -69,6 +87,9 @@ export const workoutTemplates = pgTable('workout_templates', {
 ]);
 
 // 5. Ejercicios dentro de una Plantilla
+// NOTA: la propiedad TS se llama `targetDurationSeconds` para unificar el
+// vocabulario con `workoutExercises.targetDurationSeconds`. La columna SQL
+// sigue siendo `time_cap_seconds` (sin migración necesaria).
 export const templateExercises = pgTable('template_exercises', {
   id: serial('id').primaryKey(),
   templateId: integer('template_id').references(() => workoutTemplates.id, { onDelete: 'cascade' }).notNull(),
@@ -77,7 +98,7 @@ export const templateExercises = pgTable('template_exercises', {
   targetReps: integer('target_reps'),
   targetWeight: real('target_weight'),
   targetDistance: integer('target_distance'),
-  timeCapSeconds: integer('time_cap_seconds'),
+  targetDurationSeconds: integer('time_cap_seconds'),
 }, (t) => [
   index('template_exercises_template_id_idx').on(t.templateId),
 ]);
@@ -100,6 +121,10 @@ export const workouts = pgTable('workouts', {
   index('workouts_user_id_idx').on(t.userId),
   index('workouts_user_id_start_time_idx').on(t.userId, t.startTime),
   index('workouts_type_id_idx').on(t.typeId),
+  // Unicidad de nombre por usuario (insensible a mayúsculas).
+  // El código además uniquifica en app; este índice es la garantía final
+  // frente a carreras entre pestañas/dispositivos.
+  uniqueIndex('workouts_user_id_lower_name_uniq').on(t.userId, sql`lower(${t.name})`),
 ]);
 
 // 7. Ejercicios dentro de un Entrenamiento Realizado
