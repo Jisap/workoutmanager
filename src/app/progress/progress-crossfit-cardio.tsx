@@ -1006,6 +1006,7 @@ export function ProgressCrossfitCardio({ crossfit, hyroxCardio }: ProgressCrossf
                 })}
                 {filteredBenchmarks.length > 0 && (
                   <div className="col-span-full flex items-center justify-center gap-1.5 pt-1 flex-wrap">
+                    {benchmarkTotalPages > 1 && (
                     <button
                       type="button"
                       disabled={benchmarkSafePage <= 1}
@@ -1015,7 +1016,8 @@ export function ProgressCrossfitCardio({ crossfit, hyroxCardio }: ProgressCrossf
                     >
                       <ChevronLeft className="w-4 h-4" />
                     </button>
-                    {benchmarkPageItems.map((item, idx) =>
+                    )}
+                    {benchmarkTotalPages > 1 && benchmarkPageItems.map((item, idx) =>
                       typeof item === 'number' ? (
                         <button
                           key={item}
@@ -1035,6 +1037,7 @@ export function ProgressCrossfitCardio({ crossfit, hyroxCardio }: ProgressCrossf
                         </span>
                       )
                     )}
+                    {benchmarkTotalPages > 1 && (
                     <button
                       type="button"
                       disabled={benchmarkSafePage >= benchmarkTotalPages}
@@ -1044,6 +1047,7 @@ export function ProgressCrossfitCardio({ crossfit, hyroxCardio }: ProgressCrossf
                     >
                       <ChevronRight className="w-4 h-4" />
                     </button>
+                    )}
                     <span className="text-[11px] text-gray-400 font-mono w-full text-center">
                       Mostrando {(benchmarkSafePage - 1) * benchmarkVisibleLimit + 1}
                       –{Math.min(benchmarkSafePage * benchmarkVisibleLimit, filteredBenchmarks.length)}
