@@ -25,6 +25,7 @@
 - 🎨 **UI Moderna y Accesible** — Construida con **Shadcn UI**, **Base UI** y **Tailwind v4**, con modo oscuro/claro (ThemeProvider propio con persistencia en `localStorage`).
 - 🎬 **Transiciones entre Vistas** — Cortina GSAP con logo al cambiar de página (ver [convenciones](#-convenciones-de-navegación)).
 - 🔗 **Deep-link al Detalle** — Las tarjetas del dashboard abren el modal de detalle del historial (`/workouts?open=<id>`).
+- 📤 **Compartir Entrenamientos** — Desde el modal de detalle: copiar resumen, descargar Markdown o tarjeta imagen (PNG 1080×1350) con Web Share en móvil.
 - ⚡ **Rendimiento Optimizado** — App Router de Next.js 16, Server Components y tipografías **Oswald + Inter + JetBrains Mono**.
 
 ---
