@@ -74,7 +74,13 @@ export function CountUp({
     if (startOnMount) {
       startAnimation();
     }
-    return () => stopAnimation();
+    return () => {
+      stopAnimation();
+      // Resetear los guardias para que un remontaje (StrictMode en dev)
+      // reinicie la animación en vez de quedarse congelada en `from`.
+      isVisibleRef.current = false;
+      startTimeRef.current = null;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [startOnMount, to, duration, delay, separator, from]);
 

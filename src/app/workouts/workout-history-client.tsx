@@ -915,7 +915,15 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
   const [filterType, setFilterType] = useState<string>('all');
   const [filterModality, setFilterModality] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<'all' | 'finished' | 'draft'>('all');
-  const [selectedWorkout, setSelectedWorkout] = useState<WorkoutHistoryItem | null>(null);
+  const [selectedWorkout, setSelectedWorkout] = useState<WorkoutHistoryItem | null>(() => {
+    // Deep-link: `?open=<workoutId>` preselecciona el modal de detalle
+    // (p. ej. desde las tarjetas del dashboard). Lazy initializer: sin
+    // efectos ni renders en cascada.
+    if (typeof window === 'undefined') return null;
+    const openId = Number(new URLSearchParams(window.location.search).get('open'));
+    if (!Number.isInteger(openId)) return null;
+    return history.find((w) => w.id === openId) ?? null;
+  });
   const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
   const [pageSize, setPageSize] = useState<number>(10);
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -998,6 +1006,21 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
       setTemplateViewMode(savedTpl);
     }
   }, []);
+
+  // Consume el query param `open` una vez montado: limpia la URL sin navegar
+  // para que recargar o cerrar el modal no lo reabra.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).has('open')) {
+      window.history.replaceState(null, '', window.location.pathname);
+    }
+  }, []);
+
+  const closeDetailModal = () => {
+    setSelectedWorkout(null);
+    if (new URLSearchParams(window.location.search).has('open')) {
+      window.history.replaceState(null, '', window.location.pathname);
+    }
+  };
 
   const handleViewChange = (mode: 'table' | 'cards') => {
     setViewMode(mode);
@@ -2426,7 +2449,7 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
       {selectedWorkout && (
         <WorkoutDetailModal
           workout={selectedWorkout}
-          onClose={() => setSelectedWorkout(null)}
+          onClose={closeDetailModal}
           onRepeat={() =>
             handleRepeatWorkout(
               selectedWorkout.id,

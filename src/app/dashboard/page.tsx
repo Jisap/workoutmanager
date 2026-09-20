@@ -1,12 +1,12 @@
 import { db } from '@/lib/db';
-import { workouts, workoutTypes } from '@/lib/db/schema';
+import { workouts } from '@/lib/db/schema';
 import { eq, desc } from 'drizzle-orm';
 import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Calendar, Dumbbell, TrendingUp, Plus, Activity, Scale } from 'lucide-react';
+import { Dumbbell, TrendingUp, Plus, Activity, Scale } from 'lucide-react';
 import { getConsistencyData } from '../workouts/actions';
 import { getBodySummary } from '../progress/measurements-actions';
 import { ConsistencyHeatmap } from '../progress/consitency-heatmap';
@@ -20,21 +20,31 @@ export default async function DashboardPage() {
         redirect('/sign-in');
     }
 
-    // Obtener últimos entrenamientos y datos de consistencia en paralelo
+    // Últimos entrenamientos con detalle (ejercicios + series para stats) y
+    // datos de consistencia en paralelo. Solo 5 sesiones: coste acotado.
     const [recentWorkouts, consistencyData, bodySummary] = await Promise.all([
-        db
-            .select({
-                id: workouts.id,
-                name: workouts.name,
-                startTime: workouts.startTime,
-                totalTimeSeconds: workouts.totalTimeSeconds,
-                typeName: workoutTypes.name,
-            })
-            .from(workouts)
-            .leftJoin(workoutTypes, eq(workouts.typeId, workoutTypes.id))
-            .where(eq(workouts.userId, userId))
-            .orderBy(desc(workouts.startTime))
-            .limit(5),
+        db.query.workouts.findMany({
+            where: eq(workouts.userId, userId),
+            orderBy: desc(workouts.startTime),
+            limit: 5,
+            columns: {
+                id: true,
+                name: true,
+                modality: true,
+                startTime: true,
+                totalTimeSeconds: true,
+            },
+            with: {
+                type: { columns: { name: true } },
+                exercises: {
+                    columns: { id: true },
+                    with: {
+                        exercise: { columns: { name: true } },
+                        sets: { columns: { weight: true, repCount: true } },
+                    },
+                },
+            },
+        }),
         getConsistencyData(userId),
         getBodySummary(),
     ]);
@@ -42,14 +52,52 @@ export default async function DashboardPage() {
     // Stats básicas
     const totalWorkouts = consistencyData.totalWorkouts;
 
-    const recentItems = recentWorkouts.map((workout) => ({
-        id: String(workout.id),
-        title: workout.name,
-        subtitle: workout.typeName ?? 'Sin tipo',
-        meta: `${workout.totalTimeSeconds
+    const recentItems = recentWorkouts.map((workout) => {
+        const exercisesCount = workout.exercises.length;
+        let setsCount = 0;
+        let totalVolume = 0;
+        const exerciseNames: string[] = [];
+        for (const we of workout.exercises) {
+            setsCount += we.sets.length;
+            if (we.exercise?.name) exerciseNames.push(we.exercise.name);
+            for (const s of we.sets) {
+                const w = s.weight != null ? Number(s.weight) : 0;
+                const r = s.repCount ?? 0;
+                totalVolume += w * r;
+            }
+        }
+
+        const dateLabel = new Date(workout.startTime).toLocaleDateString('es-ES', {
+            weekday: 'short',
+            day: 'numeric',
+            month: 'short',
+        });
+        const durationLabel = workout.totalTimeSeconds
             ? `${Math.round(workout.totalTimeSeconds / 60)} min`
-            : 'Sin tiempo'} · ${new Date(workout.startTime).toLocaleDateString('es-ES')}`
-    }));
+            : 'Sin tiempo';
+        const volumeLabel =
+            totalVolume >= 1000
+                ? `${(totalVolume / 1000).toLocaleString('es-ES', { maximumFractionDigits: 1 })} t`
+                : `${Math.round(totalVolume).toLocaleString('es-ES')} kg`;
+        const exercisesPreview =
+            exerciseNames.length > 2
+                ? `${exerciseNames.slice(0, 2).join(' · ')} · +${exerciseNames.length - 2} más`
+                : exerciseNames.join(' · ') || undefined;
+
+        return {
+            id: String(workout.id),
+            title: workout.name,
+            href: `/workouts?open=${workout.id}`,
+            typeLabel: workout.type?.name ?? 'Sin tipo',
+            modalityLabel: workout.modality,
+            dateLabel,
+            durationLabel,
+            exercisesCount,
+            setsCount,
+            volumeLabel,
+            exercisesPreview,
+        };
+    });
 
     return (
         <div className="space-y-6">
@@ -153,8 +201,19 @@ export default async function DashboardPage() {
 
             {/* Últimos Entrenamientos */}
             <Card>
-                <CardHeader>
-                    <CardTitle>Entrenamientos Recientes</CardTitle>
+                <CardHeader className="flex flex-row items-start justify-between gap-2">
+                    <div>
+                        <CardTitle>Entrenamientos Recientes</CardTitle>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            Tus últimas {recentWorkouts.length} {recentWorkouts.length === 1 ? 'sesión' : 'sesiones'} de un vistazo
+                        </p>
+                    </div>
+                    <Link
+                        href="/workouts"
+                        className="shrink-0 text-xs font-semibold text-sky-600 hover:underline dark:text-sky-400"
+                    >
+                        Ver historial →
+                    </Link>
                 </CardHeader>
                 <CardContent>
                     {recentWorkouts.length === 0 ? (
@@ -174,7 +233,6 @@ export default async function DashboardPage() {
                             items={recentItems}
                             delay={120}
                             className="space-y-3"
-                            itemClassName="bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100/80 dark:hover:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-700"
                         />
                     )}
                 </CardContent>
