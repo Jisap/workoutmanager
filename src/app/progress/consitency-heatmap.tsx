@@ -134,6 +134,7 @@ export function ConsistencyHeatmap({ data }: ConsistencyHeatmapProps) {
             <div className="p-3 bg-orange-100 rounded-2xl text-orange-600 shadow-inner dark:bg-orange-900/30 dark:text-orange-400">
               <Flame className="w-6 h-6" />
             </div>
+
             <div>
               <p className="text-xs font-bold text-orange-600 dark:text-orange-400 uppercase tracking-wider">Racha Actual</p>
               <p className="text-2xl font-black text-gray-900 dark:text-gray-100 tabular-nums">
@@ -148,6 +149,7 @@ export function ConsistencyHeatmap({ data }: ConsistencyHeatmapProps) {
             <div className="p-3 bg-blue-100 rounded-2xl text-blue-600 shadow-inner dark:bg-blue-900/30 dark:text-blue-400">
               <TrendingUp className="w-6 h-6" />
             </div>
+
             <div>
               <p className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider">Racha Más Larga</p>
               <p className="text-2xl font-black text-gray-900 dark:text-gray-100 tabular-nums">
@@ -162,6 +164,7 @@ export function ConsistencyHeatmap({ data }: ConsistencyHeatmapProps) {
             <div className="p-3 bg-purple-100 rounded-2xl text-purple-600 shadow-inner dark:bg-purple-900/30 dark:text-purple-400">
               <CalendarIcon className="w-6 h-6" />
             </div>
+
             <div>
               <p className="text-xs font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider">Frecuencia Semanal</p>
               <p className="text-2xl font-black text-gray-900 dark:text-gray-100 tabular-nums">
@@ -180,6 +183,7 @@ export function ConsistencyHeatmap({ data }: ConsistencyHeatmapProps) {
               <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 flex items-center gap-1.5">
                 <Sparkles className="w-4 h-4 text-emerald-600" /> Mapa de Actividad (Últimos 12 Meses)
               </h3>
+
               <p className="text-xs text-gray-500 dark:text-gray-400">
                 Haz clic en cualquier día para ver el contenido del entrenamiento, sus series y poder repetirlo.
               </p>
@@ -227,6 +231,7 @@ export function ConsistencyHeatmap({ data }: ConsistencyHeatmapProps) {
                                 ? 'Sin entrenamientos'
                                 : `${day.count} ${day.count === 1 ? 'entrenamiento' : 'entrenamientos'}`}
                             </span>
+
                             <span className="block text-gray-300 dark:text-gray-300 text-[10px]">
                               {day.date.toLocaleDateString('es-ES', {
                                 weekday: 'short',
@@ -262,6 +267,7 @@ export function ConsistencyHeatmap({ data }: ConsistencyHeatmapProps) {
                 <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
                   <CalendarIcon className="w-3.5 h-3.5" /> Detalle del Día
                 </span>
+
                 <h3 className="font-bold text-base text-gray-900 dark:text-gray-100 capitalize">
                   {selectedDayData.date.toLocaleDateString('es-ES', {
                     weekday: 'long',
@@ -288,12 +294,14 @@ export function ConsistencyHeatmap({ data }: ConsistencyHeatmapProps) {
                   <div className="w-12 h-12 rounded-2xl bg-gray-100 text-gray-400 dark:bg-gray-800 dark:text-gray-500 flex items-center justify-center mx-auto">
                     <CalendarIcon className="w-6 h-6" />
                   </div>
+
                   <div>
                     <h4 className="font-bold text-sm text-gray-900 dark:text-gray-100">Día de descanso</h4>
                     <p className="text-xs text-gray-500 dark:text-gray-400 max-w-xs mx-auto mt-1">
                       No hubo entrenamientos registrados en esta fecha. ¡El descanso también es parte del progreso!
                     </p>
                   </div>
+
                   <div className="pt-2">
                     <Button
                       onClick={handleStartNewWorkout}
@@ -315,6 +323,7 @@ export function ConsistencyHeatmap({ data }: ConsistencyHeatmapProps) {
                         ? 'entrenamiento realizado'
                         : 'entrenamientos realizados'}
                     </span>
+
                     <Button
                       onClick={handleStartNewWorkout}
                       variant="outline"
@@ -338,6 +347,7 @@ export function ConsistencyHeatmap({ data }: ConsistencyHeatmapProps) {
                             <h4 className="font-extrabold text-sm sm:text-base text-gray-900 dark:text-gray-100">
                               {workout.name}
                             </h4>
+
                             {workout.typeName && (
                               <span className="px-2 py-0.5 text-[11px] font-semibold bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 rounded-full">
                                 {workout.typeName}

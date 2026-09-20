@@ -24,10 +24,12 @@ export default async function WorkoutsHistoryPage() {
             <History className="w-6 h-6 text-blue-600" />
             Entrenamientos & Rutinas
           </h1>
+
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
             {history.length} {history.length === 1 ? 'sesión registrada' : 'sesiones registradas'} · {templates.length} {templates.length === 1 ? 'plantilla' : 'plantillas'}
           </p>
         </div>
+
         <Link href="/workouts/new">
           <Button className="bg-blue-600 hover:bg-blue-700">
             <Dumbbell className="w-4 h-4 mr-2" />
