@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { ChevronDown, HelpCircle, ShieldCheck, Zap, Database, Smartphone } from 'lucide-react';
 
 interface FAQItem {
@@ -44,6 +45,7 @@ const faqs: FAQItem[] = [
 
 export function LandingFAQ() {
   const [openIndex, setOpenIndex] = useState<number | null>(0);
+  const prefersReducedMotion = useReducedMotion();
 
   const toggle = (idx: number) => {
     setOpenIndex(openIndex === idx ? null : idx);
@@ -55,9 +57,13 @@ export function LandingFAQ() {
         const isOpen = openIndex === idx;
         const Icon = faq.icon;
         return (
-          <div
+          <motion.div
             key={idx}
-            className={`rounded-2xl border transition-all duration-300 overflow-hidden ${
+            initial={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: 16 }}
+            whileInView={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: '-60px' }}
+            transition={{ delay: Math.min(idx * 0.06, 0.3), duration: 0.45, ease: 'easeOut' }}
+            className={`rounded-2xl border transition-colors duration-300 overflow-hidden ${
               isOpen
                 ? 'border-blue-500/40 bg-zinc-900/80 shadow-lg shadow-blue-500/5'
                 : 'border-zinc-800/80 bg-zinc-900/40 hover:border-zinc-700 hover:bg-zinc-900/60'
@@ -65,6 +71,8 @@ export function LandingFAQ() {
           >
             <button
               onClick={() => toggle(idx)}
+              aria-expanded={isOpen}
+              aria-controls={`faq-panel-${idx}`}
               className="w-full p-5 sm:p-6 text-left flex items-center justify-between gap-4 cursor-pointer"
             >
               <div className="flex items-center gap-3.5">
@@ -84,12 +92,24 @@ export function LandingFAQ() {
               />
             </button>
 
-            {isOpen && (
-              <div className="px-5 sm:px-6 pb-6 pt-1 text-sm sm:text-base text-zinc-400 leading-relaxed border-t border-zinc-800/50">
-                {faq.answer}
-              </div>
-            )}
-          </div>
+            <AnimatePresence initial={false}>
+              {isOpen && (
+                <motion.div
+                  key="answer"
+                  id={`faq-panel-${idx}`}
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: prefersReducedMotion ? 0 : 0.3, ease: 'easeInOut' }}
+                  className="overflow-hidden"
+                >
+                  <div className="px-5 sm:px-6 pb-6 pt-1 text-sm sm:text-base text-zinc-400 leading-relaxed border-t border-zinc-800/50">
+                    {faq.answer}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </motion.div>
         );
       })}
     </div>
