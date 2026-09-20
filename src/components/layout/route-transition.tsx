@@ -8,6 +8,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   type ReactNode
 } from 'react';
@@ -15,6 +16,7 @@ import {
 interface RouteTransitionContextValue {
   notifyReady: () => void;
   runCoverTransition: (href: string) => void;
+  navigate: (href: string) => void;
 }
 
 const RouteTransitionContext = createContext<RouteTransitionContextValue | null>(null);
@@ -23,8 +25,30 @@ export function useRouteTransition() {
   return useContext(RouteTransitionContext);
 }
 
+// Navegación programática con cortina (p. ej. tras guardar un formulario).
+// Misma ruta → push nativo; distinta ruta → cortina. Fuera del provider,
+// push nativo directamente.
+export function useTransitionNavigate() {
+  const ctx = useRouteTransition();
+  const router = useRouter();
+  return useCallback(
+    (href: string) => {
+      if (ctx) ctx.navigate(href);
+      else router.push(href);
+    },
+    [ctx, router]
+  );
+}
+
+// Reset de scroll instantáneo: solo se usa bajo la cortina (opaca) o en
+// ramas de fallback, nunca a la vista.
+function resetScroll() {
+  document.getElementById('wm-main')?.scrollTo({ top: 0 });
+  window.scrollTo(0, 0);
+}
+
 const COVER_OUT_DURATION = 0.55;
-const READY_TIMEOUT_MS = 5000;
+const READY_TIMEOUT_MS = 3000;
 
 // Transición entre vistas con cortina GSAP.
 //
@@ -73,12 +97,14 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
       const panel = panelRef.current;
       const bar = barRef.current;
       if (!overlay || !panel || !bar) {
-        router.push(href);
+        router.push(href, { scroll: false });
+        resetScroll();
         return;
       }
 
       if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-        router.push(href);
+        router.push(href, { scroll: false });
+        resetScroll();
         return;
       }
 
@@ -94,25 +120,28 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
 
       // La navegación arranca en la misma tarea del clic, bajo la cortina.
       router.push(href, { scroll: false });
-      const scroller = document.getElementById('wm-main');
-      if (scroller) scroller.scrollTop = 0;
-      window.scrollTo(0, 0);
 
       const tl = gsap.timeline({ onComplete: () => finishTransition() });
       timelineRef.current = tl;
 
       tl.to(overlay, { opacity: 1, duration: 0.15, ease: 'power1.out' })
+        // La barra avanza al 85% durante la espera y se remata al revelar.
         .fromTo(
           bar,
           { scaleX: 0 },
-          { scaleX: 1, duration: 0.5, ease: 'power1.out' },
+          { scaleX: 0.85, duration: 0.5, ease: 'power1.out' },
           0
         )
-        // Espera al contenido real (PageReady) antes de revelar.
+        // Espera al contenido real (PageReady) antes de revelar. El scroll
+        // se resetea aquí, con la cortina ya opaca, para que la página
+        // anterior no salte a la vista durante el fundido.
         .call(() => {
-          // Red de seguridad: revelar aunque la página nunca avise.
-          timeoutRef.current = setTimeout(() => notifyReady(), READY_TIMEOUT_MS);
-          if (!readyRef.current) tl.pause();
+          resetScroll();
+          if (!readyRef.current) {
+            // Red de seguridad: revelar aunque la página nunca avise.
+            timeoutRef.current = setTimeout(() => notifyReady(), READY_TIMEOUT_MS);
+            tl.pause();
+          }
         })
         // Revelado: la cortina sale por arriba y el contenido entra.
         // Se anima #wm-main (existe en la rama autenticada); sin él, la
@@ -121,7 +150,8 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
           yPercent: -100,
           duration: COVER_OUT_DURATION,
           ease: 'expo.inOut'
-        });
+        })
+        .to(bar, { scaleX: 1, duration: 0.45, ease: 'power1.inOut' }, '<');
       const revealTarget = document.getElementById('wm-main');
       if (revealTarget) {
         tl.fromTo(
@@ -132,7 +162,10 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
             y: 0,
             duration: 0.5,
             ease: 'expo.out',
-            clearProps: 'opacity,transform'
+            clearProps: 'opacity,transform',
+            // Sin esto, GSAP aplicaría opacity:0 al crear la timeline y la
+            // página anterior desaparecería antes de que la cortina opaque.
+            immediateRender: false
           },
           '-=0.3'
         );
@@ -153,8 +186,38 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  const navigate = useCallback(
+    (href: string) => {
+      let url: URL;
+      try {
+        url = new URL(href, window.location.href);
+      } catch {
+        router.push(href);
+        return;
+      }
+      if (url.origin !== window.location.origin) {
+        router.push(href);
+        return;
+      }
+      // Misma ruta (cambios de query): push nativo; distinta ruta: cortina.
+      if (url.pathname === window.location.pathname) {
+        router.push(url.pathname + url.search + url.hash);
+        return;
+      }
+      runCoverTransition(url.pathname + url.search + url.hash);
+    },
+    [router, runCoverTransition]
+  );
+
+  // Valor memoizado: si el provider re-renderiza, PageReady no debe
+  // re-ejecutar su efecto (reavisar "listo" levantaría la cortina antes).
+  const value = useMemo(
+    () => ({ notifyReady, runCoverTransition, navigate }),
+    [notifyReady, runCoverTransition, navigate]
+  );
+
   return (
-    <RouteTransitionContext.Provider value={{ notifyReady, runCoverTransition }}>
+    <RouteTransitionContext.Provider value={value}>
       {children}
       <div ref={overlayRef} className="invisible fixed inset-0 z-[90]" aria-hidden>
         <div
@@ -167,6 +230,7 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
             alt=""
             width={96}
             height={64}
+            priority
             className="h-12 w-auto object-contain"
             draggable={false}
           />

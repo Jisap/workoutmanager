@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useTransitionNavigate } from '@/components/layout/route-transition';
 import {
   Flame,
   Calendar as CalendarIcon,
@@ -64,7 +64,7 @@ interface ConsistencyHeatmapProps {
 }
 
 export function ConsistencyHeatmap({ data }: ConsistencyHeatmapProps) {
-  const router = useRouter();
+  const navigate = useTransitionNavigate();
 
   // Día seleccionado actualmente para ver detalles en el modal / panel
   const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
@@ -117,12 +117,12 @@ export function ConsistencyHeatmap({ data }: ConsistencyHeatmapProps) {
 
   const handleRepeatWorkout = (workoutId: number) => {
     setIsModalOpen(false);
-    router.push(`/workouts/log?mode=repeat&workoutId=${workoutId}`);
+    navigate(`/workouts/log?mode=repeat&workoutId=${workoutId}`);
   };
 
   const handleStartNewWorkout = () => {
     setIsModalOpen(false);
-    router.push('/workouts/new');
+    navigate('/workouts/new');
   };
 
   return (

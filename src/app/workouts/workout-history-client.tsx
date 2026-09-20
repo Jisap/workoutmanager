@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, useDeferredValue } from 'react';
-import { useRouter } from 'next/navigation';
+import { useTransitionNavigate } from '@/components/layout/route-transition';
 import { TransitionLink as Link } from '@/components/layout/transition-link';
 import {
   Dumbbell,
@@ -904,7 +904,7 @@ function ExerciseDetailModal({
 
 // ---------- Main Component ----------
 export function WorkoutHistoryClient({ history, templates: initialTemplates = [] }: WorkoutHistoryClientProps) {
-  const router = useRouter();
+  const navigate = useTransitionNavigate();
 
   // Active Main Tab: 'history' or 'templates'
   const [activeTab, setActiveTab] = useState<'history' | 'templates'>('history');
@@ -1100,14 +1100,14 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
   const handleRepeatWorkout = (workoutId: number, isFinished: boolean = true) => {
     setSelectedWorkout(null);
     if (isFinished) {
-      router.push(`/workouts/log?mode=repeat&workoutId=${workoutId}`);
+      navigate(`/workouts/log?mode=repeat&workoutId=${workoutId}`);
     } else {
-      router.push(`/workouts/log?mode=resume&workoutId=${workoutId}`);
+      navigate(`/workouts/log?mode=resume&workoutId=${workoutId}`);
     }
   };
 
   const handleStartTemplate = (templateId: number) => {
-    router.push(`/workouts/log?mode=template&templateId=${templateId}`);
+    navigate(`/workouts/log?mode=template&templateId=${templateId}`);
   };
 
   const openConvertToTemplate = (workout: WorkoutHistoryItem) => {

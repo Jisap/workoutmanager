@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useTransitionNavigate } from '@/components/layout/route-transition';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -116,7 +116,7 @@ export function WorkoutLoggerClient({
   workoutId = null,
   existingWorkoutNames = [],
 }: WorkoutLoggerClientProps) {
-  const router = useRouter();
+  const navigate = useTransitionNavigate();
 
   // Comprobar si el tipo de entrenamiento actual requiere modalidad (CrossFit, Hyrox, Funcional, Cardio...)
   const currentSelectedType = workoutTypes.find((t) => t.id.toString() === typeId) || null;
@@ -618,7 +618,7 @@ export function WorkoutLoggerClient({
       }
       // El toast sobrevive a la navegación (el Toaster vive en el layout raíz)
       notify.success('Entrenamiento guardado', `"${typeName}"`);
-      router.push('/workouts');
+      navigate('/workouts');
     } catch (error) {
       console.error(error);
       notify.errorFrom(error, 'Error al guardar el entrenamiento');
@@ -678,7 +678,7 @@ export function WorkoutLoggerClient({
       }
 
       notify.success('Sesión finalizada', `"${typeName}" · ¡buen trabajo!`);
-      router.push('/dashboard');
+      navigate('/dashboard');
     } catch (error) {
       console.error(error);
       notify.errorFrom(error, 'Error al guardar el entrenamiento');
@@ -749,9 +749,9 @@ export function WorkoutLoggerClient({
       notify.success('Plantilla guardada', `"${directTemplateName.trim()}"`);
 
       if (andStartWorkout && res.templateId) {
-        router.push(`/workouts/log?mode=template&templateId=${res.templateId}`);
+        navigate(`/workouts/log?mode=template&templateId=${res.templateId}`);
       } else {
-        router.push('/workouts/new');
+        navigate('/workouts/new');
       }
     } catch (error) {
       console.error(error);

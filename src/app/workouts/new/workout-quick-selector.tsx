@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useTransitionNavigate } from '@/components/layout/route-transition';
 import {
   Clock,
   Copy,
@@ -116,7 +116,7 @@ export function WorkoutQuickSelector({
   recentWorkouts,
   templates,
 }: WorkoutQuickSelectorProps) {
-  const router = useRouter();
+  const navigate = useTransitionNavigate();
   const detailRef = useRef<HTMLDivElement>(null);
 
   const hasRecents = recentWorkouts.length > 0;
@@ -209,12 +209,12 @@ export function WorkoutQuickSelector({
       const target = recentWorkouts.find((w) => w.id === id);
       const isFinished = !!(target?.totalTimeSeconds && target.totalTimeSeconds > 0);
       if (isFinished) {
-        router.push(`/workouts/log?mode=repeat&workoutId=${id}`);
+        navigate(`/workouts/log?mode=repeat&workoutId=${id}`);
       } else {
-        router.push(`/workouts/log?mode=resume&workoutId=${id}`);
+        navigate(`/workouts/log?mode=resume&workoutId=${id}`);
       }
     } else {
-      router.push(`/workouts/log?mode=template&templateId=${id}`);
+      navigate(`/workouts/log?mode=template&templateId=${id}`);
     }
   };
 

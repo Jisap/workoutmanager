@@ -74,8 +74,10 @@ export function TransitionLink({ href, onClick, onNavigate: onNavigateProp, ...r
         }
         if (url.origin !== window.location.origin) return;
         if (url.pathname === window.location.pathname && url.search === window.location.search) {
+          // Ancla en la misma página: dejar que Next resuelva el scroll.
+          if (url.hash) return;
           // Misma página (p. ej. pinchar la sección activa del sidebar):
-          // no refeachear — solo volver arriba con scroll suave.
+          // no recargar los datos — solo volver arriba con scroll suave.
           nav.preventDefault();
           document.getElementById('wm-main')?.scrollTo({ top: 0, behavior: 'smooth' });
           window.scrollTo({ top: 0, behavior: 'smooth' });
