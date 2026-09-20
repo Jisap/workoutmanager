@@ -8,6 +8,7 @@ import {
   getUserStats,
 } from './actions';
 import { SettingsClient } from './settings-client';
+import { PageReady } from '@/components/layout/route-transition';
 
 export default async function SettingsPage() {
   const { userId } = await auth();
@@ -34,6 +35,7 @@ export default async function SettingsPage() {
 
   return (
     <div className="space-y-6">
+      <PageReady />
       {/* Page header */}
       <div>
         <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2 dark:text-gray-100">

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import Link from 'next/link';
+import { TransitionLink as Link } from '@/components/layout/transition-link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Zap,

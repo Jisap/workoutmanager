@@ -8,6 +8,7 @@ import {
   getAdvancedProgressData,
 } from '../workouts/actions';
 import { ProgressClient } from './progress-client';
+import { PageReady } from '@/components/layout/route-transition';
 import { getBodyMeasurements } from './measurements-actions';
 import { LineChart } from 'lucide-react';
 
@@ -55,6 +56,7 @@ export default async function ProgressPage({
 
   return (
     <div className="max-w-5xl mx-auto space-y-6 pb-24">
+      <PageReady />
       {/* Header de la Página */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 dark:border-gray-800 pb-4">
         <div>

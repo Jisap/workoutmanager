@@ -1,10 +1,11 @@
 import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
-import Link from 'next/link';
+import { TransitionLink as Link } from '@/components/layout/transition-link';
 import { getWorkoutsOverview } from './actions';
 import { Button } from '@/components/ui/button';
 import { Dumbbell, History } from 'lucide-react';
 import { WorkoutHistoryClient } from './workout-history-client';
+import { PageReady } from '@/components/layout/route-transition';
 
 export default async function WorkoutsHistoryPage() {
   const { userId } = await auth();
@@ -15,6 +16,7 @@ export default async function WorkoutsHistoryPage() {
 
   return (
     <div className="w-full max-w-7xl mx-auto space-y-6">
+      <PageReady />
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, useDeferredValue } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
+import { TransitionLink as Link } from '@/components/layout/transition-link';
 import {
   Dumbbell,
   Clock,

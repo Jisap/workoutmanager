@@ -8,6 +8,7 @@ import { Oswald, Inter, JetBrains_Mono } from 'next/font/google';
 import Script from 'next/script';
 import { ThemeProvider } from '@/components/ThemeProvider';
 import { Toaster } from '@/components/ui/toast';
+import { RouteTransitionProvider } from '@/components/layout/route-transition';
 
 const headline = Oswald({
   subsets: ['latin'],
@@ -44,9 +45,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             {isAuthenticated ? (
               // Layout con Sidebar para usuarios autenticados
               <div className="flex h-screen overflow-hidden">
-                <Sidebar />
+                <RouteTransitionProvider>
+                  <Sidebar />
 
-                <div className="flex-1 flex flex-col overflow-hidden">
+                  <div className="flex-1 flex flex-col overflow-hidden">
                   {/* Header visible únicamente en móvil */}
                   <header className="lg:hidden bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between dark:bg-gray-900 dark:border-gray-800">
                     <div className="flex items-center gap-2.5">
@@ -65,10 +67,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                     <UserButton />
                   </header>
 
-                  <main className="flex-1 overflow-y-auto p-4 sm:p-6 pb-24 lg:pb-6 animate-in fade-in duration-200">
+                  <main id="wm-main" className="flex-1 overflow-y-auto p-4 sm:p-6 pb-24 lg:pb-6">
                     {children}
                   </main>
                 </div>
+              </RouteTransitionProvider>
               </div>
             ) : (
               // Layout simple para usuarios no autenticados

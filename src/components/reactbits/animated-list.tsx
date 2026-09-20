@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import Link from 'next/link';
+import { TransitionLink as Link } from '@/components/layout/transition-link';
 import { motion, useReducedMotion } from 'motion/react';
 import {
   CalendarDays,

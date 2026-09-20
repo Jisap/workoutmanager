@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { exerciseCategories, workoutTypes, workouts } from '@/lib/db/schema';
 import { asc, eq } from 'drizzle-orm';
 import { WorkoutLoggerClient } from './workout-logger-client';
+import { PageReady } from '@/components/layout/route-transition';
 import { getTemplateData, getLastWorkoutData, getWorkoutData, getAvailableExercises, getAvailableCategories } from '../actions';
 
 export default async function WorkoutLogPage({
@@ -171,7 +172,9 @@ export default async function WorkoutLogPage({
   }
 
   return (
-    <WorkoutLoggerClient
+    <>
+      <PageReady />
+      <WorkoutLoggerClient
       availableExercises={availableExercises}
       categories={categories}
       workoutTypes={allWorkoutTypes}
@@ -184,6 +187,7 @@ export default async function WorkoutLogPage({
       initialModalityConfig={initialModalityConfig}
       workoutId={activeWorkoutId}
       existingWorkoutNames={existingNames.map((r) => r.name)}
-    />
+      />
+    </>
   );
 }

@@ -1,6 +1,6 @@
 import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
-import Link from 'next/link';
+import { TransitionLink as Link } from '@/components/layout/transition-link';
 import { db } from '@/lib/db';
 import { workoutTypes, workoutTemplates, workouts } from '@/lib/db/schema';
 import { eq, desc } from 'drizzle-orm';
@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { ArrowLeft, Dumbbell } from 'lucide-react';
 import { WorkoutQuickSelector } from './workout-quick-selector';
+import { PageReady } from '@/components/layout/route-transition';
 
 import { getAvailableExercises, getUserTemplates } from '../actions';
 
@@ -118,6 +119,7 @@ export default async function NewWorkoutPage() {
 
   return (
     <div className="mx-auto w-full max-w-2xl lg:max-w-4xl xl:max-w-5xl space-y-6 pb-24">
+      <PageReady />
       {/* Header con volver */}
       <div className="flex items-center gap-4">
         <Link href="/dashboard">

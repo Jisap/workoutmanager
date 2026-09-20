@@ -1,6 +1,7 @@
 'use client';
 
-import Link, { useLinkStatus } from 'next/link';
+import { TransitionLink as Link } from '@/components/layout/transition-link';
+import { useLinkStatus } from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { Home, Dumbbell, BarChart3, Settings, Plus, LogOut, Bookmark, Loader2, type LucideIcon } from 'lucide-react';
