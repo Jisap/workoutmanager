@@ -23,6 +23,8 @@
 - 🎯 **Métricas Detalladas** — Registro preciso por serie: repeticiones, peso, distancia, duración, RPE, marca Rx/Scaled y notas; cálculo de 1RM estimado (fórmula Epley).
 - ⚖️ **Medidas Corporales** — Peso, % de grasa, masa muscular, IMC y perímetros con curva de evolución y lectura peso vs volumen entrenado.
 - 🎨 **UI Moderna y Accesible** — Construida con **Shadcn UI**, **Base UI** y **Tailwind v4**, con modo oscuro/claro (ThemeProvider propio con persistencia en `localStorage`).
+- 🎬 **Transiciones entre Vistas** — Cortina GSAP con logo al cambiar de página (ver [convenciones](#-convenciones-de-navegación)).
+- 🔗 **Deep-link al Detalle** — Las tarjetas del dashboard abren el modal de detalle del historial (`/workouts?open=<id>`).
 - ⚡ **Rendimiento Optimizado** — App Router de Next.js 16, Server Components y tipografías **Oswald + Inter + JetBrains Mono**.
 
 ---
@@ -32,7 +34,7 @@
 | Categoría             | Tecnologías                                                                                              |
 | :-------------------- | :------------------------------------------------------------------------------------------------------- |
 | **Frontend**          | Next.js 16 (App Router), React 19, TypeScript                                                            |
-| **Estilos y UI**      | Tailwind CSS v4, Shadcn UI (estilo `base-nova`), `@base-ui/react`, `lucide-react`, `class-variance-authority`, `tw-animate-css`, `cmdk` |
+| **Estilos y UI**      | Tailwind CSS v4, Shadcn UI (estilo `base-nova`), `@base-ui/react`, `lucide-react`, `class-variance-authority`, `tw-animate-css`, `cmdk`, `motion`, `gsap` |
 | **Base de Datos**     | Neon (PostgreSQL Serverless)                                                                             |
 | **ORM y Migraciones** | Drizzle ORM, `drizzle-kit` (`@neondatabase/serverless` + `postgres`)                                     |
 | **Autenticación**     | Clerk (`@clerk/nextjs`)                                                                                  |
@@ -124,11 +126,14 @@ workoutmanager/
 │   │   ├── workouts/         # Historial, plantillas, creación (new/) y registro (log/) + actions
 │   │   ├── sign-in/          # Ruta de inicio de sesión (Clerk)
 │   │   ├── sign-up/          # Ruta de registro (Clerk)
-│   │   ├── layout.tsx        # Layout raíz (Clerk, Sidebar, ThemeProvider, fuentes)
+│   │   ├── layout.tsx        # Layout raíz (Clerk, Sidebar, ThemeProvider, fuentes,
+│   │   │                     # transición de rutas, Toaster)
 │   │   └── page.tsx          # Landing pública
 │   ├── components/           # Componentes reutilizables
 │   │   ├── landing/          # Showcase interactivo y FAQ de la landing
-│   │   ├── layout/           # Sidebar de la app
+│   │   ├── layout/           # Sidebar, cortina de transición (route-transition.tsx)
+│   │   │                     # y enlaces con transición (transition-link.tsx)
+│   │   ├── reactbits/        # Lista animada y contador animado del dashboard
 │   │   ├── ui/               # Componentes Shadcn/Base UI
 │   │   ├── workout/          # Creador de ejercicios, picker de WODs, builder Hyrox,
 │   │   │                     # panel de modalidad y combobox de ejercicios
@@ -141,11 +146,22 @@ workoutmanager/
 │   └── middleware.ts         # Middleware de Clerk (las páginas verifican sesión con auth())
 ├── components.json           # Configuración Shadcn UI
 ├── drizzle.config.ts         # Configuración Drizzle Kit (lee .env.local / .env)
-├── next.config.ts            # Configuración Next.js
+├── next.config.ts            # Configuración Next.js (optimizePackageImports,
+│                             # staleTimes del router cache: dynamic 30 s)
 ├── package.json              # Dependencias y scripts
 ├── postcss.config.mjs        # Configuración PostCSS / Tailwind v4
 └── tsconfig.json             # Configuración TypeScript (alias @/* → ./src/*)
 ```
+
+## 🧭 Convenciones de Navegación
+
+Las transiciones entre páginas usan una cortina GSAP (`src/components/layout/route-transition.tsx`). Reglas a respetar:
+
+1. **Enlaces internos** — Usa `TransitionLink` (`@/components/layout/transition-link`, misma API que `next/link`). Solo anima al cambiar de ruta; misma página hace scroll suave, cambios de query (`?tab=`, `?open=`) van nativos.
+2. **Páginas nuevas** — Añade `<PageReady />` al inicio del JSX de cada `page.tsx` autenticada (nunca en `loading.tsx`): la cortina solo se levanta con contenido real. Sin él, la cortina espera al timeout (3 s).
+3. **Navegación programática** — Usa `useTransitionNavigate()` en lugar de `router.push` (misma API, respeta las reglas anteriores).
+
+Además, `staleTimes.dynamic: 30` en `next.config.ts` sirve las revisitas desde la caché del router (las mutaciones invalidan vía `revalidatePath`, sin datos obsoletos).
 
 ## 🗄️ Modelo de Datos
 
