@@ -39,7 +39,7 @@
 | **Base de Datos**     | Neon (PostgreSQL Serverless)                                                                             |
 | **ORM y Migraciones** | Drizzle ORM, `drizzle-kit` (`@neondatabase/serverless` + `postgres`)                                     |
 | **Autenticación**     | Clerk (`@clerk/nextjs`)                                                                                  |
-| **Herramientas**      | ESLint 9, PostCSS (`@tailwindcss/postcss`), `tsx` + `dotenv`/`dotenv-cli` (script de seed)                |
+| **Herramientas**      | ESLint 9, Vitest 2, PostCSS (`@tailwindcss/postcss`), `tsx` + `dotenv`/`dotenv-cli` (script de seed)                |
 
 ---
 
@@ -108,6 +108,7 @@ Abre [http://localhost:3000](http://localhost:3000) en tu navegador. 🚀
 npm run build   # Compilar para producción
 npm run start   # Servir la build de producción
 npm run lint    # Ejecutar ESLint
+npm test        # Ejecutar tests (Vitest, 1 vez)
 ```
 
 ---
@@ -142,11 +143,14 @@ workoutmanager/
 │   ├── lib/
 │   │   ├── db/               # schema.ts, index.ts y Seed.ts (Drizzle ORM)
 │   │   ├── modality-utils.ts # Resumen y duración estimada por modalidad
+│   │   ├── share-workout.ts  # Formateadores y tarjeta PNG para compartir (+ .test.ts)
 │   │   ├── wods-catalog.ts   # Catálogo de WODs oficiales con Rx H/M
 │   │   └── utils.ts          # Utilidades (clsx, tailwind-merge)
 │   └── middleware.ts         # Middleware de Clerk (las páginas verifican sesión con auth())
 ├── components.json           # Configuración Shadcn UI
 ├── drizzle.config.ts         # Configuración Drizzle Kit (lee .env.local / .env)
+├── vitest.config.ts          # Configuración Vitest (alias @/* → ./src/*, entorno node)
+```
 ├── next.config.ts            # Configuración Next.js (optimizePackageImports,
 │                             # staleTimes del router cache: dynamic 30 s)
 ├── package.json              # Dependencias y scripts
@@ -169,6 +173,27 @@ Además, `staleTimes.dynamic: 30` en `next.config.ts` sirve las revisitas desde 
 Tablas principales en `src/lib/db/schema.ts`: `workout_types`, `exercise_categories`, `exercises`, `workout_templates`, `template_exercises`, `workouts`, `workout_exercises`, `sets` (dato atómico: reps, peso, distancia, duración, RPE, Rx, notas) y `body_measurements` (peso, composición y perímetros).
 
 El esquema incluye 14 índices btree sobre las rutas calientes (`workouts(userId, startTime)`, `workoutExercises(workoutId)`, `sets(workoutExerciseId)`, etc.). Tras modificar el esquema, genera la migración con `npm run db:generate` y aplícala con `npm run db:push`.
+
+---
+
+## 🧪 Tests
+
+Base mínima con **Vitest 2** (entorno `node`, alias `@/*` → `./src/*` en `vitest.config.ts`).
+
+```bash
+npm test                                   # toda la suite (vitest run)
+npx vitest run src/lib/share-workout.test.ts  # solo compartir workouts
+```
+
+Cobertura actual (`src/lib/share-workout.test.ts`, 14 casos, solo funciones puras de `src/lib/share-workout.ts`):
+- `formatWorkoutDuration / Volume / Date`
+- `formatWorkoutText` (estructura, singular/plural, modalidad+notas, sin ejercicios)
+- `formatWorkoutMarkdown` (KPIs, detalle de sets, notas)
+- `workoutShareFilename` (slug + fecha `YYYYMMDD`, fallback `entreno`)
+
+Fuera de alcance a propósito (requieren DOM/`navigator.share`, poco ROI): `renderWorkoutCard`, `copyTextToClipboard`, `shareImageFile` y `ShareWorkoutMenu`.
+
+> Nota: Vitest se fijó en `2.1.9` con `--legacy-peer-deps` porque la v5 exige `@types/node@22` y el proyecto usa `@types/node@20`.
 
 ---
 
