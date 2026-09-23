@@ -25,6 +25,9 @@ export interface ModalityConfig {
   // EMOM
   intervalMinutes?: number; // 1 = Every 1 min (EMOM), 2 = Every 2 min (E2MOM), etc.
   totalMinutes?: number;
+  // EMOM con varios ejercicios: shared = todos cada minuto (Min N juntos),
+  // alternate = impar/par repartidos.
+  emomMode?: 'shared' | 'alternate';
   // TABATA & HIIT
   workSeconds?: number;
   restSeconds?: number;

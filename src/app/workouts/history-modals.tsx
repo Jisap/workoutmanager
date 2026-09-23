@@ -429,6 +429,15 @@ export function WorkoutDetailModal({
           </div>
 
           {/* Notes */}
+          {workout.modality === 'EMOM' &&
+            workout.exercisesSummary.length > 1 &&
+            (workout.modalityConfig?.emomMode === 'shared' || workout.modalityConfig?.emomMode === 'alternate') && (
+              <div className="p-3 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900/40 rounded-xl text-[11px] text-blue-900 dark:text-blue-200">
+                {workout.modalityConfig.emomMode === 'shared'
+                  ? `Minutos compartidos: Min N = ${workout.exercisesSummary.map((e) => e.name).join(' + ')} juntos. Un solo EMOM, no uno por ejercicio.`
+                  : `Minutos alternos impar/par entre ${workout.exercisesSummary.map((e) => e.name).join(' y ')}.`}
+              </div>
+            )}
           {workout.notes && (
             <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl text-xs text-amber-900 dark:text-amber-200 flex gap-2">
               <FileText className="w-3.5 h-3.5 shrink-0 mt-0.5 text-amber-600" />

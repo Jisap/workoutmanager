@@ -10,11 +10,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Textarea } from '@/components/ui/textarea';
 import { ExerciseCombobox, type ExerciseOption } from '@/components/workout/exercise-combobox';
 import { Plus, Trash2, Clock, Check, ChevronDown, ChevronUp, Pencil, RotateCcw, Bookmark, Sparkles, Loader2, Play, Save, Flame, Timer, Activity, TrendingUp, Layers, Zap, Trophy } from 'lucide-react';
-import { saveWorkout, saveAsTemplate as saveAsTemplateAction, createDirectTemplate } from '../actions';
+import { saveWorkout, saveAsTemplate as saveAsTemplateAction, createDirectTemplate, getLastSetForExercise } from '../actions';
 import { CreateExerciseDialog, type Category } from '@/components/workout/create-exercise-dialog';
 import { type ModalityConfig } from '@/lib/db/schema';
 import { ModalityConfigPanel } from '@/components/workout/modality-config-panel';
-import { formatModalitySummary } from '@/lib/modality-utils';
+import { formatModalitySummary, getModalitySeriesStructure, calculateModalityEstimatedDuration } from '@/lib/modality-utils';
 import { HyroxRaceBuilder, type HyroxGeneratedExercise } from '@/components/workout/hyrox-race-builder';
 import { CrossfitWodPicker, type WodApplyPayload } from '@/components/workout/crossfit-wod-picker';
 import { OFFICIAL_WODS } from '@/lib/wods-catalog';
@@ -324,6 +324,80 @@ export function WorkoutLoggerClient({
   // Estado para expandir/colapsar desglose individual por ejercicio
   const [expandedExercises, setExpandedExercises] = useState<Record<string, boolean>>({});
 
+  // Última marca por exerciseId para el hint "Último: ..." (1 toque para rellenar).
+  // Se carga bajo demanda al seleccionar/cambiar de ejercicio, no al abrir la página.
+  // Es el conjunto completo de la última sesión (N series), no solo 1 serie.
+  type LastMarkSet = {
+    repCount: number | null;
+    weight: number | null;
+    distance: number | null;
+    durationSeconds: number | null;
+    calories: number | null;
+    rpe: number | null;
+  };
+  const [lastMarks, setLastMarks] = useState<Record<number, LastMarkSet[] | null>>({});
+  const [lastMarksLoading, setLastMarksLoading] = useState<Record<number, boolean>>({});
+
+  const ensureLastMark = (exerciseId: number) => {
+    if (!Number.isInteger(exerciseId) || exerciseId <= 0) return;
+    if (exerciseId in lastMarks || lastMarksLoading[exerciseId]) return;
+    setLastMarksLoading((prev) => ({ ...prev, [exerciseId]: true }));
+    getLastSetForExercise(exerciseId)
+      .then((mark) => setLastMarks((prev) => ({ ...prev, [exerciseId]: (mark as LastMarkSet[] | null) ?? null })))
+      .catch(() => setLastMarks((prev) => ({ ...prev, [exerciseId]: null })))
+      .finally(() => setLastMarksLoading((prev) => ({ ...prev, [exerciseId]: false })));
+  };
+
+  // Precargar última marca de los ejercicios visibles (solo lo no cacheado).
+  useEffect(() => {
+    for (const ex of exercises) ensureLastMark(ex.exerciseId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [exercises.map((e) => e.exerciseId).join(',')]);
+
+  const formatSingleSetLabel = (m: LastMarkSet): string => {
+    const parts: string[] = [];
+    if (m.weight != null) parts.push(`${m.weight}kg`);
+    if (m.repCount != null && m.repCount !== 0) parts.push(`× ${m.repCount}`);
+    if (m.distance != null) parts.push(`${m.distance}m`);
+    if (m.durationSeconds != null) parts.push(formatDurationInput(m.durationSeconds));
+    if (m.calories != null) parts.push(`${m.calories}kcal`);
+    return parts.join(' ') || '—';
+  };
+
+  const formatLastMarkLabel = (marks: LastMarkSet[]): string => {
+    if (marks.length === 0) return '—';
+    if (marks.length === 1) return formatSingleSetLabel(marks[0]);
+    const first = formatSingleSetLabel(marks[0]);
+    const allEqual = marks.every((m) => formatSingleSetLabel(m) === first);
+    if (allEqual) return `${marks.length}× ${first}`;
+    return `${marks.length} series · ${first}…`;
+  };
+
+  const applyLastMark = (localId: string, marks: LastMarkSet[]) => {
+    // Restaura el conjunto completo como punto de partida editable:
+    // repetir tal cual, añadir o quitar series después. RPE en fresco (null).
+    if (marks.length === 0) return;
+    setExercises((prev) =>
+      prev.map((ex) => {
+        if (ex.id !== localId) return ex;
+        return {
+          ...ex,
+          sets: marks.map((m) => ({
+            id: crypto.randomUUID(),
+            repCount: m.repCount ?? 0,
+            weight: m.weight ?? null,
+            distance: m.distance ?? null,
+            durationSeconds: m.durationSeconds ?? null,
+            calories: m.calories ?? null,
+            rpe: null,
+            isRx: true,
+            isCompleted: false,
+          })),
+        };
+      })
+    );
+  };
+
   const toggleExpand = (exerciseId: string) => {
     setExpandedExercises((prev) => ({ ...prev, [exerciseId]: !prev[exerciseId] }));
   };
@@ -404,13 +478,20 @@ export function WorkoutLoggerClient({
     return total;
   }, [exercises]);
 
-  // Al abrir el diálogo de finalizar en Hyrox, el total se calcula solo
-  // sumando los tiempos introducidos tramo a tramo (editable después si quieres)
+  // Al abrir el diálogo de finalizar, el total se sugiere solo:
+  // 1) Hyrox: suma de tramos; 2) resto: duración estimada de la modalidad
+  // (EMOM 12' → 12 min, TABATA/HIIT → protocolo, For Time → cap). Editable después.
+  const modalityEstimatedSeconds =
+    requiresModality && modality ? calculateModalityEstimatedDuration(modality, modalityConfig) : null;
   useEffect(() => {
-    if (isFinishDialogOpen && isHyroxPage && segmentTotalSeconds > 0) {
+    if (!isFinishDialogOpen) return;
+    if (isHyroxPage && segmentTotalSeconds > 0) {
       setTotalTimeMinutes(String(Math.max(1, Math.round(segmentTotalSeconds / 60))));
+    } else if (modalityEstimatedSeconds && modalityEstimatedSeconds > 0) {
+      setTotalTimeMinutes(String(Math.max(1, Math.round(modalityEstimatedSeconds / 60))));
     }
-  }, [isFinishDialogOpen, isHyroxPage, segmentTotalSeconds]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFinishDialogOpen]);
 
   // Ajustar número total de series desde la vista rápida
   const setSetsCount = (exerciseId: string, count: number) => {
@@ -438,6 +519,62 @@ export function WorkoutLoggerClient({
         return { ...ex, sets: [...ex.sets, ...added] };
       })
     );
+  };
+
+  // Generar estructura desde modalityConfig (EMOM/TABATA/HIIT/Ladder).
+  // Solo crece o actualiza reps: nunca borra series con datos.
+  // EMOM con varios ejercicios: minutos compartidos. "Ambos cada minuto"
+  // crea N en cada ejercicio (Min N = Ej1 + Ej2 juntos); "Alternos" reparte
+  // N entre ejercicios (impar/par). Se persiste en modalityConfig.emomMode
+  // para que el historial lo muestre.
+  const [emomMode, setEmomMode] = useState<'shared' | 'alternate'>(
+    () => initialModalityConfig?.emomMode ?? 'shared'
+  );
+  const withEmomMode = (cfg: ModalityConfig): ModalityConfig =>
+    modality === 'EMOM' ? { ...cfg, emomMode } : cfg;
+  const applyModalityStructure = () => {
+    const structure = getModalitySeriesStructure(modality, modalityConfig);
+    if (!structure || exercises.length === 0) return;
+    const reps = structure.reps;
+    setExercises((prev) => {
+      const numEx = prev.length;
+      return prev.map((ex, exIndex) => {
+        let targetCount = Math.max(1, Math.min(50, structure.count));
+        if (modality === 'EMOM' && emomMode === 'alternate' && numEx > 1) {
+          const total = structure.count;
+          const base = Math.floor(total / numEx);
+          const remainder = total % numEx;
+          targetCount = Math.max(1, base + (exIndex < remainder ? 1 : 0));
+        }
+        const grown: LocalSet[] = [...ex.sets];
+        if (grown.length < targetCount) {
+          const lastSet = grown[grown.length - 1];
+          for (let i = grown.length; i < targetCount; i++) {
+            grown.push({
+              id: crypto.randomUUID(),
+              repCount: reps ? reps[i] ?? lastSet?.repCount ?? 0 : lastSet?.repCount ?? 0,
+              weight: lastSet?.weight ?? null,
+              distance: lastSet?.distance ?? null,
+              durationSeconds: lastSet?.durationSeconds ?? null,
+              calories: lastSet?.calories ?? null,
+              rpe: null,
+              isRx: lastSet?.isRx ?? true,
+              isCompleted: false,
+            });
+          }
+        }
+        // Ladder: fijar reps del esquema en las series solapadas (resetea ✓ si cambia).
+        const updated = reps
+          ? grown.map((s, i) => {
+              if (i >= reps.length) return s;
+              if (s.repCount === reps[i]) return s;
+              return { ...s, repCount: reps[i], isCompleted: false };
+            })
+          : grown;
+        return { ...ex, sets: updated };
+      });
+    });
+    notify.success('Estructura aplicada', structure.label);
   };
 
   // Actualizar un campo (reps, peso, distancia, calorías, RPE...) en todas las series del ejercicio
@@ -569,6 +706,7 @@ export function WorkoutLoggerClient({
     setDirectTemplateName(uniqueTitle);
     setModality(payload.modality);
     setModalityConfig(payload.modalityConfig);
+    if (payload.modality === 'EMOM') setEmomMode(payload.modalityConfig?.emomMode ?? 'shared');
     setExercises(payload.exercises);
     setShowWodPicker(false);
     setPendingWod(null);
@@ -594,7 +732,7 @@ export function WorkoutLoggerClient({
         typeId: parseInt(typeId || '1', 10),
         name: typeName,
         modality: requiresModality ? modality : null,
-        modalityConfig: requiresModality && modality ? modalityConfig : null,
+        modalityConfig: requiresModality && modality ? withEmomMode(modalityConfig) : null,
         totalTimeSeconds: 0, // 0 = Guardado sin finalizar / En progreso
         notes,
         exercises: exercises.map((ex, index) => ({
@@ -635,13 +773,13 @@ export function WorkoutLoggerClient({
       const parsedReps = parseInt(scoreReps, 10);
       const finishConfig =
         requiresModality && modality && (modality === 'AMRAP' || modality === 'EMOM')
-          ? {
+          ? withEmomMode({
               ...modalityConfig,
               ...(!isNaN(parsedRounds) && parsedRounds >= 0 ? { scoreRounds: parsedRounds } : {}),
               ...(!isNaN(parsedReps) && parsedReps >= 0 ? { scoreReps: parsedReps } : {}),
-            }
+            })
           : requiresModality && modality
-            ? modalityConfig
+            ? withEmomMode(modalityConfig)
             : null;
       const payload = {
         workoutId: currentWorkoutId,
@@ -673,7 +811,7 @@ export function WorkoutLoggerClient({
           workoutId: result.workoutId,
           name: templateName,
           modality: requiresModality ? modality : null,
-          modalityConfig: requiresModality && modality ? modalityConfig : null,
+          modalityConfig: requiresModality && modality ? withEmomMode(modalityConfig) : null,
         });
       }
 
@@ -741,7 +879,7 @@ export function WorkoutLoggerClient({
         description: directTemplateDescription.trim() || undefined,
         typeId: directTemplateTypeId,
         modality: requiresModality ? modality : null,
-        modalityConfig: requiresModality && modality ? modalityConfig : null,
+        modalityConfig: requiresModality && modality ? withEmomMode(modalityConfig) : null,
         exercises: templateExercisesPayload,
       });
 
@@ -926,9 +1064,88 @@ export function WorkoutLoggerClient({
         </div>
       </div>
 
-      {/* ─── SELECTOR DE MODALIDAD (CrossFit, Hyrox, Funcional, Cardio) ─── */}
+      {/* ─── PASO 1 · PUNTO DE PARTIDA (opcional: biblioteca Hyrox / WODs) ─── */}
+      {/* Antes partía en dos la configuración: ahora va primero y colapsado si ya hay ejercicios */}
+      {((currentTypeNameLower.includes('hyrox') || typeName.toLowerCase().includes('hyrox')) ||
+        isCrossfitPickerContext) && (
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 px-1">
+            <span className="w-5 h-5 rounded-full bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-[11px] font-black flex items-center justify-center shrink-0">
+              1
+            </span>
+            <h3 className="text-xs font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">
+              Punto de partida
+            </h3>
+            <span className="text-[11px] text-gray-400 font-medium">opcional · carga una base o empieza de cero</span>
+          </div>
+
+          {/* ─── GENERADOR OFICIAL HYROX (plegable para no duplicar la vista de carrera) ─── */}
+          {(currentTypeNameLower.includes('hyrox') || typeName.toLowerCase().includes('hyrox')) && (
+            <div className="space-y-2">
+              {exercises.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowHyroxBuilder((v) => !v)}
+                  className="w-full flex items-center justify-between px-4 py-2.5 rounded-2xl border border-purple-200 dark:border-purple-800/60 bg-purple-50/60 dark:bg-purple-950/20 text-xs font-bold text-purple-900 dark:text-purple-200 hover:bg-purple-100 dark:hover:bg-purple-950/40 transition-colors cursor-pointer"
+                >
+                  <span className="flex items-center gap-2">
+                    <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+                    {showHyroxBuilder ? 'Ocultar generador de carrera Hyrox' : `Generador Hyrox (${exercises.length} tramos cargados)`}
+                  </span>
+                  <span className="text-purple-500">{showHyroxBuilder ? '▲' : '▼'}</span>
+                </button>
+              )}
+              {(showHyroxBuilder || exercises.length === 0) && (
+                <HyroxRaceBuilder
+                  availableExercises={availableExercisesList}
+                  onApplyPreset={(title, generated) => {
+                    handleApplyHyroxPreset(title, generated);
+                    setShowHyroxBuilder(false);
+                    setHyroxUnified(true);
+                  }}
+                />
+              )}
+            </div>
+          )}
+
+          {/* ─── CATÁLOGO DE WODs OFICIALES (CrossFit / Funcional) ─── */}
+          {isCrossfitPickerContext && (
+            <div className="space-y-2">
+              {exercises.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowWodPicker((v) => !v)}
+                  className="w-full flex items-center justify-between px-4 py-2.5 rounded-2xl border border-orange-200 dark:border-orange-800/60 bg-orange-50/60 dark:bg-orange-950/20 text-xs font-bold text-orange-900 dark:text-orange-200 hover:bg-orange-100 dark:hover:bg-orange-950/40 transition-colors cursor-pointer"
+                >
+                  <span className="flex items-center gap-2">
+                    <Trophy className="w-3.5 h-3.5 text-orange-500" />
+                    {showWodPicker ? 'Ocultar catálogo de WODs oficiales' : `WODs oficiales (${exercises.length} ejercicios cargados)`}
+                  </span>
+                  <span className="text-orange-500">{showWodPicker ? '▲' : '▼'}</span>
+                </button>
+              )}
+              {(showWodPicker || exercises.length === 0) && (
+                <CrossfitWodPicker
+                  availableExercises={availableExercisesList}
+                  onApplyWod={handleApplyWod}
+                />
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ─── PASO 2 · MODALIDAD (CrossFit, Hyrox, Funcional, Cardio) ─── */}
       {requiresModality && (
         <div className="space-y-3">
+          <div className="flex items-center gap-2 px-1">
+            <span className="w-5 h-5 rounded-full bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-[11px] font-black flex items-center justify-center shrink-0">
+              2
+            </span>
+            <h3 className="text-xs font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">
+              Modalidad de la Sesión / WOD
+            </h3>
+          </div>
           <div className="bg-white dark:bg-gray-900 rounded-2xl border border-orange-200/80 dark:border-orange-900/40 p-3.5 sm:p-4 shadow-xs space-y-2.5">
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <div className="flex items-center gap-2">
@@ -989,61 +1206,80 @@ export function WorkoutLoggerClient({
         </div>
       )}
 
-      {/* ─── GENERADOR OFICIAL HYROX (plegable para no duplicar la vista de carrera) ─── */}
-      {(currentTypeNameLower.includes('hyrox') || typeName.toLowerCase().includes('hyrox')) && (
-        <div className="space-y-2">
-          {exercises.length > 0 && (
+      {/* ─── PASO 3 · EJERCICIOS (aquí vive Generar estructura, en contexto) ─── */}
+      <div className="flex items-center gap-2 px-1">
+        <span className="w-5 h-5 rounded-full bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-[11px] font-black flex items-center justify-center shrink-0">
+          3
+        </span>
+        <h3 className="text-xs font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">
+          Ejercicios
+        </h3>
+        <span className="text-[11px] text-gray-400 font-medium">
+          {exercises.length} cargado{exercises.length !== 1 ? 's' : ''}
+        </span>
+      </div>
+
+      {/* Generar estructura integrada en la configuración de ejercicios */}
+      {(() => {
+        const structure =
+          requiresModality && modality && (modality === 'EMOM' || modality === 'TABATA' || modality === 'HIIT' || modality === 'Ladder')
+            ? getModalitySeriesStructure(modality, modalityConfig)
+            : null;
+        if (!structure || exercises.length === 0 || useHyroxUnified) return null;
+        const isEmomMulti = modality === 'EMOM' && exercises.length > 1;
+        const emomDetail = isEmomMulti
+          ? emomMode === 'shared'
+            ? `${structure.count} min compartidos · ambos cada minuto (${structure.count}+${structure.count})`
+            : `${structure.count} min alternos (${Math.ceil(structure.count / exercises.length)}+${Math.floor(structure.count / exercises.length)})`
+          : structure.label;
+        return (
+          <div className="space-y-2">
+            {isEmomMulti && (
+              <div className="px-4 py-2 rounded-2xl bg-blue-50/70 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/40 text-[11px] text-blue-900 dark:text-blue-200">
+                Minuto compartido: Min N = {exercises.map((e) => e.name).join(' + ')} juntos. Lo que sobre del minuto se descansa. No son dos EMOMs: el total sigue siendo {structure.count}&apos;.
+              </div>
+            )}
+            {isEmomMulti && (
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setEmomMode('shared')}
+                  className={`flex-1 px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-colors cursor-pointer ${
+                    emomMode === 'shared'
+                      ? 'bg-orange-500 text-white border-orange-600'
+                      : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700'
+                  }`}
+                >
+                  Ambos cada minuto
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEmomMode('alternate')}
+                  className={`flex-1 px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-colors cursor-pointer ${
+                    emomMode === 'alternate'
+                      ? 'bg-orange-500 text-white border-orange-600'
+                      : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700'
+                  }`}
+                >
+                  Alternos impar/par
+                </button>
+              </div>
+            )}
             <button
               type="button"
-              onClick={() => setShowHyroxBuilder((v) => !v)}
-              className="w-full flex items-center justify-between px-4 py-2.5 rounded-2xl border border-purple-200 dark:border-purple-800/60 bg-purple-50/60 dark:bg-purple-950/20 text-xs font-bold text-purple-900 dark:text-purple-200 hover:bg-purple-100 dark:hover:bg-purple-950/40 transition-colors cursor-pointer"
+              onClick={applyModalityStructure}
+              title="Crea las series que faltan y fija reps del esquema. No borra lo que ya tienes."
+              className="w-full flex items-center justify-between gap-2 px-4 py-2.5 rounded-2xl border border-orange-200 dark:border-orange-800/60 bg-orange-50/60 dark:bg-orange-950/20 text-xs font-bold text-orange-900 dark:text-orange-200 hover:bg-orange-100 dark:hover:bg-orange-950/40 transition-colors cursor-pointer"
             >
-              <span className="flex items-center gap-2">
-                <Sparkles className="w-3.5 h-3.5 text-purple-600" />
-                {showHyroxBuilder ? 'Ocultar generador de carrera Hyrox' : `Generador Hyrox (${exercises.length} tramos cargados)`}
+              <span className="flex items-center gap-2 min-w-0">
+                <Layers className="w-3.5 h-3.5 text-orange-500 shrink-0" />
+                <span className="truncate">Generar estructura: {emomDetail}</span>
               </span>
-              <span className="text-purple-500">{showHyroxBuilder ? '▲' : '▼'}</span>
+              <span className="shrink-0 text-orange-500">→ {exercises.length} ej.</span>
             </button>
-          )}
-          {(showHyroxBuilder || exercises.length === 0) && (
-            <HyroxRaceBuilder
-              availableExercises={availableExercisesList}
-              onApplyPreset={(title, generated) => {
-                handleApplyHyroxPreset(title, generated);
-                setShowHyroxBuilder(false);
-                setHyroxUnified(true);
-              }}
-            />
-          )}
-        </div>
-      )}
-
-      {/* ─── CATÁLOGO DE WODs OFICIALES (CrossFit / Funcional) ─── */}
-      {/* Visible en entrenos personalizados de CrossFit/Funcional (también en modo
-          plantilla: desde aquí se puede "Guardar como Plantilla" con el WOD cargado) */}
-      {isCrossfitPickerContext && (
-          <div className="space-y-2">
-            {exercises.length > 0 && (
-              <button
-                type="button"
-                onClick={() => setShowWodPicker((v) => !v)}
-                className="w-full flex items-center justify-between px-4 py-2.5 rounded-2xl border border-orange-200 dark:border-orange-800/60 bg-orange-50/60 dark:bg-orange-950/20 text-xs font-bold text-orange-900 dark:text-orange-200 hover:bg-orange-100 dark:hover:bg-orange-950/40 transition-colors cursor-pointer"
-              >
-                <span className="flex items-center gap-2">
-                  <Trophy className="w-3.5 h-3.5 text-orange-500" />
-                  {showWodPicker ? 'Ocultar catálogo de WODs oficiales' : `WODs oficiales (${exercises.length} ejercicios cargados)`}
-                </span>
-                <span className="text-orange-500">{showWodPicker ? '▲' : '▼'}</span>
-              </button>
-            )}
-            {(showWodPicker || exercises.length === 0) && (
-              <CrossfitWodPicker
-                availableExercises={availableExercisesList}
-                onApplyWod={handleApplyWod}
-              />
-            )}
           </div>
-        )}
+        );
+      })()}
 
       {/* Lista de Ejercicios — en Hyrox se unifica en una sola tabla de carrera */}
       <div className="space-y-4">
@@ -1248,6 +1484,7 @@ export function WorkoutLoggerClient({
                       const selected = exerciseOptions.find((o) => o.value === val);
                       const newExerciseId = parseInt(val, 10);
                       const newName = selected?.label || `Ejercicio ${val}`;
+                      ensureLastMark(newExerciseId);
                       const newIsRope = isRopeExerciseName(newName);
                       const newIsCardio = !newIsRope && isCardioProfile(newExerciseId);
                       setExercises((prev) =>
@@ -1315,6 +1552,40 @@ export function WorkoutLoggerClient({
                   </Button>
                 </div>
               </CardHeader>
+
+              {/* Hint última marca: restaura el conjunto para repetir/añadir/quitar */}
+              {(() => {
+                const marks = lastMarks[ex.exerciseId];
+                if (!marks || marks.length === 0) return null;
+                const sameLength = ex.sets.length === marks.length;
+                const alreadyApplied =
+                  sameLength &&
+                  ex.sets.every((s, i) => {
+                    const m = marks[i];
+                    return (
+                      (m.weight ?? null) === (s.weight ?? null) &&
+                      (m.repCount ?? 0) === (s.repCount ?? 0) &&
+                      (m.distance ?? null) === (s.distance ?? null) &&
+                      (m.durationSeconds ?? null) === (s.durationSeconds ?? null) &&
+                      (m.calories ?? null) === (s.calories ?? null)
+                    );
+                  });
+                if (alreadyApplied) return null;
+                return (
+                  <div className="px-4 py-2 flex items-center justify-between gap-2 bg-blue-50/70 dark:bg-blue-950/20 border-b border-blue-100 dark:border-blue-900/40">
+                    <span className="text-[11px] font-medium text-blue-900 dark:text-blue-200 tabular-nums truncate">
+                      Último: {formatLastMarkLabel(marks)}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => applyLastMark(ex.id, marks)}
+                      className="shrink-0 h-7 px-2.5 rounded-lg text-[11px] font-bold text-blue-700 dark:text-blue-300 bg-white dark:bg-blue-900/40 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/60 transition-colors cursor-pointer"
+                    >
+                      {`Usar (${marks.length})`}
+                    </button>
+                  </div>
+                );
+              })()}
 
               <CardContent className="p-0">
                 {!isExpanded ? (
@@ -1500,7 +1771,7 @@ export function WorkoutLoggerClient({
                     {isRope ? (
                       <>
                         <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase border-b dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50">
-                          <div className="col-span-1 text-center">Serie</div>
+                          <div className="col-span-1 text-center">{modality === 'EMOM' ? 'Min' : 'Serie'}</div>
                           <div className="col-span-3 text-center">Saltos</div>
                           <div className="col-span-4 text-center">Tiempo (m:ss)</div>
                           <div className="col-span-2 text-center">Kcal</div>
@@ -1590,7 +1861,7 @@ export function WorkoutLoggerClient({
                     ) : isCardio ? (
                       <>
                         <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase border-b dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50">
-                          <div className="col-span-1 text-center">Serie</div>
+                          <div className="col-span-1 text-center">{modality === 'EMOM' ? 'Min' : 'Serie'}</div>
                           <div className="col-span-3 text-center">Dist. (m)</div>
                           <div className="col-span-4 text-center">Tiempo (m:ss)</div>
                           <div className="col-span-2 text-center">Kcal</div>
@@ -1679,7 +1950,7 @@ export function WorkoutLoggerClient({
                     ) : hasDistance || primaryDistance != null ? (
                       <>
                         <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase border-b dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50">
-                          <div className="col-span-1 text-center">Serie</div>
+                          <div className="col-span-1 text-center">{modality === 'EMOM' ? 'Min' : 'Serie'}</div>
                           <div className="col-span-2 text-center">Metros</div>
                           <div className="col-span-3 text-center">Tiempo (m:ss)</div>
                           <div className="col-span-2 text-center">Kg</div>
@@ -1780,7 +2051,7 @@ export function WorkoutLoggerClient({
                     ) : showTimeField ? (
                       <>
                         <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase border-b dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50">
-                          <div className="col-span-1 text-center">Serie</div>
+                          <div className="col-span-1 text-center">{modality === 'EMOM' ? 'Min' : 'Serie'}</div>
                           <div className="col-span-2 text-center">Kg</div>
                           <div className="col-span-2 text-center">Reps</div>
                           <div className="col-span-5 text-center">Tiempo (m:ss)</div>
@@ -1868,7 +2139,7 @@ export function WorkoutLoggerClient({
                     ) : (
                       <>
                         <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase border-b dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50">
-                          <div className="col-span-1 text-center">Serie</div>
+                          <div className="col-span-1 text-center">{modality === 'EMOM' ? 'Min' : 'Serie'}</div>
                           <div className="col-span-3 text-center">Kg</div>
                           <div className="col-span-3 text-center">Reps</div>
                           <div className="col-span-3 text-center">RPE</div>
@@ -2166,6 +2437,22 @@ export function WorkoutLoggerClient({
                     ⏱ Auto: {formatDurationInput(segmentTotalSeconds)} — recalcular
                   </button>
                 )}
+                {!(isHyroxPage && segmentTotalSeconds > 0) &&
+                  requiresModality &&
+                  modality &&
+                  modalityEstimatedSeconds &&
+                  modalityEstimatedSeconds > 0 && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setTotalTimeMinutes(String(Math.max(1, Math.round(modalityEstimatedSeconds / 60))))
+                      }
+                      className="text-[11px] font-bold text-orange-600 dark:text-orange-400 hover:underline cursor-pointer"
+                      title="Usar la duración de la modalidad (editable)"
+                    >
+                      ⏱ Sugerido {formatModalitySummary(modality, modalityConfig)} — aplicar
+                    </button>
+                  )}
               </div>
               <Input
                 type="number"

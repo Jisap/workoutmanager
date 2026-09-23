@@ -497,6 +497,20 @@ export function ModalityConfigPanel({
                 onChange={(e) => update({ repScheme: e.target.value })}
                 className="w-full px-3 py-1.5 text-xs font-bold text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500"
               />
+              {(() => {
+                const nums = (config.repScheme || '').match(/\d+/g);
+                if (!nums || nums.length === 0) {
+                  return <p className="text-[11px] text-red-500 font-medium">Escribe números separados por guiones, ej. 21-15-9</p>;
+                }
+                if (nums.length > 30) {
+                  return <p className="text-[11px] text-red-500 font-medium">Máximo 30 valores</p>;
+                }
+                return (
+                  <p className="text-[11px] text-gray-500">
+                    {nums.length} series: {nums.join(' · ')}
+                  </p>
+                );
+              })()}
             </div>
 
             {/* Time Cap opcional */}
@@ -540,7 +554,7 @@ export function ModalityConfigPanel({
             <span className="text-[11px] font-medium text-gray-500 mr-1 flex items-center gap-1">
               <Sparkles className="w-3 h-3 text-orange-500" /> Esquemas populares:
             </span>
-            {['21-15-9', '15-12-9', '10-8-6-4-2', '1 a 10 (1-2-3...10)', '10 a 1 (10-9-8...1)', '50-40-30-20-10'].map((sch) => (
+            {['21-15-9', '15-12-9', '10-8-6-4-2', '1-2-3-4-5-6-7-8-9-10', '10-9-8-7-6-5-4-3-2-1', '50-40-30-20-10'].map((sch) => (
               <button
                 key={sch}
                 type="button"

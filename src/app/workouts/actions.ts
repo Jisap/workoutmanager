@@ -479,6 +479,41 @@ export async function getLastWorkoutData(userId: string) {
   return lastWorkout;
 }
 
+// Últimas series registradas para un ejercicio (hint "Último: ..." en el logger).
+// Devuelve el conjunto completo de la sesión más reciente donde apareció el
+// ejercicio, para que el usuario decida si repetir, añadir o quitar series.
+// Solo datos del propio usuario.
+export async function getLastSetForExercise(exerciseId: number) {
+  const { userId } = await auth();
+  if (!userId) throw new Error('No autorizado');
+  if (!Number.isInteger(exerciseId) || exerciseId <= 0) throw new Error('Ejercicio inválido');
+
+  const lastEx = await db
+    .select({ id: workoutExercises.id })
+    .from(workoutExercises)
+    .innerJoin(workouts, eq(workoutExercises.workoutId, workouts.id))
+    .where(and(eq(workouts.userId, userId), eq(workoutExercises.exerciseId, exerciseId)))
+    .orderBy(desc(workouts.startTime), desc(workoutExercises.id))
+    .limit(1);
+
+  if (lastEx.length === 0) return null;
+
+  const rows = await db
+    .select({
+      repCount: sets.repCount,
+      weight: sets.weight,
+      distance: sets.distance,
+      durationSeconds: sets.durationSeconds,
+      calories: sets.calories,
+      rpe: sets.rpe,
+    })
+    .from(sets)
+    .where(eq(sets.workoutExerciseId, lastEx[0].id))
+    .orderBy(asc(sets.id));
+
+  return rows.length > 0 ? rows : null;
+}
+
 // Guardar como plantilla
 export async function saveAsTemplate(data: {
   workoutId: number;
