@@ -440,10 +440,10 @@ export function WorkoutLoggerClient({
     );
   };
 
-  // Actualizar un campo (reps, peso, distancia, calorías...) en todas las series del ejercicio
+  // Actualizar un campo (reps, peso, distancia, calorías, RPE...) en todas las series del ejercicio
   const updateAllSetsField = (
     exerciseId: string,
-    field: 'repCount' | 'weight' | 'distance' | 'durationSeconds' | 'calories',
+    field: 'repCount' | 'weight' | 'distance' | 'durationSeconds' | 'calories' | 'rpe',
     value: number | null
   ) => {
     setExercises((prev) =>
@@ -1205,6 +1205,7 @@ export function WorkoutLoggerClient({
           const primaryDistance = ex.sets[0]?.distance;
           const primaryDuration = ex.sets[0]?.durationSeconds ?? null;
           const primaryCalories = ex.sets[0]?.calories;
+          const primaryRpe = ex.sets[0]?.rpe ?? null;
 
           const hasDistance =
             ex.sets.some((s) => s.distance != null) ||
@@ -1437,6 +1438,33 @@ export function WorkoutLoggerClient({
                               updateAllSetsField(ex.id, 'weight', val);
                             }}
                             className="h-9 text-center font-bold text-sm tabular-nums bg-gray-50/50 dark:bg-gray-800/50 dark:text-gray-100 dark:border-gray-700"
+                          />
+                        </div>
+                      )}
+
+                      {/* RPE (1-10, opcional — aplica a todas las series) */}
+                      {!isRope && (
+                        <div className="flex flex-col flex-1 min-w-[60px] max-w-[80px]">
+                          <span className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">
+                            RPE
+                          </span>
+                          <Input
+                            type="number"
+                            min="1"
+                            max="10"
+                            step="1"
+                            placeholder="–"
+                            title="Esfuerzo percibido 1-10 (opcional)"
+                            value={primaryRpe ?? ''}
+                            onChange={(e) => {
+                              if (e.target.value.trim() === '') {
+                                updateAllSetsField(ex.id, 'rpe', null);
+                                return;
+                              }
+                              const val = parseInt(e.target.value, 10);
+                              if (!isNaN(val)) updateAllSetsField(ex.id, 'rpe', Math.max(1, Math.min(10, val)));
+                            }}
+                            className="h-9 text-center font-bold text-sm tabular-nums bg-amber-50/50 dark:bg-amber-950/20 dark:text-gray-100 dark:border-gray-700 border-amber-200"
                           />
                         </div>
                       )}
@@ -1840,9 +1868,10 @@ export function WorkoutLoggerClient({
                     ) : (
                       <>
                         <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase border-b dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50">
-                          <div className="col-span-2 text-center">Serie</div>
-                          <div className="col-span-4 text-center">Kg</div>
-                          <div className="col-span-4 text-center">Reps</div>
+                          <div className="col-span-1 text-center">Serie</div>
+                          <div className="col-span-3 text-center">Kg</div>
+                          <div className="col-span-3 text-center">Reps</div>
+                          <div className="col-span-3 text-center">RPE</div>
                           <div className="col-span-2 text-center">✓</div>
                         </div>
 
@@ -1853,7 +1882,7 @@ export function WorkoutLoggerClient({
                               set.isCompleted ? 'bg-green-50/50 dark:bg-green-900/10' : 'hover:bg-gray-50/30 dark:hover:bg-gray-800/50'
                             }`}
                           >
-                            <div className="col-span-2 flex items-center justify-center gap-1">
+                            <div className="col-span-1 flex items-center justify-center gap-1">
                               <span className="font-semibold text-xs text-gray-600 dark:text-gray-400">{setIndex + 1}</span>
                               {ex.sets.length > 1 && (
                                 <button
@@ -1867,12 +1896,12 @@ export function WorkoutLoggerClient({
                               )}
                             </div>
 
-                            <div className="col-span-4">
+                            <div className="col-span-3">
                               <Input
                                 type="number"
                                 step="0.5"
                                 placeholder="0"
-                                className="text-center h-8 text-sm tabular-nums"
+                                className="text-center h-8 text-sm tabular-nums px-1"
                                 value={set.weight ?? ''}
                                 onChange={(e) =>
                                   updateSet(ex.id, set.id, 'weight', e.target.value ? parseFloat(e.target.value) : null)
@@ -1880,15 +1909,36 @@ export function WorkoutLoggerClient({
                               />
                             </div>
 
-                            <div className="col-span-4">
+                            <div className="col-span-3">
                               <Input
                                 type="number"
                                 placeholder="0"
-                                className="text-center h-8 text-sm tabular-nums"
+                                className="text-center h-8 text-sm tabular-nums px-1"
                                 value={set.repCount || ''}
                                 onChange={(e) =>
                                   updateSet(ex.id, set.id, 'repCount', e.target.value ? parseInt(e.target.value, 10) : 0)
                                 }
+                              />
+                            </div>
+
+                            <div className="col-span-3">
+                              <Input
+                                type="number"
+                                min="1"
+                                max="10"
+                                step="1"
+                                placeholder="–"
+                                title="RPE 1-10 (opcional)"
+                                className="text-center h-8 text-sm tabular-nums px-1 border-amber-200 bg-amber-50/50 dark:bg-amber-950/20"
+                                value={set.rpe ?? ''}
+                                onChange={(e) => {
+                                  if (e.target.value.trim() === '') {
+                                    updateSet(ex.id, set.id, 'rpe', null);
+                                  } else {
+                                    const val = parseInt(e.target.value, 10);
+                                    if (!isNaN(val)) updateSet(ex.id, set.id, 'rpe', Math.max(1, Math.min(10, val)));
+                                  }
+                                }}
                               />
                             </div>
 
@@ -1909,7 +1959,7 @@ export function WorkoutLoggerClient({
                     )}
 
                     {/* Acciones de la vista detallada */}
-                    <div className="flex items-center justify-between px-4 py-2.5 bg-gray-50/70 dark:bg-gray-800/50 border-t dark:border-gray-700">
+                    <div className="flex items-center justify-between gap-2 px-4 py-2.5 bg-gray-50/70 dark:bg-gray-800/50 border-t dark:border-gray-700 flex-wrap">
                       <Button
                         type="button"
                         variant="ghost"
@@ -1920,6 +1970,33 @@ export function WorkoutLoggerClient({
                         <Plus className="w-3.5 h-3.5 mr-1" />
                         Añadir serie
                       </Button>
+
+                      {/* RPE masivo para perfiles sin columna RPE (cardio, comba, distancia, tiempo).
+                          En fuerza ya hay RPE por serie; esto lo complementa. */}
+                      <div className="flex items-center gap-1.5">
+                        <label htmlFor={`rpe-all-${ex.id}`} className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                          RPE todas
+                        </label>
+                        <Input
+                          id={`rpe-all-${ex.id}`}
+                          type="number"
+                          min="1"
+                          max="10"
+                          step="1"
+                          placeholder="–"
+                          title="Aplicar RPE 1-10 a todas las series (opcional)"
+                          value={primaryRpe ?? ''}
+                          onChange={(e) => {
+                            if (e.target.value.trim() === '') {
+                              updateAllSetsField(ex.id, 'rpe', null);
+                              return;
+                            }
+                            const val = parseInt(e.target.value, 10);
+                            if (!isNaN(val)) updateAllSetsField(ex.id, 'rpe', Math.max(1, Math.min(10, val)));
+                          }}
+                          className="w-16 h-8 text-center text-sm tabular-nums px-1 border-amber-200 bg-amber-50/50 dark:bg-amber-950/20"
+                        />
+                      </div>
 
                       <button
                         type="button"
