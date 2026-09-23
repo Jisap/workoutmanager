@@ -522,25 +522,45 @@ export function WorkoutLoggerClient({
   };
 
   // Generar estructura desde modalityConfig (EMOM/TABATA/HIIT/Ladder).
-  // Solo crece o actualiza reps: nunca borra series con datos.
-  // EMOM con varios ejercicios: minutos compartidos. "Ambos cada minuto"
-  // crea N en cada ejercicio (Min N = Ej1 + Ej2 juntos); "Alternos" reparte
-  // N entre ejercicios (impar/par). Se persiste en modalityConfig.emomMode
-  // para que el historial lo muestre.
+  // Crece siempre; al repartir (EMOM alterno / TABATA compartido) también
+  // recorta, pero solo series vacías del final. Si hay datos, no se borra:
+  // se avisa para ajustar a mano con el input Series.
   const [emomMode, setEmomMode] = useState<'shared' | 'alternate'>(
     () => initialModalityConfig?.emomMode ?? 'shared'
   );
-  const withEmomMode = (cfg: ModalityConfig): ModalityConfig =>
-    modality === 'EMOM' ? { ...cfg, emomMode } : cfg;
+  const [tabataMode, setTabataMode] = useState<'perExercise' | 'shared'>(
+    () => initialModalityConfig?.tabataMode ?? 'perExercise'
+  );
+  const withEmomMode = (cfg: ModalityConfig): ModalityConfig => {
+    let out = cfg;
+    if (modality === 'EMOM') out = { ...out, emomMode };
+    if (modality === 'TABATA') out = { ...out, tabataMode };
+    return out;
+  };
+  const isEmptySet = (s: LocalSet): boolean =>
+    !s.isCompleted &&
+    (s.repCount ?? 0) === 0 &&
+    (s.weight ?? null) === null &&
+    (s.distance ?? null) === null &&
+    (s.durationSeconds ?? null) === null &&
+    (s.calories ?? null) === null &&
+    (s.rpe ?? null) === null;
   const applyModalityStructure = () => {
     const structure = getModalitySeriesStructure(modality, modalityConfig);
     if (!structure || exercises.length === 0) return;
     const reps = structure.reps;
+    let blockedShrink = 0;
     setExercises((prev) => {
       const numEx = prev.length;
       return prev.map((ex, exIndex) => {
         let targetCount = Math.max(1, Math.min(50, structure.count));
         if (modality === 'EMOM' && emomMode === 'alternate' && numEx > 1) {
+          const total = structure.count;
+          const base = Math.floor(total / numEx);
+          const remainder = total % numEx;
+          targetCount = Math.max(1, base + (exIndex < remainder ? 1 : 0));
+        }
+        if (modality === 'TABATA' && tabataMode === 'shared' && numEx > 1) {
           const total = structure.count;
           const base = Math.floor(total / numEx);
           const remainder = total % numEx;
@@ -562,6 +582,13 @@ export function WorkoutLoggerClient({
               isCompleted: false,
             });
           }
+        } else if (grown.length > targetCount) {
+          // Recorte seguro: solo series vacías del final (caso típico: se generó
+          // con 1 ejercicio y luego se añadió otro en modo compartido).
+          while (grown.length > targetCount && isEmptySet(grown[grown.length - 1])) {
+            grown.pop();
+          }
+          if (grown.length > targetCount) blockedShrink += 1;
         }
         // Ladder: fijar reps del esquema en las series solapadas (resetea ✓ si cambia).
         const updated = reps
@@ -574,7 +601,14 @@ export function WorkoutLoggerClient({
         return { ...ex, sets: updated };
       });
     });
-    notify.success('Estructura aplicada', structure.label);
+    if (blockedShrink > 0) {
+      notify.warning(
+        'Revisa las series',
+        `${blockedShrink} ejercicio(s) tienen datos y no se recortaron solos: ajusta el nº en Series`
+      );
+    } else {
+      notify.success('Estructura aplicada', structure.label);
+    }
   };
 
   // Actualizar un campo (reps, peso, distancia, calorías, RPE...) en todas las series del ejercicio
@@ -707,6 +741,7 @@ export function WorkoutLoggerClient({
     setModality(payload.modality);
     setModalityConfig(payload.modalityConfig);
     if (payload.modality === 'EMOM') setEmomMode(payload.modalityConfig?.emomMode ?? 'shared');
+    if (payload.modality === 'TABATA') setTabataMode(payload.modalityConfig?.tabataMode ?? 'perExercise');
     setExercises(payload.exercises);
     setShowWodPicker(false);
     setPendingWod(null);
@@ -1227,16 +1262,29 @@ export function WorkoutLoggerClient({
             : null;
         if (!structure || exercises.length === 0 || useHyroxUnified) return null;
         const isEmomMulti = modality === 'EMOM' && exercises.length > 1;
+        const isTabataMulti = modality === 'TABATA' && exercises.length > 1;
         const emomDetail = isEmomMulti
           ? emomMode === 'shared'
             ? `${structure.count} min compartidos · ambos cada minuto (${structure.count}+${structure.count})`
             : `${structure.count} min alternos (${Math.ceil(structure.count / exercises.length)}+${Math.floor(structure.count / exercises.length)})`
-          : structure.label;
+          : isTabataMulti
+            ? tabataMode === 'shared'
+              ? `${structure.count} rondas compartidas · rotando`
+              : `${structure.count} rondas c/u · secuencial`
+            : structure.label;
+        const generateDetail = `Generar estructura: ${emomDetail}`;
         return (
           <div className="space-y-2">
             {isEmomMulti && (
               <div className="px-4 py-2 rounded-2xl bg-blue-50/70 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/40 text-[11px] text-blue-900 dark:text-blue-200">
                 Minuto compartido: Min N = {exercises.map((e) => e.name).join(' + ')} juntos. Lo que sobre del minuto se descansa. No son dos EMOMs: el total sigue siendo {structure.count}&apos;.
+              </div>
+            )}
+            {isTabataMulti && (
+              <div className="px-4 py-2 rounded-2xl bg-blue-50/70 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/40 text-[11px] text-blue-900 dark:text-blue-200">
+                {tabataMode === 'shared'
+                  ? `Rondas compartidas: R N rota entre ${exercises.map((e) => e.name).join(' y ')} (20s on / 10s off). Un solo Tabata.`
+                  : `Un Tabata completo por ejercicio, en secuencia: ${structure.count} rondas cada uno.`}
               </div>
             )}
             {isEmomMulti && (
@@ -1265,15 +1313,41 @@ export function WorkoutLoggerClient({
                 </button>
               </div>
             )}
+            {isTabataMulti && (
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setTabataMode('perExercise')}
+                  className={`flex-1 px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-colors cursor-pointer ${
+                    tabataMode === 'perExercise'
+                      ? 'bg-orange-500 text-white border-orange-600'
+                      : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700'
+                  }`}
+                >
+                  Cada uno su Tabata
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTabataMode('shared')}
+                  className={`flex-1 px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-colors cursor-pointer ${
+                    tabataMode === 'shared'
+                      ? 'bg-orange-500 text-white border-orange-600'
+                      : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700'
+                  }`}
+                >
+                  Rondas compartidas
+                </button>
+              </div>
+            )}
             <button
               type="button"
               onClick={applyModalityStructure}
-              title="Crea las series que faltan y fija reps del esquema. No borra lo que ya tienes."
+              title="Crea las series que faltan y recorta las vacías al repartir. Nunca borra series con datos."
               className="w-full flex items-center justify-between gap-2 px-4 py-2.5 rounded-2xl border border-orange-200 dark:border-orange-800/60 bg-orange-50/60 dark:bg-orange-950/20 text-xs font-bold text-orange-900 dark:text-orange-200 hover:bg-orange-100 dark:hover:bg-orange-950/40 transition-colors cursor-pointer"
             >
               <span className="flex items-center gap-2 min-w-0">
                 <Layers className="w-3.5 h-3.5 text-orange-500 shrink-0" />
-                <span className="truncate">Generar estructura: {emomDetail}</span>
+                <span className="truncate">{generateDetail}</span>
               </span>
               <span className="shrink-0 text-orange-500">→ {exercises.length} ej.</span>
             </button>
@@ -1771,7 +1845,7 @@ export function WorkoutLoggerClient({
                     {isRope ? (
                       <>
                         <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase border-b dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50">
-                          <div className="col-span-1 text-center">{modality === 'EMOM' ? 'Min' : 'Serie'}</div>
+                          <div className="col-span-1 text-center">{modality === 'EMOM' ? 'Min' : modality === 'TABATA' ? 'Ronda' : 'Serie'}</div>
                           <div className="col-span-3 text-center">Saltos</div>
                           <div className="col-span-4 text-center">Tiempo (m:ss)</div>
                           <div className="col-span-2 text-center">Kcal</div>
@@ -1861,7 +1935,7 @@ export function WorkoutLoggerClient({
                     ) : isCardio ? (
                       <>
                         <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase border-b dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50">
-                          <div className="col-span-1 text-center">{modality === 'EMOM' ? 'Min' : 'Serie'}</div>
+                          <div className="col-span-1 text-center">{modality === 'EMOM' ? 'Min' : modality === 'TABATA' ? 'Ronda' : 'Serie'}</div>
                           <div className="col-span-3 text-center">Dist. (m)</div>
                           <div className="col-span-4 text-center">Tiempo (m:ss)</div>
                           <div className="col-span-2 text-center">Kcal</div>
@@ -1950,7 +2024,7 @@ export function WorkoutLoggerClient({
                     ) : hasDistance || primaryDistance != null ? (
                       <>
                         <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase border-b dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50">
-                          <div className="col-span-1 text-center">{modality === 'EMOM' ? 'Min' : 'Serie'}</div>
+                          <div className="col-span-1 text-center">{modality === 'EMOM' ? 'Min' : modality === 'TABATA' ? 'Ronda' : 'Serie'}</div>
                           <div className="col-span-2 text-center">Metros</div>
                           <div className="col-span-3 text-center">Tiempo (m:ss)</div>
                           <div className="col-span-2 text-center">Kg</div>
@@ -2051,7 +2125,7 @@ export function WorkoutLoggerClient({
                     ) : showTimeField ? (
                       <>
                         <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase border-b dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50">
-                          <div className="col-span-1 text-center">{modality === 'EMOM' ? 'Min' : 'Serie'}</div>
+                          <div className="col-span-1 text-center">{modality === 'EMOM' ? 'Min' : modality === 'TABATA' ? 'Ronda' : 'Serie'}</div>
                           <div className="col-span-2 text-center">Kg</div>
                           <div className="col-span-2 text-center">Reps</div>
                           <div className="col-span-5 text-center">Tiempo (m:ss)</div>
@@ -2139,7 +2213,7 @@ export function WorkoutLoggerClient({
                     ) : (
                       <>
                         <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase border-b dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50">
-                          <div className="col-span-1 text-center">{modality === 'EMOM' ? 'Min' : 'Serie'}</div>
+                          <div className="col-span-1 text-center">{modality === 'EMOM' ? 'Min' : modality === 'TABATA' ? 'Ronda' : 'Serie'}</div>
                           <div className="col-span-3 text-center">Kg</div>
                           <div className="col-span-3 text-center">Reps</div>
                           <div className="col-span-3 text-center">RPE</div>

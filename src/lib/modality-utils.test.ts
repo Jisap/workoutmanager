@@ -70,3 +70,20 @@ describe('formatModalitySummary EMOM', () => {
     );
   });
 });
+
+describe('formatModalitySummary TABATA', () => {
+  it('sin modo → base', () => {
+    expect(formatModalitySummary('TABATA', { workSeconds: 20, restSeconds: 10, rounds: 8, sets: 1 })).toBe(
+      'TABATA 8r (20/10s)'
+    );
+  });
+
+  it('perExercise → c/u, shared → rotando', () => {
+    expect(
+      formatModalitySummary('TABATA', { workSeconds: 20, restSeconds: 10, rounds: 8, sets: 1, tabataMode: 'perExercise' })
+    ).toBe('TABATA 8r (20/10s) · c/u');
+    expect(
+      formatModalitySummary('TABATA', { workSeconds: 20, restSeconds: 10, rounds: 8, sets: 1, tabataMode: 'shared' })
+    ).toBe('TABATA 8r (20/10s) · rotando');
+  });
+});

@@ -28,7 +28,10 @@ export function formatModalitySummary(
       const rest = config.restSeconds ?? 10;
       const rounds = config.rounds ?? 8;
       const sets = config.sets && config.sets > 1 ? `${config.sets}×` : '';
-      return `TABATA ${sets}${rounds}r (${work}/${rest}s)`;
+      const base = `TABATA ${sets}${rounds}r (${work}/${rest}s)`;
+      if (config.tabataMode === 'shared') return `${base} · rotando`;
+      if (config.tabataMode === 'perExercise') return `${base} · c/u`;
+      return base;
     }
     case 'HIIT': {
       const work = config.workSeconds ?? 40;

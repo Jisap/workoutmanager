@@ -28,6 +28,9 @@ export interface ModalityConfig {
   // EMOM con varios ejercicios: shared = todos cada minuto (Min N juntos),
   // alternate = impar/par repartidos.
   emomMode?: 'shared' | 'alternate';
+  // TABATA con varios ejercicios: perExercise = cada uno su Tabata completo
+  // (secuencial), shared = rondas compartidas rotando (R1 Ej1, R2 Ej2...).
+  tabataMode?: 'perExercise' | 'shared';
   // TABATA & HIIT
   workSeconds?: number;
   restSeconds?: number;
