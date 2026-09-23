@@ -447,6 +447,15 @@ export function WorkoutDetailModal({
                   : `Un Tabata completo por ejercicio, en secuencia.`}
               </div>
             )}
+          {workout.modality === 'HIIT' &&
+            workout.exercisesSummary.length > 1 &&
+            (workout.modalityConfig?.hiitMode === 'circuit' || workout.modalityConfig?.hiitMode === 'sequential') && (
+              <div className="p-3 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900/40 rounded-xl text-[11px] text-blue-900 dark:text-blue-200">
+                {workout.modalityConfig.hiitMode === 'circuit'
+                  ? `En circuito: Ronda N = ${workout.exercisesSummary.map((e) => e.name).join(' + ')} una vez cada uno.`
+                  : `Secuencial: primero todos los esfuerzos de un ejercicio, luego el siguiente.`}
+              </div>
+            )}
           {workout.notes && (
             <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl text-xs text-amber-900 dark:text-amber-200 flex gap-2">
               <FileText className="w-3.5 h-3.5 shrink-0 mt-0.5 text-amber-600" />

@@ -87,3 +87,20 @@ describe('formatModalitySummary TABATA', () => {
     ).toBe('TABATA 8r (20/10s) · rotando');
   });
 });
+
+describe('formatModalitySummary HIIT', () => {
+  it('sin modo → base', () => {
+    expect(formatModalitySummary('HIIT', { workSeconds: 40, restSeconds: 20, rounds: 5, sets: 3 })).toBe(
+      'HIIT 3×5r (40/20s)'
+    );
+  });
+
+  it('circuit → circuito, sequential → secuencial', () => {
+    expect(
+      formatModalitySummary('HIIT', { workSeconds: 40, restSeconds: 20, rounds: 5, sets: 3, hiitMode: 'circuit' })
+    ).toBe('HIIT 3×5r (40/20s) · circuito');
+    expect(
+      formatModalitySummary('HIIT', { workSeconds: 40, restSeconds: 20, rounds: 5, sets: 3, hiitMode: 'sequential' })
+    ).toBe('HIIT 3×5r (40/20s) · secuencial');
+  });
+});

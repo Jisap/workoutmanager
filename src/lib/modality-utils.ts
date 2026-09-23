@@ -38,7 +38,10 @@ export function formatModalitySummary(
       const rest = config.restSeconds ?? 20;
       const rounds = config.rounds ?? 5;
       const sets = config.sets && config.sets > 1 ? `${config.sets}×` : '';
-      return `HIIT ${sets}${rounds}r (${work}/${rest}s)`;
+      const base = `HIIT ${sets}${rounds}r (${work}/${rest}s)`;
+      if (config.hiitMode === 'circuit') return `${base} · circuito`;
+      if (config.hiitMode === 'sequential') return `${base} · secuencial`;
+      return base;
     }
     case 'Ladder': {
       const scheme = config.repScheme ? ` (${config.repScheme})` : '';

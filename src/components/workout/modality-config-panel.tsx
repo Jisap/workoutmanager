@@ -326,6 +326,23 @@ export function ModalityConfigPanel({
             </div>
           </div>
 
+          {/* Cómo se lee: 1 bloque = rondas × (trabajo + descanso) */}
+          {(() => {
+            const work = config.workSeconds ?? 20;
+            const rest = config.restSeconds ?? 10;
+            const rounds = config.rounds ?? 8;
+            const blocks = config.sets ?? 1;
+            const blockSecs = (work + rest) * rounds;
+            const fmt = (s: number) => `${Math.floor(s / 60)}m${s % 60 > 0 ? ` ${s % 60}s` : ''}`;
+            return (
+              <p className="rounded-xl bg-blue-50/70 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/40 px-3 py-2 text-[11px] text-blue-900 dark:text-blue-200">
+                <strong>Bloque</strong> = {rounds} rondas × ({work}s + {rest}s) = {fmt(blockSecs)}
+                {blocks > 1 ? ` · ${blocks} bloques = ${fmt(blockSecs * blocks)}` : ''}. Descanso corto entre
+                rondas{blocks > 1 ? ', pausa larga solo entre bloques' : ''}.
+              </p>
+            );
+          })()}
+
           {/* Presets Tabata */}
           <div className="flex items-center gap-1.5 flex-wrap pt-1">
             <span className="text-[11px] font-medium text-gray-500 mr-1 flex items-center gap-1">
@@ -449,6 +466,32 @@ export function ModalityConfigPanel({
             </div>
           </div>
 
+          {/* Cómo se lee: jerarquía + descansos + desglose del total */}
+          {(() => {
+            const work = config.workSeconds ?? 40;
+            const rest = config.restSeconds ?? 20;
+            const rounds = config.rounds ?? 5;
+            const blocks = config.sets ?? 3;
+            const pause = config.restBetweenSetsSeconds ?? 60;
+            const effort = work + rest;
+            const blockSecs = effort * rounds;
+            const totalSecs = blockSecs * blocks + (blocks > 1 ? pause * (blocks - 1) : 0);
+            const fmt = (s: number) => `${Math.floor(s / 60)}m${s % 60 > 0 ? ` ${s % 60}s` : ''}`;
+            return (
+              <div className="rounded-xl bg-blue-50/70 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/40 px-3 py-2 text-[11px] text-blue-900 dark:text-blue-200 space-y-0.5">
+                <p className="font-bold">Sesión → Bloques → Rondas → Ejercicios</p>
+                <p>
+                  Bloque = {rounds} rondas × ({work}s + {rest}s) = {fmt(blockSecs)}. Sesión = {blocks} bloque
+                  {blocks !== 1 ? 's' : ''} ({rounds * blocks} esfuerzos c/u)
+                  {blocks > 1 ? ` + ${blocks - 1} pausa${blocks - 1 !== 1 ? 's' : ''} de ${pause}s = ${fmt(totalSecs)}` : ` = ${fmt(totalSecs)}`}.
+                </p>
+                <p className="text-blue-800/80 dark:text-blue-300/80">
+                  Descanso corto entre esfuerzos, pausa larga solo entre bloques.
+                </p>
+              </div>
+            );
+          })()}
+
           {/* Presets HIIT */}
           <div className="flex items-center gap-1.5 flex-wrap pt-1">
             <span className="text-[11px] font-medium text-gray-500 mr-1 flex items-center gap-1">
@@ -507,7 +550,7 @@ export function ModalityConfigPanel({
                 }
                 return (
                   <p className="text-[11px] text-gray-500">
-                    {nums.length} series: {nums.join(' · ')}
+                    {nums.length} series: {nums.join(' · ')}. Los ejercicios que añadas ya traen estas series.
                   </p>
                 );
               })()}

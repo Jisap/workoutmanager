@@ -31,6 +31,10 @@ export interface ModalityConfig {
   // TABATA con varios ejercicios: perExercise = cada uno su Tabata completo
   // (secuencial), shared = rondas compartidas rotando (R1 Ej1, R2 Ej2...).
   tabataMode?: 'perExercise' | 'shared';
+  // HIIT con varios ejercicios: sequential = cada uno sus esfuerzos seguidos,
+  // circuit = se rota (Ronda N = todos una vez). El conteo por ejercicio
+  // (rondas × bloques) es el mismo; cambia el orden.
+  hiitMode?: 'sequential' | 'circuit';
   // TABATA & HIIT
   workSeconds?: number;
   restSeconds?: number;

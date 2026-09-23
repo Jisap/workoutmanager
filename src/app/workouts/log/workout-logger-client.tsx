@@ -14,7 +14,7 @@ import { saveWorkout, saveAsTemplate as saveAsTemplateAction, createDirectTempla
 import { CreateExerciseDialog, type Category } from '@/components/workout/create-exercise-dialog';
 import { type ModalityConfig } from '@/lib/db/schema';
 import { ModalityConfigPanel } from '@/components/workout/modality-config-panel';
-import { formatModalitySummary, getModalitySeriesStructure, calculateModalityEstimatedDuration } from '@/lib/modality-utils';
+import { formatModalitySummary, getModalitySeriesStructure, calculateModalityEstimatedDuration, parseRepScheme } from '@/lib/modality-utils';
 import { HyroxRaceBuilder, type HyroxGeneratedExercise } from '@/components/workout/hyrox-race-builder';
 import { CrossfitWodPicker, type WodApplyPayload } from '@/components/workout/crossfit-wod-picker';
 import { OFFICIAL_WODS } from '@/lib/wods-catalog';
@@ -282,11 +282,23 @@ export function WorkoutLoggerClient({
 
 
   const addExercise = () => {
+    // En Ladder el esquema manda: el ejercicio nuevo ya trae sus series
+    // (esquema primero, ejercicios después).
+    const ladderReps =
+      requiresModality && modality === 'Ladder' ? parseRepScheme(modalityConfig.repScheme) : null;
     const newEx: LocalExercise = {
       id: crypto.randomUUID(),
       exerciseId: defaultExercise.id,
       name: defaultExercise.name,
-      sets: [{ id: crypto.randomUUID(), repCount: 0, weight: null, isCompleted: false }],
+      sets:
+        ladderReps && ladderReps.length > 0
+          ? ladderReps.map((reps) => ({
+              id: crypto.randomUUID(),
+              repCount: reps,
+              weight: null,
+              isCompleted: false,
+            }))
+          : [{ id: crypto.randomUUID(), repCount: 0, weight: null, isCompleted: false }],
     };
     setExercises((prev) => [...prev, newEx]);
   };
@@ -531,10 +543,14 @@ export function WorkoutLoggerClient({
   const [tabataMode, setTabataMode] = useState<'perExercise' | 'shared'>(
     () => initialModalityConfig?.tabataMode ?? 'perExercise'
   );
+  const [hiitMode, setHiitMode] = useState<'sequential' | 'circuit'>(
+    () => initialModalityConfig?.hiitMode ?? 'circuit'
+  );
   const withEmomMode = (cfg: ModalityConfig): ModalityConfig => {
     let out = cfg;
     if (modality === 'EMOM') out = { ...out, emomMode };
     if (modality === 'TABATA') out = { ...out, tabataMode };
+    if (modality === 'HIIT') out = { ...out, hiitMode };
     return out;
   };
   const isEmptySet = (s: LocalSet): boolean =>
@@ -742,6 +758,7 @@ export function WorkoutLoggerClient({
     setModalityConfig(payload.modalityConfig);
     if (payload.modality === 'EMOM') setEmomMode(payload.modalityConfig?.emomMode ?? 'shared');
     if (payload.modality === 'TABATA') setTabataMode(payload.modalityConfig?.tabataMode ?? 'perExercise');
+    if (payload.modality === 'HIIT') setHiitMode(payload.modalityConfig?.hiitMode ?? 'circuit');
     setExercises(payload.exercises);
     setShowWodPicker(false);
     setPendingWod(null);
@@ -1263,6 +1280,7 @@ export function WorkoutLoggerClient({
         if (!structure || exercises.length === 0 || useHyroxUnified) return null;
         const isEmomMulti = modality === 'EMOM' && exercises.length > 1;
         const isTabataMulti = modality === 'TABATA' && exercises.length > 1;
+        const isHiitMulti = modality === 'HIIT' && exercises.length > 1;
         const emomDetail = isEmomMulti
           ? emomMode === 'shared'
             ? `${structure.count} min compartidos · ambos cada minuto (${structure.count}+${structure.count})`
@@ -1271,7 +1289,11 @@ export function WorkoutLoggerClient({
             ? tabataMode === 'shared'
               ? `${structure.count} rondas compartidas · rotando`
               : `${structure.count} rondas c/u · secuencial`
-            : structure.label;
+            : isHiitMulti
+              ? hiitMode === 'circuit'
+                ? `${structure.count} esfuerzos c/u · en circuito`
+                : `${structure.count} esfuerzos c/u · secuencial`
+              : structure.label;
         const generateDetail = `Generar estructura: ${emomDetail}`;
         return (
           <div className="space-y-2">
@@ -1285,6 +1307,13 @@ export function WorkoutLoggerClient({
                 {tabataMode === 'shared'
                   ? `Rondas compartidas: R N rota entre ${exercises.map((e) => e.name).join(' y ')} (20s on / 10s off). Un solo Tabata.`
                   : `Un Tabata completo por ejercicio, en secuencia: ${structure.count} rondas cada uno.`}
+              </div>
+            )}
+            {isHiitMulti && (
+              <div className="px-4 py-2 rounded-2xl bg-blue-50/70 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/40 text-[11px] text-blue-900 dark:text-blue-200">
+                {hiitMode === 'circuit'
+                  ? `En circuito: Ronda N = ${exercises.map((e) => e.name).join(' + ')} una vez cada uno. Mismo conteo (${structure.count} c/u), distinto orden.`
+                  : `Secuencial: primero todos los esfuerzos de un ejercicio (${structure.count} c/u), luego el siguiente.`}
               </div>
             )}
             {isEmomMulti && (
@@ -1336,6 +1365,32 @@ export function WorkoutLoggerClient({
                   }`}
                 >
                   Rondas compartidas
+                </button>
+              </div>
+            )}
+            {isHiitMulti && (
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setHiitMode('circuit')}
+                  className={`flex-1 px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-colors cursor-pointer ${
+                    hiitMode === 'circuit'
+                      ? 'bg-orange-500 text-white border-orange-600'
+                      : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700'
+                  }`}
+                >
+                  En circuito
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setHiitMode('sequential')}
+                  className={`flex-1 px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-colors cursor-pointer ${
+                    hiitMode === 'sequential'
+                      ? 'bg-orange-500 text-white border-orange-600'
+                      : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700'
+                  }`}
+                >
+                  Secuencial
                 </button>
               </div>
             )}
@@ -1516,6 +1571,11 @@ export function WorkoutLoggerClient({
           const primaryDuration = ex.sets[0]?.durationSeconds ?? null;
           const primaryCalories = ex.sets[0]?.calories;
           const primaryRpe = ex.sets[0]?.rpe ?? null;
+          // En Ladder/pirámides cada serie tiene sus reps: la compacta no puede
+          // colapsarlas en un valor sin mentir (mostraba solo la primera: 21).
+          const repsVary = new Set(ex.sets.map((s) => s.repCount ?? 0)).size > 1;
+          const weightVary = new Set(ex.sets.map((s) => s.weight ?? null)).size > 1;
+          const repsSummary = ex.sets.map((s) => s.repCount ?? 0).join(' · ');
 
           const hasDistance =
             ex.sets.some((s) => s.distance != null) ||
@@ -1756,8 +1816,13 @@ export function WorkoutLoggerClient({
                           <Input
                             type="number"
                             min="0"
-                            placeholder="0"
-                            value={primaryReps || ''}
+                            placeholder={repsVary ? 'varias' : '0'}
+                            title={
+                              repsVary
+                                ? `Cada serie tiene sus reps (${repsSummary}). Edita en Desglosar o escribe aquí para igualarlas todas.`
+                                : undefined
+                            }
+                            value={repsVary ? '' : primaryReps || ''}
                             onChange={(e) => {
                               const reps = parseInt(e.target.value, 10) || 0;
                               updateAllSetsField(ex.id, 'repCount', reps);
@@ -1776,8 +1841,13 @@ export function WorkoutLoggerClient({
                           <Input
                             type="number"
                             step="0.5"
-                            placeholder="0"
-                            value={primaryWeight ?? ''}
+                            placeholder={weightVary ? 'varios' : '0'}
+                            title={
+                              weightVary
+                                ? 'Cada serie tiene su peso. Edita en Desglosar o escribe aquí para igualarlos todos.'
+                                : undefined
+                            }
+                            value={weightVary ? '' : primaryWeight ?? ''}
                             onChange={(e) => {
                               const val = e.target.value ? parseFloat(e.target.value) : null;
                               updateAllSetsField(ex.id, 'weight', val);
@@ -1838,6 +1908,28 @@ export function WorkoutLoggerClient({
                         </span>
                       </button>
                     </div>
+                    {/* Ladder/pirámide: reps distintas por serie, visibles sin desglosar */}
+                    {(repsVary || weightVary) && (
+                      <div className="w-full text-[11px] text-gray-500 dark:text-gray-400 tabular-nums">
+                        Por serie:{' '}
+                        <strong className="text-gray-700 dark:text-gray-200">
+                          {ex.sets
+                            .map(
+                              (s) =>
+                                `${s.repCount ?? 0}${s.weight != null ? `×${s.weight}kg` : ''}`
+                            )
+                            .join(' · ')}
+                        </strong>{' '}
+                        —{' '}
+                        <button
+                          type="button"
+                          onClick={() => toggleExpand(ex.id)}
+                          className="font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                        >
+                          Desglosar para editar
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   /* VISTA DETALLADA (Serie a Serie) */
