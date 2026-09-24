@@ -7,7 +7,7 @@ import type { ModalityConfig } from '@/lib/db/schema';
 
 export type WodCategory = 'girl' | 'hero' | 'classic';
 
-export type WodRxDivision = 'rx-men' | 'rx-women';
+export type WodRxDivision = 'rx-men' | 'rx-women' | 'scaled';
 
 export interface WodMovementSpec {
   /** Nombres a buscar en el catálogo del usuario (en orden de preferencia) */
@@ -47,6 +47,34 @@ export const WOD_CATEGORY_LABELS: Record<WodCategory, string> = {
   hero: 'Héroes',
   classic: 'Clásicos',
 };
+
+// División Scaled (informe §8: el catálogo solo Rx excluía novatos).
+// Sin reescribir las 24 prescripciones: 60% del Rx redondeado a discos de 2,5.
+// Peso corporal, distancias y esquemas no cambian.
+export const SCALED_RATIO = 0.6;
+
+export function scaledWeight(rxKg: number | null): number | null {
+  if (rxKg == null || rxKg <= 0) return rxKg;
+  const scaled = rxKg * SCALED_RATIO;
+  // Redondeo a 2,5 kg; mínimo 2,5 para que no salga 0
+  return Math.max(2.5, Math.round(scaled / 2.5) * 2.5);
+}
+
+/** Carga según división (base hombres en scaled, como la mayoría de boxes). */
+export function wodWeightForDivision(
+  m: WodMovementSpec,
+  division: WodRxDivision
+): number | null {
+  if (division === 'rx-men') return m.weightMen;
+  if (division === 'rx-women') return m.weightWomen;
+  return scaledWeight(m.weightMen ?? m.weightWomen);
+}
+
+export function wodDivisionLabel(division: WodRxDivision): string {
+  if (division === 'rx-men') return 'RX';
+  if (division === 'rx-women') return 'RX W';
+  return 'SC 60%';
+}
 
 const FT = (timeCapMinutes: number): ModalityConfig => ({ timeCapMinutes });
 const AMRAP = (timeCapMinutes: number): ModalityConfig => ({ timeCapMinutes });

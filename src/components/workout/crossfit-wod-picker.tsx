@@ -14,6 +14,9 @@ import {
 import {
   OFFICIAL_WODS,
   WOD_CATEGORY_LABELS,
+  scaledWeight,
+  wodDivisionLabel,
+  wodWeightForDivision,
   type OfficialWod,
   type WodCategory,
   type WodRxDivision,
@@ -33,6 +36,7 @@ const CATEGORY_OPTIONS: { id: WodCategory | 'all'; label: string; icon: React.El
 const DIVISION_OPTIONS: { id: WodRxDivision; label: string; sub: string }[] = [
   { id: 'rx-men', label: 'RX Hombres', sub: 'Cargas Rx masculinas' },
   { id: 'rx-women', label: 'RX Mujeres', sub: 'Cargas Rx femeninas' },
+  { id: 'scaled', label: 'Scaled', sub: '60% del Rx · para novatos' },
 ];
 
 export interface WodApplyPayload {
@@ -90,7 +94,7 @@ export function CrossfitWodPicker({ availableExercises, onApplyWod }: CrossfitWo
   }, [selected, availableExercises]);
 
   const movementPreview = (m: WodMovementSpec): string => {
-    const weight = division === 'rx-men' ? m.weightMen : m.weightWomen;
+    const weight = wodWeightForDivision(m, division);
     const parts: string[] = [];
     if (selected?.ladder) {
       parts.push(selected.ladder.join('-'));
@@ -104,11 +108,18 @@ export function CrossfitWodPicker({ availableExercises, onApplyWod }: CrossfitWo
     return parts.join(' · ');
   };
 
+  const scaledHint = (m: WodMovementSpec): string | null => {
+    if (division !== 'scaled') return null;
+    const rx = m.weightMen ?? m.weightWomen;
+    if (rx == null || rx <= 0) return null;
+    return `Rx ${rx}kg → SC ${scaledWeight(rx)}kg`;
+  };
+
   const handleLoad = () => {
     if (!selected) return;
     const generated: HyroxGeneratedExercise[] = selected.movements.map((m) => {
       const resolved = resolveMovement(m);
-      const weight = division === 'rx-men' ? m.weightMen : m.weightWomen;
+      const weight = wodWeightForDivision(m, division);
       // Esquema 21-15-9 y similares: una serie por valor; si no, N rondas × reps
       const repsList: number[] = selected.ladder ?? Array.from({ length: Math.max(1, m.rounds) }, () => m.reps);
       return {
@@ -127,7 +138,7 @@ export function CrossfitWodPicker({ availableExercises, onApplyWod }: CrossfitWo
     });
 
     const todayStr = new Date().toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
-    const divisionLabel = division === 'rx-men' ? 'RX' : 'RX W';
+    const divisionLabel = wodDivisionLabel(division);
     onApplyWod({
       title: `${selected.name} · ${divisionLabel} · ${todayStr}`,
       exercises: generated,
@@ -278,12 +289,15 @@ export function CrossfitWodPicker({ availableExercises, onApplyWod }: CrossfitWo
                 {WOD_CATEGORY_LABELS[selected.category]}
               </span>
               <span className="text-xs font-mono font-bold text-orange-600 dark:text-orange-400">{selected.scheme}</span>
-              <span className="text-[11px] text-gray-500 dark:text-gray-400">· {selected.modality} · {selected.rxNote}</span>
+              <span className="text-[11px] text-gray-500 dark:text-gray-400">
+                · {selected.modality} · {selected.rxNote}
+                {division === 'scaled' && ' · SC al 60%'}
+              </span>
             </div>
             <p className="text-xs text-gray-600 dark:text-gray-300">{selected.description}</p>
 
             {/* División Rx */}
-            <div className="grid grid-cols-2 gap-2 max-w-md">
+            <div className="grid grid-cols-3 gap-2 max-w-xl">
               {DIVISION_OPTIONS.map((d) => {
                 const isActive = division === d.id;
                 return (
@@ -323,6 +337,11 @@ export function CrossfitWodPicker({ availableExercises, onApplyWod }: CrossfitWo
                         </span>
                       )}
                       {m.note && <p className="text-[10px] text-gray-400 mt-0.5">{m.note}</p>}
+                      {scaledHint(m) && (
+                        <p className="text-[10px] font-semibold text-blue-600 dark:text-blue-400 mt-0.5">
+                          {scaledHint(m)}
+                        </p>
+                      )}
                     </div>
                     <span className="font-mono font-bold text-orange-600 dark:text-orange-400 shrink-0 text-[11px]">
                       {movementPreview(m)}

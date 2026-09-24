@@ -743,8 +743,24 @@ export function WorkoutLoggerClient({
     setExercises(generatedExercises);
   };
 
-  // WOD pendiente de confirmación (sustituiría los ejercicios actuales)
+  // WOD pendiente de confirmación (solo si hay contenido real que proteger)
   const [pendingWod, setPendingWod] = useState<WodApplyPayload | null>(null);
+
+  // ¿Hay contenido que merezca confirmación? El logger arranca con 1 ejercicio
+  // de relleno (0 reps, sin peso): cargarlo encima no debe pedir permiso.
+  const hasSessionContent = (list: LocalExercise[]): boolean =>
+    list.some((ex) =>
+      ex.sets.some(
+        (s) =>
+          s.isCompleted ||
+          s.weight != null ||
+          (s.repCount || 0) > 0 ||
+          (s.distance || 0) > 0 ||
+          (s.durationSeconds || 0) > 0 ||
+          (s.calories || 0) > 0 ||
+          s.rpe != null
+      )
+    );
 
   // FAB "Finalizar" (móvil): solo cuando la tarjeta final no está en pantalla,
   // para no duplicar la acción cuando ya la ves abajo.
@@ -779,8 +795,22 @@ export function WorkoutLoggerClient({
     setPendingWod(null);
   };
 
+  // Añadir el WOD al final sin tocar lo actual (nombre y modalidad se conservan).
+  // Se regeneran ids para no colisionar si se carga el mismo WOD dos veces.
+  const appendWodPayload = (payload: WodApplyPayload) => {
+    const appended: LocalExercise[] = payload.exercises.map((ex) => ({
+      ...ex,
+      id: crypto.randomUUID(),
+      sets: ex.sets.map((s) => ({ ...s, id: crypto.randomUUID(), isCompleted: false })),
+    }));
+    setExercises((prev) => [...prev, ...appended]);
+    setShowWodPicker(false);
+    setPendingWod(null);
+    notify.success('WOD añadido', `"${payload.title}" al final de tu sesión`);
+  };
+
   const handleApplyWod = (payload: WodApplyPayload) => {
-    if (exercises.length > 0) {
+    if (hasSessionContent(exercises)) {
       setPendingWod(payload);
       return;
     }
@@ -2864,32 +2894,41 @@ export function WorkoutLoggerClient({
         onExerciseCreated={handleExerciseCreated}
       />
 
-      {/* Confirmación al cargar un WOD con ejercicios ya presentes */}
+      {/* Confirmación al cargar un WOD con contenido real ya presente */}
       <Dialog open={pendingWod !== null} onOpenChange={(open) => { if (!open) setPendingWod(null); }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-base font-bold text-gray-900 dark:text-gray-100">
-              Sustituir ejercicios actuales
+              Cargar "{pendingWod?.title}"
             </DialogTitle>
             <DialogDescription className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-              Cargar "{pendingWod?.title}" sustituirá los {exercises.length} {exercises.length === 1 ? 'ejercicio actual' : 'ejercicios actuales'}. Esta acción no se puede deshacer.
+              Ya tienes contenido en esta sesión. <strong>Reemplazar</strong> lo sustituye (cambia nombre y
+              modalidad). <strong>Añadir</strong> suma los ejercicios del WOD al final sin tocar lo actual.
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter className="gap-2 sm:gap-1.5">
+          <DialogFooter className="gap-2 sm:gap-1.5 flex-col sm:flex-row">
             <Button
               type="button"
               variant="outline"
               onClick={() => setPendingWod(null)}
-              className="text-xs"
+              className="text-xs h-11 sm:h-9 cursor-pointer"
             >
               Cancelar
             </Button>
             <Button
               type="button"
-              onClick={() => { if (pendingWod) applyWodPayload(pendingWod); }}
-              className="bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold"
+              variant="outline"
+              onClick={() => { if (pendingWod) appendWodPayload(pendingWod); }}
+              className="text-xs h-11 sm:h-9 font-bold cursor-pointer"
             >
-              Cargar WOD
+              Añadir al final
+            </Button>
+            <Button
+              type="button"
+              onClick={() => { if (pendingWod) applyWodPayload(pendingWod); }}
+              className="bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold h-11 sm:h-9 cursor-pointer"
+            >
+              Reemplazar
             </Button>
           </DialogFooter>
         </DialogContent>
