@@ -204,8 +204,10 @@ export async function renameExerciseCategory(categoryId: number, newName: string
   return { success: true };
 }
 
-/** Eliminar una categoría personalizada */
-export async function deleteExerciseCategory(categoryId: number) {
+/** Eliminar una categoría personalizada.
+ *  `reassignToId`: categoría destino para sus ejercicios (null/undefined = sin categoría).
+ */
+export async function deleteExerciseCategory(categoryId: number, reassignToId?: number | null) {
   const { userId } = await auth();
   if (!userId) throw new Error('No autorizado');
 
@@ -217,10 +219,26 @@ export async function deleteExerciseCategory(categoryId: number) {
 
   if (!cat) throw new Error('Categoría no encontrada o no se puede eliminar (categoría del sistema)');
 
-  // Desvincular ejercicios que usaban esta categoría
+  // Destino de reasignación (opcional): debe existir y no ser la propia.
+  // Vale cualquier categoría visible (sistema o propia); si no, sin categoría.
+  let targetId: number | null = null;
+  if (reassignToId != null && Number.isInteger(reassignToId) && reassignToId !== categoryId) {
+    const [target] = await db
+      .select({ id: exerciseCategories.id })
+      .from(exerciseCategories)
+      .where(
+        and(
+          eq(exerciseCategories.id, reassignToId),
+          or(isNull(exerciseCategories.userId), eq(exerciseCategories.userId, userId))
+        )
+      );
+    if (target) targetId = target.id;
+  }
+
+  // Mover sus ejercicios al destino (o desvincularlos)
   await db
     .update(exercises)
-    .set({ categoryId: null })
+    .set({ categoryId: targetId })
     .where(eq(exercises.categoryId, categoryId));
 
   // Eliminar la categoría

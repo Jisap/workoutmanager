@@ -4,9 +4,9 @@ import { TransitionLink as Link } from '@/components/layout/transition-link';
 import { useLinkStatus } from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { Home, Dumbbell, BarChart3, Settings, Plus, LogOut, Bookmark, Loader2, type LucideIcon } from 'lucide-react';
+import { Home, Dumbbell, BarChart3, Settings, Plus, LogOut, Bookmark, Loader2, UserCog, type LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { SignOutButton, useUser } from '@clerk/nextjs';
+import { SignOutButton, useUser, useClerk } from '@clerk/nextjs';
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: Home },
@@ -35,6 +35,22 @@ function LinkPendingSpinner({ className }: { className?: string }) {
   const { pending } = useLinkStatus();
   if (!pending) return null;
   return <Loader2 className={cn('animate-spin', className)} />;
+}
+
+// Botón que abre el panel de cuenta de Clerk (perfil, email, exportar, eliminar).
+function ManageAccountButton() {
+  const { openUserProfile } = useClerk();
+  return (
+    <button
+      type="button"
+      onClick={() => openUserProfile()}
+      className="p-2 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors shrink-0 cursor-pointer dark:hover:text-blue-400 dark:hover:bg-blue-900/20"
+      title="Gestionar cuenta (perfil, email, datos)"
+      aria-label="Gestionar cuenta"
+    >
+      <UserCog className="w-4 h-4" />
+    </button>
+  );
 }
 
 export function Sidebar() {
@@ -133,6 +149,8 @@ export function Sidebar() {
                     {user.primaryEmailAddress?.emailAddress}
                   </p>
                 </div>
+                {/* Gestionar cuenta Clerk (nombre, avatar, email, exportar/eliminar) */}
+                <ManageAccountButton />
               </div>
             )}
 

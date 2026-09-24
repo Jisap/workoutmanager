@@ -97,7 +97,7 @@ function getTypeStyle(typeName?: string): {
   icon: React.ElementType;
 } {
   const lower = (typeName || '').toLowerCase();
-  if (lower.includes('muscu') || lower.includes('fuerza') || lower.includes('gym'))
+  if (lower.includes('muscu') || lower.includes('fuerza') || lower.includes('gym') || lower.includes('pierna') || lower.includes('leg'))
     return { badge: 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 border-blue-200 dark:border-blue-800', icon: Dumbbell };
   if (lower.includes('crossfit') || lower.includes('wod') || lower.includes('funcional'))
     return { badge: 'bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300 border-orange-200 dark:border-orange-800', icon: Zap };

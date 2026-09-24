@@ -185,7 +185,7 @@ function ProfileSection({ profile }: { profile: UserProfile }) {
       <div className="mt-4 pt-4 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-3 dark:border-gray-800">
         <p className="text-xs text-gray-400 flex items-center gap-1 dark:text-gray-500">
           <ChevronRight className="w-3 h-3 shrink-0" />
-          Para editar tu perfil, usa el botón de usuario en la esquina superior derecha.
+          Nombre, avatar y email se editan en tu cuenta Clerk: menú lateral, icono de tuerca junto a tu avatar.
         </p>
         <SignOutButton>
           <Button variant="outline" size="sm" className="text-xs text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200 shrink-0">
@@ -565,6 +565,8 @@ function CategoriesSection({
   const [editName, setEditName] = useState('');
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+  // Destino para reasignar ejercicios al borrar ('': sin categoría)
+  const [reassignTo, setReassignTo] = useState<string>('');
   const [isPending, startTransition] = useTransition();
 
   // New category form
@@ -614,11 +616,16 @@ function CategoriesSection({
     startTransition(async () => {
       try {
         const target = categories.find((c) => c.id === id);
-        await deleteExerciseCategory(id);
+        const reassignId = reassignTo ? parseInt(reassignTo, 10) : null;
+        await deleteExerciseCategory(id, Number.isNaN(reassignId) ? null : reassignId);
         setCategories((prev) => prev.filter((c) => c.id !== id));
         setDeletingId(null);
         setConfirmDeleteId(null);
-        notify.success('Categoría eliminada', target ? `"${target.name}"` : undefined);
+        setReassignTo('');
+        notify.success(
+          'Categoría eliminada',
+          target ? `"${target.name}"${reassignId ? ' · ejercicios movidos' : ''}` : undefined
+        );
       } catch (err) {
         console.error(err);
         notify.errorFrom(err, 'Error al eliminar la categoría');
@@ -743,25 +750,51 @@ function CategoriesSection({
                   </button>
                 </>
               ) : confirmDeleteId === cat.id ? (
-                /* Confirm delete */
-                <>
-                  <span className="flex-1 text-xs text-red-600 font-medium dark:text-red-400">
-                    ¿Eliminar «{cat.name}»? Sus ejercicios quedarán sin categoría.
+                /* Confirm delete con reasignación (informe §6) */
+                <div className="flex-1 min-w-0 space-y-2 py-0.5">
+                  <span className="block text-xs text-red-600 font-medium dark:text-red-400">
+                    ¿Eliminar «{cat.name}»?
                   </span>
-                  <button
-                    onClick={() => handleDelete(cat.id)}
-                    disabled={deletingId === cat.id}
-                    className="px-2 py-1 text-xs bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
-                  >
-                    {deletingId === cat.id ? '...' : 'Sí, eliminar'}
-                  </button>
-                  <button
-                    onClick={() => setConfirmDeleteId(null)}
-                    className="p-1.5 text-gray-400 hover:bg-gray-200 rounded-lg transition dark:hover:bg-gray-700"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </>
+                  {(cat.exerciseCount ?? 0) > 0 && (
+                    <label className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300">
+                      <span className="shrink-0">
+                        Mover sus {cat.exerciseCount} {cat.exerciseCount === 1 ? 'ejercicio' : 'ejercicios'} a:
+                      </span>
+                      <select
+                        value={reassignTo}
+                        onChange={(e) => setReassignTo(e.target.value)}
+                        className="min-w-0 flex-1 px-2 py-1.5 text-xs border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-400/40 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 cursor-pointer"
+                      >
+                        <option value="">Sin categoría</option>
+                        {categories
+                          .filter((c) => c.id !== cat.id)
+                          .map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.name}
+                            </option>
+                          ))}
+                      </select>
+                    </label>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleDelete(cat.id)}
+                      disabled={deletingId === cat.id}
+                      className="px-2 py-1 text-xs bg-red-600 text-white rounded-lg hover:bg-red-700 transition cursor-pointer"
+                    >
+                      {deletingId === cat.id ? '...' : 'Sí, eliminar'}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setConfirmDeleteId(null);
+                        setReassignTo('');
+                      }}
+                      className="p-1.5 text-gray-400 hover:bg-gray-200 rounded-lg transition dark:hover:bg-gray-700 cursor-pointer"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
               ) : (
                 /* Normal display mode */
                 <>
@@ -780,8 +813,11 @@ function CategoriesSection({
                       {cat.isCustom ? 'Custom' : 'Sistema'}
                     </span>
                     {cat.type && (
-                      <span className="text-[11px] text-gray-400 dark:text-gray-500">
-                        · {cat.type}
+                      <span
+                        className="text-[11px] text-gray-400 dark:text-gray-500"
+                        title={`Valor guardado: ${cat.type} (solo Cardio activa el modo tiempo/distancia)`}
+                      >
+                        · {cat.type.toLowerCase() === 'cardio' ? 'Cardio' : 'Fuerza'}
                       </span>
                     )}
                   </div>
@@ -801,7 +837,10 @@ function CategoriesSection({
                           <Pencil className="w-3.5 h-3.5" />
                         </button>
                         <button
-                          onClick={() => setConfirmDeleteId(cat.id)}
+                          onClick={() => {
+                            setReassignTo('');
+                            setConfirmDeleteId(cat.id);
+                          }}
                           className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100 dark:hover:bg-red-900/20"
                           title="Eliminar categoría"
                         >
@@ -840,16 +879,16 @@ function CategoriesSection({
               <select
                 value={newType}
                 onChange={(e) => setNewType(e.target.value)}
-                className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-purple-400/40 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-purple-400/40 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 cursor-pointer"
+                title="Solo Cardio activa el registro por tiempo/distancia; el resto mide peso/reps"
               >
-                <option value="Fuerza">Tipo: Fuerza / Musculación</option>
-                <option value="Cardio">Tipo: Cardio / Resistencia</option>
-                <option value="CrossFit">Tipo: CrossFit / WOD</option>
-                <option value="Funcional">Tipo: Funcional / HIIT</option>
-                <option value="Movilidad">Tipo: Movilidad / Flexibilidad</option>
-                <option value="Otro">Tipo: General / Otro</option>
+                <option value="Fuerza">Mide: Fuerza (peso y reps)</option>
+                <option value="Cardio">Mide: Cardio (tiempo y distancia)</option>
               </select>
             </div>
+            <p className="text-[11px] text-gray-400 dark:text-gray-500">
+              No es el tipo de entrenamiento (eso está en «Tipos»): solo define cómo se registran sus series.
+            </p>
             <div className="flex gap-2">
               <Button
                 size="sm"
@@ -886,6 +925,9 @@ const TYPE_ICONS: Record<string, React.ElementType> = {
   muscu: Dumbbell,
   fuerza: Dumbbell,
   gym: Dumbbell,
+  pierna: Dumbbell,
+  leg: Dumbbell,
+  cuadriceps: Dumbbell,
   crossfit: Zap,
   wod: Zap,
   funcional: Zap,
@@ -903,6 +945,9 @@ const TYPE_COLORS: Record<string, string> = {
   muscu: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800/60',
   fuerza: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800/60',
   gym: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800/60',
+  pierna: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800/60',
+  leg: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800/60',
+  cuadriceps: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800/60',
   crossfit: 'bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-950/40 dark:text-orange-300 dark:border-orange-800/60',
   wod: 'bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-950/40 dark:text-orange-300 dark:border-orange-800/60',
   funcional: 'bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-950/40 dark:text-orange-300 dark:border-orange-800/60',
@@ -1044,8 +1089,8 @@ function PreferencesSection() {
             <div className="space-y-2 flex-1">
               <p className="text-xs font-bold text-red-800 dark:text-red-200">Zona de peligro</p>
               <p className="text-xs text-red-700 dark:text-red-300/80">
-                Para eliminar tu cuenta o exportar todos tus datos, utiliza el panel de usuario de Clerk
-                (botón en la esquina superior derecha).
+                Para exportar tus datos o eliminar tu cuenta, abre tu panel de Clerk con el icono de tuerca
+                junto a tu avatar en el menú lateral.
               </p>
             </div>
           </div>
