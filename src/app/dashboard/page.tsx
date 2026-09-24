@@ -1,6 +1,6 @@
 import { db } from '@/lib/db';
 import { workouts } from '@/lib/db/schema';
-import { eq, desc, and, isNull } from 'drizzle-orm';
+import { eq, desc, and, isNull, count, or } from 'drizzle-orm';
 import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
 import { TransitionLink as Link } from '@/components/layout/transition-link';
@@ -25,7 +25,7 @@ export default async function DashboardPage() {
   // Últimos entrenamientos con detalle (ejercicios + series para stats) y
   // datos de consistencia en paralelo. Solo 5 sesiones: coste acotado.
   // Además se busca el borrador más reciente (sin finalizar) para el hero "Continuar".
-  const [recentWorkouts, consistencyData, bodySummary, draftWorkout] = await Promise.all([
+  const [recentWorkouts, consistencyData, bodySummary, draftWorkouts, sessionsCount] = await Promise.all([
     db.query.workouts.findMany({
       where: eq(workouts.userId, userId),
       orderBy: desc(workouts.startTime),
@@ -51,15 +51,24 @@ export default async function DashboardPage() {
     }),
     getConsistencyData(userId),
     getBodySummary(),
-    db.query.workouts.findFirst({
-      where: and(eq(workouts.userId, userId), isNull(workouts.totalTimeSeconds)),
+    db.query.workouts.findMany({
+      // Borradores = sin finalizar: NULL o 0 (igual que en el historial).
+      // Se traen todos (los últimos 5): si hay varios hay que decirlo.
+      where: and(
+        eq(workouts.userId, userId),
+        or(isNull(workouts.totalTimeSeconds), eq(workouts.totalTimeSeconds, 0))
+      ),
       orderBy: desc(workouts.startTime),
+      limit: 5,
       columns: { id: true, name: true, startTime: true },
     }),
+    // Nº real de sesiones (informe §4: no confundir con días activos)
+    db.select({ value: count() }).from(workouts).where(eq(workouts.userId, userId)),
   ]);
+  const totalSessions = sessionsCount[0]?.value ?? 0;
 
-  // Stats básicas
-  const totalWorkouts = consistencyData.totalWorkouts;
+  // Stats básicas (informe §4: sesiones ≠ días activos, no mezclarlos)
+  const activeDays = consistencyData.totalWorkouts;
 
   const recentItems = recentWorkouts.map((workout) => {
     const exercisesCount = workout.exercises.length;
@@ -127,28 +136,50 @@ export default async function DashboardPage() {
         </Link>
       </div>
 
-      {/* Hero-action: Continuar borrador o Empezar hoy (informe §4.1) */}
-      {draftWorkout ? (
+      {/* Hero-action: Continuar borrador(es) o Empezar hoy (informe §4.1) */}
+      {draftWorkouts.length > 0 ? (
         <Card className="border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800">
-          <CardContent className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-4">
-            <div className="min-w-0">
-              <p className="text-xs font-bold text-amber-700 uppercase tracking-wider dark:text-amber-300 flex items-center gap-1.5">
-                <RotateCcw className="w-3.5 h-3.5" /> Tienes un entreno sin finalizar
-              </p>
-              <p className="text-sm font-bold text-gray-900 truncate mt-1 dark:text-gray-100">
-                {draftWorkout.name}
-              </p>
+          <CardContent className="space-y-3 py-4">
+            <p className="text-xs font-bold text-amber-700 uppercase tracking-wider dark:text-amber-300 flex items-center gap-1.5">
+              <RotateCcw className="w-3.5 h-3.5" />
+              {draftWorkouts.length === 1
+                ? 'Tienes 1 entreno sin finalizar'
+                : `Tienes ${draftWorkouts.length} entrenos sin finalizar`}
+            </p>
+            <div className="space-y-2">
+              {draftWorkouts.map((draft) => (
+                <div
+                  key={draft.id}
+                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-xl border border-amber-200/70 dark:border-amber-800/60 bg-white/60 dark:bg-gray-900/40 px-3 py-2.5"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-gray-900 truncate dark:text-gray-100">
+                      {draft.name}
+                    </p>
+                    <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                      {new Date(draft.startTime).toLocaleDateString('es-ES', {
+                        weekday: 'short',
+                        day: 'numeric',
+                        month: 'short',
+                      })}
+                    </p>
+                  </div>
+                  <Link
+                    href={`/workouts/log?mode=resume&workoutId=${draft.id}`}
+                    className="shrink-0"
+                  >
+                    <Button className="bg-amber-600 hover:bg-amber-700 text-white min-h-[44px] w-full sm:w-auto">
+                      <Play className="w-4 h-4 mr-1.5" />
+                      Continuar
+                    </Button>
+                  </Link>
+                </div>
+              ))}
             </div>
-            <div className="flex gap-2 shrink-0">
-              <Link href={`/workouts/log?mode=resume&workoutId=${draftWorkout.id}`}>
-                <Button className="bg-amber-600 hover:bg-amber-700 text-white min-h-[44px]">
-                  <Play className="w-4 h-4 mr-1.5" />
-                  Continuar
-                </Button>
-              </Link>
+            <div className="flex justify-end">
               <Link href="/workouts/new">
-                <Button variant="outline" className="min-h-[44px]">
-                  Empezar otro
+                <Button variant="outline" size="sm" className="h-9 text-xs rounded-xl">
+                  O empezar otro
                 </Button>
               </Link>
             </div>
@@ -185,14 +216,14 @@ export default async function DashboardPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Entrenamientos Totales</CardTitle>
+            <CardTitle className="text-sm font-medium">Sesiones</CardTitle>
             <Dumbbell className="w-4 h-4 text-gray-400 dark:text-gray-500" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold dark:text-gray-100">
-              <CountUp to={totalWorkouts} duration={1500} />
+              <CountUp to={totalSessions} duration={1500} />
             </div>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Días activos registrados</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{activeDays} {activeDays === 1 ? 'día activo' : 'días activos'}</p>
           </CardContent>
         </Card>
 
@@ -238,12 +269,14 @@ export default async function DashboardPage() {
                     </span>
                   )}
                 </div>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  <Link href="/progress?tab=corporal" className="text-sky-600 dark:text-sky-400 font-semibold hover:underline">
-                    Ver evolución →
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 flex items-center gap-2 flex-wrap">
+                  <Link href="/progress?tab=corporal">
+                    <Button variant="outline" size="sm" className="h-9 text-xs rounded-xl">
+                      Ver evolución →
+                    </Button>
                   </Link>
                   {bodySummary.daysSinceLast != null && bodySummary.daysSinceLast > 7 && (
-                    <span> · hace {bodySummary.daysSinceLast} días sin medirte</span>
+                    <span className="font-semibold text-amber-600 dark:text-amber-400">· hace {bodySummary.daysSinceLast} días sin medirte</span>
                   )}
                 </p>
               </>
@@ -261,9 +294,9 @@ export default async function DashboardPage() {
         </Card>
       </div>
 
-      {/* Mapa de Actividad Interactivo */}
+      {/* Mapa de Actividad (sin KPIs: el dashboard ya muestra racha/frecuencia arriba) */}
       <div className="space-y-3">
-        <ConsistencyHeatmap data={consistencyData} />
+        <ConsistencyHeatmap data={consistencyData} showKpis={false} />
       </div>
 
       {/* Últimos Entrenamientos */}
