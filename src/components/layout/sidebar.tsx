@@ -15,6 +15,13 @@ const navigation = [
   { name: 'Configuración', href: '/settings', icon: Settings },
 ];
 
+function isActivePath(pathname: string | null, href: string) {
+  if (!pathname) return false;
+  if (pathname === href) return true;
+  // Activo por prefijo: /workouts resalta en /workouts/new, /workouts/log, etc.
+  return pathname.startsWith(href + '/');
+}
+
 // Icono de navegación que se convierte en spinner mientras la ruta destino carga.
 // Debe renderizarse dentro de un <Link> (usa useLinkStatus).
 function NavIcon({ Icon, className }: { Icon: LucideIcon; className?: string }) {
@@ -60,7 +67,7 @@ export function Sidebar() {
             <nav className="space-y-1.5">
               {navigation.map((item) => {
                 const Icon = item.icon;
-                const isActive = pathname === item.href;
+                const isActive = isActivePath(pathname, item.href);
 
                 return (
                   <Link
@@ -143,18 +150,47 @@ export function Sidebar() {
       </aside>
 
       {/* Bottom Navigation Mobile */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-4 py-2 z-50 shadow-lg dark:bg-gray-900 dark:border-gray-800">
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-4 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] z-50 shadow-lg dark:bg-gray-900 dark:border-gray-800">
         <div className="flex items-center justify-around">
-          {navigation.map((item) => {
+          {navigation.slice(0, 2).map((item) => {
             const Icon = item.icon;
-            const isActive = pathname === item.href;
+            const isActive = isActivePath(pathname, item.href);
 
             return (
               <Link
                 key={item.name}
                 href={item.href}
                 className={cn(
-                  'flex flex-col items-center px-3 py-1.5 text-[11px] font-medium transition-colors',
+                  'flex flex-col items-center px-3 py-1.5 text-[11px] font-medium transition-colors min-h-[44px] justify-center',
+                  isActive ? 'text-blue-600 font-bold' : 'text-gray-500 hover:text-gray-900'
+                )}
+              >
+                <NavIcon Icon={Icon} className="w-5 h-5 mb-0.5" />
+                {item.name}
+              </Link>
+            );
+          })}
+          {/* CTA central: empezar en 1 toque desde el gimnasio */}
+          <Link
+            href="/workouts/log?mode=free"
+            aria-label="Empezar entrenamiento vacío"
+            className="flex flex-col items-center justify-center -mt-6 shrink-0"
+          >
+            <span className="flex items-center justify-center w-14 h-14 rounded-full bg-blue-600 text-white shadow-lg border-4 border-white dark:border-gray-900 hover:bg-blue-700 active:scale-95 transition-all">
+              <Plus className="w-6 h-6" />
+            </span>
+            <span className="text-[11px] font-bold text-blue-600 mt-0.5">Entrenar</span>
+          </Link>
+          {navigation.slice(2).map((item) => {
+            const Icon = item.icon;
+            const isActive = isActivePath(pathname, item.href);
+
+            return (
+              <Link
+                key={item.name}
+                href={item.href}
+                className={cn(
+                  'flex flex-col items-center px-3 py-1.5 text-[11px] font-medium transition-colors min-h-[44px] justify-center',
                   isActive ? 'text-blue-600 font-bold' : 'text-gray-500 hover:text-gray-900'
                 )}
               >

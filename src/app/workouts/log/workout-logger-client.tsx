@@ -1428,7 +1428,7 @@ export function WorkoutLoggerClient({
                 <button
                   type="button"
                   onClick={() => setHyroxShowCargas((v) => !v)}
-                  className="h-8 px-2.5 rounded-lg text-[11px] font-bold text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/40 border border-purple-200 dark:border-purple-800 transition-colors cursor-pointer"
+                  className="h-11 px-2.5 rounded-lg text-[11px] font-bold text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/40 border border-purple-200 dark:border-purple-800 transition-colors cursor-pointer"
                   title="Mostrar/ocultar distancia, carga y reps (fijos por división)"
                 >
                   {hyroxShowCargas ? 'Ocultar cargas' : 'Editar cargas'}
@@ -1436,14 +1436,14 @@ export function WorkoutLoggerClient({
                 <button
                   type="button"
                   onClick={toggleAllHyroxCompleted}
-                  className="h-8 px-2.5 rounded-lg text-[11px] font-bold text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 border border-gray-200 dark:border-gray-700 transition-colors cursor-pointer"
+                  className="h-11 px-2.5 rounded-lg text-[11px] font-bold text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 border border-gray-200 dark:border-gray-700 transition-colors cursor-pointer"
                 >
                   {hyroxProgress.done === hyroxProgress.total && hyroxProgress.total > 0 ? 'Desmarcar' : 'Todo hecho'}
                 </button>
                 <button
                   type="button"
                   onClick={() => setHyroxUnified(false)}
-                  className="h-8 px-2.5 rounded-lg text-[11px] font-medium text-gray-500 dark:text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors cursor-pointer"
+                  className="h-11 px-2.5 rounded-lg text-[11px] font-medium text-gray-500 dark:text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors cursor-pointer"
                   title="Volver a las tarjetas por ejercicio"
                 >
                   Vista tarjetas
@@ -1536,7 +1536,7 @@ export function WorkoutLoggerClient({
                         <button
                           type="button"
                           onClick={() => toggleAllSetsCompleted(ex.id)}
-                          className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors cursor-pointer ${
+                          className={`w-11 h-11 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
                             done ? 'bg-green-500 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
                           }`}
                           title={done ? 'Desmarcar tramo' : 'Marcar tramo hecho'}
@@ -1546,7 +1546,7 @@ export function WorkoutLoggerClient({
                         <button
                           type="button"
                           onClick={() => removeExercise(ex.id)}
-                          className="w-8 h-8 rounded-lg hidden sm:flex items-center justify-center text-gray-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors cursor-pointer"
+                          className="w-11 h-11 rounded-xl hidden sm:flex items-center justify-center text-gray-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors cursor-pointer"
                           title="Eliminar tramo"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -1659,7 +1659,7 @@ export function WorkoutLoggerClient({
                     variant="ghost"
                     size="sm"
                     onClick={() => toggleExpand(ex.id)}
-                    className="h-8 px-2 text-xs font-medium text-gray-600 dark:text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 flex items-center gap-1"
+                    className="h-11 px-2 text-xs font-medium text-gray-600 dark:text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 flex items-center gap-1"
                     title={isExpanded ? 'Vista compacta / rápida' : 'Desglosar series individuales'}
                   >
                     {isExpanded ? (
@@ -1680,7 +1680,7 @@ export function WorkoutLoggerClient({
                     variant="ghost"
                     size="icon"
                     onClick={() => removeExercise(ex.id)}
-                    className="h-8 w-8 text-gray-400 dark:text-gray-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
+                    className="h-11 w-11 text-gray-400 dark:text-gray-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
                   >
                     <Trash2 className="w-4 h-4" />
                   </Button>
@@ -1970,7 +1970,7 @@ export function WorkoutLoggerClient({
                                 type="number"
                                 min="0"
                                 placeholder="0"
-                                className="text-center h-8 text-sm tabular-nums px-1"
+                                className="text-center h-11 text-base tabular-nums px-1"
                                 value={set.repCount || ''}
                                 onChange={(e) =>
                                   updateSet(ex.id, set.id, 'repCount', e.target.value ? parseInt(e.target.value, 10) : 0)
@@ -1983,7 +1983,7 @@ export function WorkoutLoggerClient({
                                 type="text"
                                 inputMode="numeric"
                                 placeholder="1:00"
-                                className="text-center h-8 text-sm tabular-nums font-mono px-1 border-purple-200 bg-purple-50/50 dark:bg-purple-950/20"
+                                className="text-center h-11 text-base tabular-nums font-mono px-1 border-purple-200 bg-purple-50/50 dark:bg-purple-950/20"
                                 value={formatDurationInput(set.durationSeconds)}
                                 onChange={(e) => {
                                   if (e.target.value.trim() === '') {
@@ -2002,7 +2002,7 @@ export function WorkoutLoggerClient({
                                 min="0"
                                 step="1"
                                 placeholder="0"
-                                className="text-center h-8 text-sm tabular-nums px-1 border-orange-200 bg-orange-50/50 dark:bg-orange-950/20"
+                                className="text-center h-11 text-base tabular-nums px-1 border-orange-200 bg-orange-50/50 dark:bg-orange-950/20"
                                 value={set.calories ?? ''}
                                 onChange={(e) =>
                                   updateSet(ex.id, set.id, 'calories', e.target.value ? parseFloat(e.target.value) : null)
@@ -2014,7 +2014,7 @@ export function WorkoutLoggerClient({
                               <button
                                 type="button"
                                 onClick={() => updateSet(ex.id, set.id, 'isCompleted', !set.isCompleted)}
-                                className={`w-7 h-7 rounded-md flex items-center justify-center transition-colors cursor-pointer ${
+                                className={`w-11 h-11 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
                                   set.isCompleted ? 'bg-green-500 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
                                 }`}
                               >
@@ -2059,7 +2059,7 @@ export function WorkoutLoggerClient({
                               <Input
                                 type="number"
                                 placeholder="0 m"
-                                className="text-center h-8 text-sm tabular-nums px-1"
+                                className="text-center h-11 text-base tabular-nums px-1"
                                 value={set.distance ?? ''}
                                 onChange={(e) =>
                                   updateSet(ex.id, set.id, 'distance', e.target.value ? parseInt(e.target.value, 10) : null)
@@ -2072,7 +2072,7 @@ export function WorkoutLoggerClient({
                                 type="text"
                                 inputMode="numeric"
                                 placeholder="4:30"
-                                className="text-center h-8 text-sm tabular-nums font-mono px-1 border-purple-200 bg-purple-50/50 dark:bg-purple-950/20"
+                                className="text-center h-11 text-base tabular-nums font-mono px-1 border-purple-200 bg-purple-50/50 dark:bg-purple-950/20"
                                 value={formatDurationInput(set.durationSeconds)}
                                 onChange={(e) => {
                                   if (e.target.value.trim() === '') {
@@ -2091,7 +2091,7 @@ export function WorkoutLoggerClient({
                                 min="0"
                                 step="1"
                                 placeholder="0"
-                                className="text-center h-8 text-sm tabular-nums px-1 border-orange-200 bg-orange-50/50 dark:bg-orange-950/20"
+                                className="text-center h-11 text-base tabular-nums px-1 border-orange-200 bg-orange-50/50 dark:bg-orange-950/20"
                                 value={set.calories ?? ''}
                                 onChange={(e) =>
                                   updateSet(ex.id, set.id, 'calories', e.target.value ? parseFloat(e.target.value) : null)
@@ -2103,7 +2103,7 @@ export function WorkoutLoggerClient({
                               <button
                                 type="button"
                                 onClick={() => updateSet(ex.id, set.id, 'isCompleted', !set.isCompleted)}
-                                className={`w-7 h-7 rounded-md flex items-center justify-center transition-colors cursor-pointer ${
+                                className={`w-11 h-11 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
                                   set.isCompleted ? 'bg-green-500 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
                                 }`}
                               >
@@ -2149,7 +2149,7 @@ export function WorkoutLoggerClient({
                               <Input
                                 type="number"
                                 placeholder="0 m"
-                                className="text-center h-8 text-sm tabular-nums px-1"
+                                className="text-center h-11 text-base tabular-nums px-1"
                                 value={set.distance ?? ''}
                                 onChange={(e) =>
                                   updateSet(ex.id, set.id, 'distance', e.target.value ? parseInt(e.target.value, 10) : null)
@@ -2162,7 +2162,7 @@ export function WorkoutLoggerClient({
                                 type="text"
                                 inputMode="numeric"
                                 placeholder="4:30"
-                                className="text-center h-8 text-sm tabular-nums font-mono px-1 border-purple-200 bg-purple-50/50 dark:bg-purple-950/20"
+                                className="text-center h-11 text-base tabular-nums font-mono px-1 border-purple-200 bg-purple-50/50 dark:bg-purple-950/20"
                                 value={formatDurationInput(set.durationSeconds)}
                                 onChange={(e) => {
                                   if (e.target.value.trim() === '') {
@@ -2180,7 +2180,7 @@ export function WorkoutLoggerClient({
                                 type="number"
                                 step="0.5"
                                 placeholder="0"
-                                className="text-center h-8 text-sm tabular-nums px-1"
+                                className="text-center h-11 text-base tabular-nums px-1"
                                 value={set.weight ?? ''}
                                 onChange={(e) =>
                                   updateSet(ex.id, set.id, 'weight', e.target.value ? parseFloat(e.target.value) : null)
@@ -2192,7 +2192,7 @@ export function WorkoutLoggerClient({
                               <Input
                                 type="number"
                                 placeholder="0"
-                                className="text-center h-8 text-sm tabular-nums px-1"
+                                className="text-center h-11 text-base tabular-nums px-1"
                                 value={set.repCount || ''}
                                 onChange={(e) =>
                                   updateSet(ex.id, set.id, 'repCount', e.target.value ? parseInt(e.target.value, 10) : 0)
@@ -2204,7 +2204,7 @@ export function WorkoutLoggerClient({
                               <button
                                 type="button"
                                 onClick={() => updateSet(ex.id, set.id, 'isCompleted', !set.isCompleted)}
-                                className={`w-7 h-7 rounded-md flex items-center justify-center transition-colors cursor-pointer ${
+                                className={`w-11 h-11 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
                                   set.isCompleted ? 'bg-green-500 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
                                 }`}
                               >
@@ -2250,7 +2250,7 @@ export function WorkoutLoggerClient({
                                 type="number"
                                 step="0.5"
                                 placeholder="0"
-                                className="text-center h-8 text-sm tabular-nums px-1"
+                                className="text-center h-11 text-base tabular-nums px-1"
                                 value={set.weight ?? ''}
                                 onChange={(e) =>
                                   updateSet(ex.id, set.id, 'weight', e.target.value ? parseFloat(e.target.value) : null)
@@ -2262,7 +2262,7 @@ export function WorkoutLoggerClient({
                               <Input
                                 type="number"
                                 placeholder="0"
-                                className="text-center h-8 text-sm tabular-nums px-1"
+                                className="text-center h-11 text-base tabular-nums px-1"
                                 value={set.repCount || ''}
                                 onChange={(e) =>
                                   updateSet(ex.id, set.id, 'repCount', e.target.value ? parseInt(e.target.value, 10) : 0)
@@ -2275,7 +2275,7 @@ export function WorkoutLoggerClient({
                                 type="text"
                                 inputMode="numeric"
                                 placeholder="4:30"
-                                className="text-center h-8 text-sm tabular-nums font-mono px-1 border-purple-200 bg-purple-50/50 dark:bg-purple-950/20"
+                                className="text-center h-11 text-base tabular-nums font-mono px-1 border-purple-200 bg-purple-50/50 dark:bg-purple-950/20"
                                 value={formatDurationInput(set.durationSeconds)}
                                 onChange={(e) => {
                                   if (e.target.value.trim() === '') {
@@ -2292,7 +2292,7 @@ export function WorkoutLoggerClient({
                               <button
                                 type="button"
                                 onClick={() => updateSet(ex.id, set.id, 'isCompleted', !set.isCompleted)}
-                                className={`w-7 h-7 rounded-md flex items-center justify-center transition-colors cursor-pointer ${
+                                className={`w-11 h-11 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
                                   set.isCompleted ? 'bg-green-500 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
                                 }`}
                               >
@@ -2338,7 +2338,7 @@ export function WorkoutLoggerClient({
                                 type="number"
                                 step="0.5"
                                 placeholder="0"
-                                className="text-center h-8 text-sm tabular-nums px-1"
+                                className="text-center h-11 text-base tabular-nums px-1"
                                 value={set.weight ?? ''}
                                 onChange={(e) =>
                                   updateSet(ex.id, set.id, 'weight', e.target.value ? parseFloat(e.target.value) : null)
@@ -2350,7 +2350,7 @@ export function WorkoutLoggerClient({
                               <Input
                                 type="number"
                                 placeholder="0"
-                                className="text-center h-8 text-sm tabular-nums px-1"
+                                className="text-center h-11 text-base tabular-nums px-1"
                                 value={set.repCount || ''}
                                 onChange={(e) =>
                                   updateSet(ex.id, set.id, 'repCount', e.target.value ? parseInt(e.target.value, 10) : 0)
@@ -2366,7 +2366,7 @@ export function WorkoutLoggerClient({
                                 step="1"
                                 placeholder="–"
                                 title="RPE 1-10 (opcional)"
-                                className="text-center h-8 text-sm tabular-nums px-1 border-amber-200 bg-amber-50/50 dark:bg-amber-950/20"
+                                className="text-center h-11 text-base tabular-nums px-1 border-amber-200 bg-amber-50/50 dark:bg-amber-950/20"
                                 value={set.rpe ?? ''}
                                 onChange={(e) => {
                                   if (e.target.value.trim() === '') {
@@ -2383,7 +2383,7 @@ export function WorkoutLoggerClient({
                               <button
                                 type="button"
                                 onClick={() => updateSet(ex.id, set.id, 'isCompleted', !set.isCompleted)}
-                                className={`w-7 h-7 rounded-md flex items-center justify-center transition-colors cursor-pointer ${
+                                className={`w-11 h-11 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
                                   set.isCompleted ? 'bg-green-500 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
                                 }`}
                               >
@@ -2431,7 +2431,7 @@ export function WorkoutLoggerClient({
                             const val = parseInt(e.target.value, 10);
                             if (!isNaN(val)) updateAllSetsField(ex.id, 'rpe', Math.max(1, Math.min(10, val)));
                           }}
-                          className="w-16 h-8 text-center text-sm tabular-nums px-1 border-amber-200 bg-amber-50/50 dark:bg-amber-950/20"
+                          className="w-16 h-11 text-center text-sm tabular-nums px-1 border-amber-200 bg-amber-50/50 dark:bg-amber-950/20"
                         />
                       </div>
 
@@ -2473,7 +2473,7 @@ export function WorkoutLoggerClient({
         </Button>
 
         {/* Barra de acciones al final de la página */}
-        <div className="bg-gray-50/90 dark:bg-gray-800/50 rounded-2xl p-4 border border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div className="sticky bottom-20 lg:bottom-6 z-30 bg-gray-50/95 dark:bg-gray-800/90 backdrop-blur rounded-2xl p-4 border border-gray-200 dark:border-gray-700 shadow-lg pb-[calc(1rem+env(safe-area-inset-bottom))] flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="text-xs text-gray-500 dark:text-gray-400 text-center sm:text-left">
             <span>{exercises.length} ejercicio{exercises.length !== 1 ? 's' : ''} configurado{exercises.length !== 1 ? 's' : ''}</span>
           </div>

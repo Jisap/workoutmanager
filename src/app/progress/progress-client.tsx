@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ProgressGeneralStats } from './progress-general-stats';
@@ -84,6 +85,22 @@ export function ProgressClient({
   initialTab = 'general',
 }: ProgressClientProps) {
   const [activeTab, setActiveTab] = useState<'general' | 'musculacion' | 'powerlifting' | 'crossfit' | 'exercise' | 'corporal'>(initialTab);
+  const router = useRouter();
+
+  // Si el usuario usa back/forward, el servidor re-renderiza con otro initialTab
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setActiveTab(initialTab);
+  }, [initialTab]);
+
+  const handleTabChange = (tabId: typeof activeTab) => {
+    setActiveTab(tabId);
+    // Sincroniza URL para compartir/back sin recargar (ya leído en page.tsx ?tab=)
+    // Preserva exerciseId si existe para no romper el deep-link de ejercicio.
+    const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
+    params.set('tab', tabId);
+    router.replace(`?${params.toString()}`, { scroll: false });
+  };
 
   const tabs = [
     { id: 'general', label: 'General', icon: BarChart3, color: 'text-blue-600' },
@@ -105,7 +122,7 @@ export function ProgressClient({
           return (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
+              onClick={() => handleTabChange(tab.id as any)}
               className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                 isActive
                   ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 shadow-xs'

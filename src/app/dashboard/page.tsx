@@ -1,12 +1,13 @@
 import { db } from '@/lib/db';
 import { workouts } from '@/lib/db/schema';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, and, isNull } from 'drizzle-orm';
 import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
 import { TransitionLink as Link } from '@/components/layout/transition-link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dumbbell, TrendingUp, Plus, Activity, Scale } from 'lucide-react';
+import { Dumbbell, TrendingUp, Plus, Activity, Scale, Play, RotateCcw } from 'lucide-react';
+import { formatModalitySummary } from '@/lib/modality-utils';
 import { getConsistencyData } from '../workouts/actions';
 import { getBodySummary } from '../progress/measurements-actions';
 import { ConsistencyHeatmap } from '../progress/consitency-heatmap';
@@ -23,7 +24,8 @@ export default async function DashboardPage() {
 
   // Últimos entrenamientos con detalle (ejercicios + series para stats) y
   // datos de consistencia en paralelo. Solo 5 sesiones: coste acotado.
-  const [recentWorkouts, consistencyData, bodySummary] = await Promise.all([
+  // Además se busca el borrador más reciente (sin finalizar) para el hero "Continuar".
+  const [recentWorkouts, consistencyData, bodySummary, draftWorkout] = await Promise.all([
     db.query.workouts.findMany({
       where: eq(workouts.userId, userId),
       orderBy: desc(workouts.startTime),
@@ -32,6 +34,7 @@ export default async function DashboardPage() {
         id: true,
         name: true,
         modality: true,
+        modalityConfig: true,
         startTime: true,
         totalTimeSeconds: true,
       },
@@ -48,6 +51,11 @@ export default async function DashboardPage() {
     }),
     getConsistencyData(userId),
     getBodySummary(),
+    db.query.workouts.findFirst({
+      where: and(eq(workouts.userId, userId), isNull(workouts.totalTimeSeconds)),
+      orderBy: desc(workouts.startTime),
+      columns: { id: true, name: true, startTime: true },
+    }),
   ]);
 
   // Stats básicas
@@ -75,22 +83,25 @@ export default async function DashboardPage() {
     });
     const durationLabel = workout.totalTimeSeconds
       ? `${Math.round(workout.totalTimeSeconds / 60)} min`
-      : 'Sin tiempo';
-    const volumeLabel =
-      totalVolume >= 1000
-        ? `${(totalVolume / 1000).toLocaleString('es-ES', { maximumFractionDigits: 1 })} t`
-        : `${Math.round(totalVolume).toLocaleString('es-ES')} kg`;
+      : 'Sin finalizar · Continuar';
+    // Volumen siempre en kg para unificar con historial/progreso (antes mezclaba t/kg).
+    const volumeLabel = `${Math.round(totalVolume).toLocaleString('es-ES')} kg`;
     const exercisesPreview =
       exerciseNames.length > 2
         ? `${exerciseNames.slice(0, 2).join(' · ')} · +${exerciseNames.length - 2} más`
         : exerciseNames.join(' · ') || undefined;
+    const isFinished = !!(workout.totalTimeSeconds && workout.totalTimeSeconds > 0);
 
     return {
       id: String(workout.id),
       title: workout.name,
       href: `/workouts?open=${workout.id}`,
+      // Repetir en 1 clic desde la tarjeta (informe §4.2). Si es borrador, continuar.
+      repeatHref: isFinished
+        ? `/workouts/log?mode=repeat&workoutId=${workout.id}`
+        : `/workouts/log?mode=resume&workoutId=${workout.id}`,
       typeLabel: workout.type?.name ?? 'Sin tipo',
-      modalityLabel: workout.modality,
+      modalityLabel: workout.modality ? formatModalitySummary(workout.modality, workout.modalityConfig) : null,
       dateLabel,
       durationLabel,
       exercisesCount,
@@ -115,6 +126,60 @@ export default async function DashboardPage() {
           </Button>
         </Link>
       </div>
+
+      {/* Hero-action: Continuar borrador o Empezar hoy (informe §4.1) */}
+      {draftWorkout ? (
+        <Card className="border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800">
+          <CardContent className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-4">
+            <div className="min-w-0">
+              <p className="text-xs font-bold text-amber-700 uppercase tracking-wider dark:text-amber-300 flex items-center gap-1.5">
+                <RotateCcw className="w-3.5 h-3.5" /> Tienes un entreno sin finalizar
+              </p>
+              <p className="text-sm font-bold text-gray-900 truncate mt-1 dark:text-gray-100">
+                {draftWorkout.name}
+              </p>
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <Link href={`/workouts/log?mode=resume&workoutId=${draftWorkout.id}`}>
+                <Button className="bg-amber-600 hover:bg-amber-700 text-white min-h-[44px]">
+                  <Play className="w-4 h-4 mr-1.5" />
+                  Continuar
+                </Button>
+              </Link>
+              <Link href="/workouts/new">
+                <Button variant="outline" className="min-h-[44px]">
+                  Empezar otro
+                </Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card className="border-blue-200 bg-blue-50/60 dark:bg-blue-950/20 dark:border-blue-800">
+          <CardContent className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-4">
+            <div>
+              <p className="text-sm font-bold text-gray-900 dark:text-gray-100">¿Entrenas hoy?</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Repite tu última sesión en 1 toque o empieza un WOD vacío.</p>
+            </div>
+            <div className="flex gap-2 shrink-0">
+              {recentWorkouts[0] ? (
+                <Link href={`/workouts/log?mode=repeat&workoutId=${recentWorkouts[0].id}`}>
+                  <Button variant="outline" className="min-h-[44px]">
+                    <RotateCcw className="w-4 h-4 mr-1.5" />
+                    Repetir último
+                  </Button>
+                </Link>
+              ) : null}
+              <Link href="/workouts/log?mode=free">
+                <Button className="min-h-[44px]">
+                  <Play className="w-4 h-4 mr-1.5" />
+                  Empezar hoy
+                </Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

@@ -185,7 +185,7 @@ function ProfileSection({ profile }: { profile: UserProfile }) {
       <div className="mt-4 pt-4 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-3 dark:border-gray-800">
         <p className="text-xs text-gray-400 flex items-center gap-1 dark:text-gray-500">
           <ChevronRight className="w-3 h-3 shrink-0" />
-          Para editar tu perfil, haz clic en tu avatar en la barra superior.
+          Para editar tu perfil, usa el botón de usuario en la esquina superior derecha.
         </p>
         <SignOutButton>
           <Button variant="outline" size="sm" className="text-xs text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200 shrink-0">
@@ -478,13 +478,13 @@ function CustomExercisesSection({
                   </div>
                   <button
                     onClick={() => handleStartEdit(ex)}
-                    className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition opacity-0 group-hover:opacity-100 dark:hover:bg-blue-900/20"
+                    className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100 dark:hover:bg-blue-900/20"
                   >
                     <Pencil className="w-3.5 h-3.5" />
                   </button>
                   <button
                     onClick={() => setConfirmDeleteId(ex.id)}
-                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition opacity-0 group-hover:opacity-100 dark:hover:bg-red-900/20"
+                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100 dark:hover:bg-red-900/20"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
@@ -795,14 +795,14 @@ function CategoriesSection({
                       <>
                         <button
                           onClick={() => handleStartEdit(cat)}
-                          className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition opacity-0 group-hover:opacity-100 dark:hover:bg-blue-900/20"
+                          className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100 dark:hover:bg-blue-900/20"
                           title="Renombrar categoría"
                         >
                           <Pencil className="w-3.5 h-3.5" />
                         </button>
                         <button
                           onClick={() => setConfirmDeleteId(cat.id)}
-                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition opacity-0 group-hover:opacity-100 dark:hover:bg-red-900/20"
+                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100 dark:hover:bg-red-900/20"
                           title="Eliminar categoría"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -959,7 +959,7 @@ function WorkoutTypesSection({ workoutTypes }: { workoutTypes: WorkoutType[] }) 
       </div>
       <p className="text-xs text-gray-400 dark:text-gray-500 mt-3 flex items-center gap-1">
         <ChevronRight className="w-3 h-3" />
-        Los tipos de entrenamiento son globales del sistema. Próximamente podrás crear los tuyos.
+        Los tipos de entrenamiento son globales del sistema y no se pueden editar desde aquí.
       </p>
     </Section>
   );
@@ -1018,6 +1018,9 @@ function PreferencesSection() {
               </button>
             ))}
           </div>
+          <p className="text-[11px] text-gray-400 mt-2 dark:text-gray-500">
+            De momento el historial se muestra siempre en kg. Esta preferencia solo se guarda en este dispositivo.
+          </p>
         </div>
 
         <Button

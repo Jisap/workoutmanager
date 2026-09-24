@@ -43,7 +43,7 @@ export interface OfficialWod {
 }
 
 export const WOD_CATEGORY_LABELS: Record<WodCategory, string> = {
-  girl: 'The Girls',
+  girl: 'Las Chicas',
   hero: 'Héroes',
   classic: 'Clásicos',
 };

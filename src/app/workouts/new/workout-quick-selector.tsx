@@ -155,6 +155,7 @@ export function WorkoutQuickSelector({
           q === '' ||
           w.name.toLowerCase().includes(q) ||
           (w.typeName && w.typeName.toLowerCase().includes(q)) ||
+          (w.modality && w.modality.toLowerCase().includes(q)) ||
           w.exercises.some((e) => e.name.toLowerCase().includes(q));
         return matchesType && matchesQuery;
       });
@@ -166,6 +167,7 @@ export function WorkoutQuickSelector({
           t.name.toLowerCase().includes(q) ||
           (t.description && t.description.toLowerCase().includes(q)) ||
           (t.typeName && t.typeName.toLowerCase().includes(q)) ||
+          (t.modality && t.modality.toLowerCase().includes(q)) ||
           t.exercises.some((e) => e.name.toLowerCase().includes(q));
         return matchesType && matchesQuery;
       });
@@ -306,7 +308,7 @@ export function WorkoutQuickSelector({
               onChange={(e) => setTypeFilter(e.target.value)}
               className="w-full sm:w-auto appearance-none pl-8 pr-8 py-2 text-xs border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50/50 dark:bg-gray-800 hover:bg-white dark:hover:bg-gray-800 focus:bg-white dark:focus:bg-gray-800 shadow-2xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer font-medium text-gray-700 dark:text-gray-300"
             >
-              <option value="all">Todas las modalidades</option>
+              <option value="all">Todos los tipos</option>
               {uniqueTypes.map((t) => (
                 <option key={t} value={t}>
                   {t}

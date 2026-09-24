@@ -122,7 +122,7 @@ export function ConsistencyHeatmap({ data }: ConsistencyHeatmapProps) {
 
   const handleStartNewWorkout = () => {
     setIsModalOpen(false);
-    navigate('/workouts/new');
+    navigate('/workouts/log?mode=free');
   };
 
   return (
@@ -208,7 +208,7 @@ export function ConsistencyHeatmap({ data }: ConsistencyHeatmapProps) {
                     const globalIndex = 364 - (weekIndex * 7 + (6 - dayIndex));
                     const day = days[globalIndex];
 
-                    if (!day) return <div key={dayIndex} className="w-3.5 h-3.5 rounded-xs" />;
+                    if (!day) return <div key={dayIndex} className="w-6 h-6 sm:w-3.5 sm:h-3.5 rounded-xs" />;
 
                     const isSelected = selectedDateKey === day.dateKey;
 
@@ -217,7 +217,7 @@ export function ConsistencyHeatmap({ data }: ConsistencyHeatmapProps) {
                         key={dayIndex}
                         type="button"
                         onClick={() => handleDayClick(day.dateKey)}
-                        className={`w-3.5 h-3.5 rounded-xs ${getColor(
+                        className={`w-6 h-6 sm:w-3.5 sm:h-3.5 rounded-xs ${getColor(
                           day.count,
                           isSelected
                         )} transition-all active:scale-90 cursor-pointer relative group focus:outline-none`}

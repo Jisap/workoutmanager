@@ -25,7 +25,7 @@ import type { HyroxGeneratedExercise } from './hyrox-race-builder';
 
 const CATEGORY_OPTIONS: { id: WodCategory | 'all'; label: string; icon: React.ElementType }[] = [
   { id: 'all', label: 'Todos', icon: Star },
-  { id: 'girl', label: 'The Girls', icon: Medal },
+  { id: 'girl', label: 'Las Chicas', icon: Medal },
   { id: 'hero', label: 'Héroes', icon: Trophy },
   { id: 'classic', label: 'Clásicos', icon: Sparkles },
 ];

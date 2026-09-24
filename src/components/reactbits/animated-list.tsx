@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { TransitionLink as Link } from '@/components/layout/transition-link';
+import { useTransitionNavigate } from '@/components/layout/route-transition';
 import { motion, useReducedMotion } from 'motion/react';
 import {
   CalendarDays,
@@ -38,6 +39,8 @@ export interface AnimatedListItem {
   exercisesPreview?: string;
   /** Enlace opcional al envolver la tarjeta. */
   href?: string;
+  /** Acción rápida "Repetir" en 1 clic (navega al logger en modo repeat). */
+  repeatHref?: string;
 }
 
 interface AnimatedListProps {
@@ -149,6 +152,7 @@ function ItemCard({
         'hover:-translate-y-px hover:border-gray-300 hover:bg-white',
         'hover:shadow-[0_10px_28px_-14px_rgba(0,0,0,0.3)]',
         'dark:border-gray-800 dark:bg-gray-800/40 dark:hover:border-gray-700 dark:hover:bg-gray-800/80',
+        item.repeatHref ? 'pb-16' : null,
         itemClassName
       )}
     >
@@ -256,6 +260,7 @@ export function AnimatedList({
 }: AnimatedListProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const prefersReducedMotion = useReducedMotion();
+  const navigate = useTransitionNavigate();
 
   useEffect(() => {
     if (!enableArrowNavigation) return;
@@ -293,13 +298,26 @@ export function AnimatedList({
           }}
         >
           {item.href ? (
-            <Link
-              href={item.href}
-              aria-label={item.title}
-              className="block rounded-xl focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
-            >
-              <ItemCard item={item} itemClassName={itemClassName} />
-            </Link>
+            <div className="relative">
+              <Link
+                href={item.href}
+                aria-label={item.title}
+                className="block rounded-xl focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
+              >
+                <ItemCard item={item} itemClassName={itemClassName} />
+              </Link>
+              {item.repeatHref ? (
+                <button
+                  type="button"
+                  onClick={() => navigate(item.repeatHref as string)}
+                  title="Repetir este entrenamiento en 1 clic"
+                  className="absolute right-3 bottom-3 inline-flex items-center gap-1 px-3 min-h-[44px] rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-sm active:scale-95 transition-all cursor-pointer"
+                >
+                  <Repeat2 className="h-3.5 w-3.5" />
+                  Repetir
+                </button>
+              ) : null}
+            </div>
           ) : (
             <ItemCard item={item} itemClassName={itemClassName} />
           )}
