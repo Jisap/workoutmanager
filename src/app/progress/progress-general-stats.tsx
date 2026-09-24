@@ -1,7 +1,9 @@
 'use client';
 
+import { TransitionLink as Link } from '@/components/layout/transition-link';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Flame, Calendar, Clock, Trophy, TrendingUp, Sparkles, ShieldCheck, BatteryCharging, CheckCircle2 } from 'lucide-react';
+import { Flame, Calendar, Clock, Trophy, TrendingUp, Sparkles, ShieldCheck, BatteryCharging, CheckCircle2, Play } from 'lucide-react';
 
 interface ProgressGeneralStatsProps {
   general: {
@@ -212,6 +214,20 @@ export function ProgressGeneralStats({ general }: ProgressGeneralStatsProps) {
                     {recovery.targetRestHours}h de descanso
                   </span>
                 </div>
+                {/* Comparativa vs objetivo + acción (informe §5: el estado era opaco) */}
+                {recovery.status === 'ready' ? (
+                  <Link href="/workouts/new" className="block pt-1">
+                    <Button size="sm" className="w-full h-11 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl gap-1.5 cursor-pointer">
+                      <Play className="w-3.5 h-3.5 fill-current" />
+                      Recuperado · Entrenar hoy
+                    </Button>
+                  </Link>
+                ) : (
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400 pt-1 border-t border-gray-100 dark:border-gray-800">
+                    Listo en ~{Math.max(0, recovery.remainingHours)}h de las {recovery.targetRestHours}h objetivo
+                    ({recovery.hoursSince}h desde el último entreno).
+                  </p>
+                )}
               </div>
             ) : (
               <p className="text-xs text-gray-500 text-center py-2">

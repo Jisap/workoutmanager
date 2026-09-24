@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent } from '@/components/ui/card';
 import { getExerciseProgressForCurrentUser } from '../workouts/actions';
@@ -98,15 +98,21 @@ export function ExerciseProgressChart({
   const hasDistData = useMemo(() => (data || []).some((s) => (s.totalDistance || 0) > 0), [data]);
   const hasTimeData = useMemo(() => (data || []).some((s) => (s.totalDurationSeconds || 0) > 0), [data]);
 
-  // Estados interactivos (métrica por defecto según el tipo real de datos)
-  const [metric, setMetric] = useState<MetricType>(() => {
-    if (!data || data.length === 0) return '1rm';
-    if (data.some((s) => s.estimated1RM > 0)) return '1rm';
-    if (data.some((s) => !s.isBodyweight)) return 'maxWeight';
-    if (data.some((s) => (s.totalDistance || 0) > 0)) return 'distance';
-    if (data.some((s) => (s.totalDurationSeconds || 0) > 0)) return 'duration';
+  // Métrica por defecto según el tipo real de datos (kg → 1RM, peso
+  // corporal → reps, cardio → distancia/tiempo). Se recalcula al cambiar
+  // de ejercicio: antes quedaba clavada la del anterior (p. ej. 1RM con
+  // todo a cero en dominadas) y la gráfica salía vacía.
+  const defaultMetricFor = (sessions: ProgressSessionPoint[] | null): MetricType => {
+    if (!sessions || sessions.length === 0) return '1rm';
+    if (sessions.some((s) => s.estimated1RM > 0)) return '1rm';
+    if (sessions.some((s) => !s.isBodyweight)) return 'maxWeight';
+    if (sessions.some((s) => (s.totalDistance || 0) > 0)) return 'distance';
+    if (sessions.some((s) => (s.totalDurationSeconds || 0) > 0)) return 'duration';
     return 'reps';
-  });
+  };
+
+  // Estados interactivos (métrica por defecto según el tipo real de datos)
+  const [metric, setMetric] = useState<MetricType>(() => defaultMetricFor(data));
   const [timeRange, setTimeRange] = useState<TimeRange>('all');
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   // Nuevos: tendencia, volumen en barras, borradores y comparador
@@ -276,8 +282,25 @@ export function ExerciseProgressChart({
 
   const handleSelectExercise = (exerciseId: number) => {
     setIsSelectorOpen(false);
-    router.push(`/progress?exerciseId=${exerciseId}`);
+    // Sin recarga de pestaña ni scroll: se conserva tab=exercise y la posición.
+    // (Antes: push a ?exerciseId= solo → el servidor re-renderizaba en General.)
+    const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
+    params.set('tab', 'exercise');
+    params.set('exerciseId', String(exerciseId));
+    router.replace(`/progress?${params.toString()}`, { scroll: false });
   };
+
+  // Al cambiar de ejercicio (llegan nuevos `data` por props): métrica acorde
+  // al tipo de datos + limpieza de comparador/hover del ejercicio anterior.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMetric(defaultMetricFor(data));
+    setCompareId(null);
+    setCompareData(null);
+    setIsCompareOpen(false);
+    setHoveredIndex(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedExerciseId]);
 
   // Métricas calculadas para el ejercicio actual
   const stats = useMemo(() => {
@@ -828,7 +851,24 @@ export function ExerciseProgressChart({
             </div>
           </div>
 
-          {/* 2b. OPCIONES DE VISTA: tendencia, volumen, borradores y comparador */}
+          {/* 2b. OPCIONES AVANZADAS colapsadas (informe §5: elige → ves si subes).
+              Tendencia, volumen, borradores y comparador viven aquí. */}
+          <details className="group rounded-2xl border border-gray-200 bg-white dark:bg-gray-900 dark:border-gray-700">
+            <summary className="flex items-center justify-between gap-2 px-3 py-2.5 text-xs font-bold text-gray-600 dark:text-gray-300 cursor-pointer list-none">
+              <span className="flex items-center gap-1.5">
+                Opciones avanzadas
+                {compareId != null && (
+                  <span className="px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-700 text-[10px] dark:bg-emerald-900/40 dark:text-emerald-300">
+                    vs {compareExercise?.name ?? ''}
+                  </span>
+                )}
+                {(showTrend === false || showVolumeBars === false || includeDrafts) && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500" title="Vista personalizada" />
+                )}
+              </span>
+              <span className="text-gray-400 transition-transform group-open:rotate-90">›</span>
+            </summary>
+            <div className="px-3 pb-3 space-y-2.5">
           <div className="flex flex-wrap items-center gap-1.5">
             <button
               onClick={() => setShowTrend((v) => !v)}
@@ -945,6 +985,8 @@ export function ExerciseProgressChart({
               </button>
             </div>
           )}
+            </div>
+          </details>
 
           {/* 2c. ESTADO DE PROGRESIÓN (racha de PRs) */}
           {prStatus && (
@@ -1092,7 +1134,7 @@ export function ExerciseProgressChart({
                   Curva de Progresión: {getMetricLabel(metric)}
                 </h3>
                 <p className="text-xs text-gray-500 dark:text-gray-400">
-                  {points.length} puntos registrados. Pasa el cursor sobre la gráfica para ver el desglose de cada sesión.
+                  {points.length} puntos registrados. Toca un punto (o pasa el cursor) para ver el desglose de cada sesión.
                 </p>
               </div>
 
@@ -1249,6 +1291,7 @@ export function ExerciseProgressChart({
                       className="cursor-pointer"
                       onMouseEnter={() => setHoveredIndex(i)}
                       onMouseLeave={() => setHoveredIndex(null)}
+                      onClick={() => setHoveredIndex((prev) => (prev === i ? null : i))}
                     >
                       {/* Área táctil amplia */}
                       <circle cx={p.x} cy={p.y} r="18" fill="transparent" />

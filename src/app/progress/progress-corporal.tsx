@@ -18,10 +18,13 @@ import {
   History,
   Ruler,
   Loader2,
+  Pencil,
+  Weight,
 } from 'lucide-react';
 import {
   logBodyMeasurement,
   deleteBodyMeasurement,
+  updateBodyMeasurement,
   type BodyMeasurementDTO,
 } from './measurements-actions';
 import { notify } from '@/lib/notify';
@@ -176,13 +179,31 @@ export function ProgressCorporal({
   const [formDate, setFormDate] = useState(todayStr);
   const [formValues, setFormValues] = useState<Record<string, string>>({});
   const [formNotes, setFormNotes] = useState('');
+  // Edición (informe §5: antes solo borrar+recrear) y modo rápido Solo peso
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [quickWeight, setQuickWeight] = useState(false);
 
   const openDialog = () => {
     // Pre-rellenar altura con la última conocida (casi nunca cambia)
     const lastH = [...measurements].reverse().find((r) => r.heightCm != null);
+    setEditingId(null);
+    setQuickWeight(false);
     setFormDate(todayStr);
     setFormValues(lastH?.heightCm != null ? { heightCm: String(lastH.heightCm) } : {});
     setFormNotes('');
+    setIsDialogOpen(true);
+  };
+
+  const openEditDialog = (m: BodyMeasurementDTO) => {
+    setEditingId(m.id);
+    setQuickWeight(false);
+    setFormDate(new Date(m.measuredAt).toISOString().split('T')[0]);
+    const vals: Record<string, string> = {};
+    for (const k of ['weightKg', 'heightCm', 'bodyFatPct', 'muscleMassKg', 'waistCm', 'chestCm', 'armCm', 'thighCm', 'hipCm'] as const) {
+      if (m[k] != null) vals[k] = String(m[k]);
+    }
+    setFormValues(vals);
+    setFormNotes(m.notes ?? '');
     setIsDialogOpen(true);
   };
 
@@ -197,24 +218,32 @@ export function ProgressCorporal({
     };
     setIsSaving(true);
     try {
-      await logBodyMeasurement({
+      const payload = {
         measuredAt: formDate ? new Date(`${formDate}T12:00:00`).toISOString() : undefined,
         weightKg: num('weightKg'),
-        heightCm: num('heightCm'),
-        bodyFatPct: num('bodyFatPct'),
-        muscleMassKg: num('muscleMassKg'),
-        waistCm: num('waistCm'),
-        chestCm: num('chestCm'),
-        armCm: num('armCm'),
-        thighCm: num('thighCm'),
-        hipCm: num('hipCm'),
+        // En modo Solo peso solo viajan peso+notas (rápido en el gimnasio)
+        heightCm: quickWeight ? null : num('heightCm'),
+        bodyFatPct: quickWeight ? null : num('bodyFatPct'),
+        muscleMassKg: quickWeight ? null : num('muscleMassKg'),
+        waistCm: quickWeight ? null : num('waistCm'),
+        chestCm: quickWeight ? null : num('chestCm'),
+        armCm: quickWeight ? null : num('armCm'),
+        thighCm: quickWeight ? null : num('thighCm'),
+        hipCm: quickWeight ? null : num('hipCm'),
         notes: formNotes || null,
-      });
+      };
+      if (editingId != null) {
+        await updateBodyMeasurement(editingId, payload);
+        notify.success('Medición actualizada');
+      } else {
+        await logBodyMeasurement(payload);
+        notify.success('Medición guardada');
+      }
       setIsDialogOpen(false);
+      setEditingId(null);
       router.refresh();
-      notify.success('Medición guardada');
     } catch (e) {
-      notify.errorFrom(e, 'Error al guardar la medición');
+      notify.errorFrom(e, editingId != null ? 'Error al actualizar la medición' : 'Error al guardar la medición');
     } finally {
       setIsSaving(false);
     }
@@ -573,6 +602,7 @@ export function ProgressCorporal({
                       className="cursor-pointer"
                       onMouseEnter={() => setHoveredIndex(i)}
                       onMouseLeave={() => setHoveredIndex(null)}
+                      onClick={() => setHoveredIndex((prev) => (prev === i ? null : i))}
                     >
                       <circle cx={p.x} cy={p.y} r="16" fill="transparent" />
                       {(hoveredIndex === i || (hoveredIndex === null && i === chartPoints.length - 1)) && (
@@ -636,7 +666,15 @@ export function ProgressCorporal({
                             {v || <span className="text-gray-300 dark:text-gray-600">—</span>}
                           </td>
                         ))}
-                        <td className="px-3 py-2.5 text-right">
+                        <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                          <button
+                            type="button"
+                            onClick={() => openEditDialog(r)}
+                            className="p-1.5 rounded-lg text-gray-300 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors cursor-pointer"
+                            title="Editar medición"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
                           <button
                             type="button"
                             onClick={() => setConfirmDeleteId(r.id)}
@@ -663,13 +701,33 @@ export function ProgressCorporal({
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Scale className="w-4 h-4 text-blue-600" />
-              Registrar medición
+              {editingId != null ? 'Editar medición' : 'Registrar medición'}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <p className="text-[11px] text-gray-500 dark:text-gray-400">
               Solo rellena lo que hayas medido hoy. Con 2+ registros de la misma métrica verás su evolución.
             </p>
+            {/* Modo rápido Solo peso (informe §5): báscula en 10 segundos */}
+            {editingId == null && (
+              <button
+                type="button"
+                onClick={() => setQuickWeight((v) => !v)}
+                className={`w-full flex items-center justify-between gap-2 px-3 h-11 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                  quickWeight
+                    ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300'
+                    : 'border-gray-200 text-gray-600 hover:border-gray-300 dark:border-gray-700 dark:text-gray-300'
+                }`}
+              >
+                <span className="flex items-center gap-1.5">
+                  <Weight className="w-3.5 h-3.5" />
+                  Modo rápido: solo peso
+                </span>
+                <span className={`w-9 h-5 rounded-full relative transition-colors ${quickWeight ? 'bg-blue-500' : 'bg-gray-300 dark:bg-gray-600'}`}>
+                  <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${quickWeight ? 'left-[18px]' : 'left-0.5'}`} />
+                </span>
+              </button>
+            )}
             <div className="space-y-1.5">
               <Label>Fecha</Label>
               <Input type="date" value={formDate} onChange={(e) => setFormDate(e.target.value)} className="tabular-nums" />
@@ -685,7 +743,9 @@ export function ProgressCorporal({
                 { key: 'armCm', label: 'Brazo (cm)', step: '0.1' },
                 { key: 'thighCm', label: 'Muslo (cm)', step: '0.5' },
                 { key: 'hipCm', label: 'Cadera (cm)', step: '0.5' },
-              ].map((f) => (
+              ]
+                .filter((f) => !quickWeight || f.key === 'weightKg')
+                .map((f) => (
                 <div key={f.key} className="space-y-1.5">
                   <Label className="text-xs">{f.label}</Label>
                   <Input
@@ -717,8 +777,8 @@ export function ProgressCorporal({
               Cancelar
             </Button>
             <Button onClick={handleSave} disabled={isSaving} className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold gap-1.5">
-              {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
-              {isSaving ? 'Guardando…' : 'Guardar medición'}
+              {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : editingId != null ? <Pencil className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
+              {isSaving ? 'Guardando…' : editingId != null ? 'Guardar cambios' : 'Guardar medición'}
             </Button>
           </DialogFooter>
         </DialogContent>

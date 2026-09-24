@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { TransitionLink as Link } from '@/components/layout/transition-link';
 import dynamic from 'next/dynamic';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ProgressGeneralStats } from './progress-general-stats';
@@ -159,16 +160,27 @@ export function ProgressClient({
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {progressData.prs.map((pr, index) => (
-                  <Card key={index} className="border-l-4 border-l-yellow-400 dark:bg-gray-900 border-gray-200 dark:border-gray-700 shadow-2xs">
+                  <Card key={index} className="border-l-4 border-l-yellow-400 dark:bg-gray-900 border-gray-200 dark:border-gray-700 shadow-2xs hover:border-yellow-400 transition-colors">
                     <CardContent className="p-3.5 space-y-1">
                       <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 truncate">{pr.exerciseName}</p>
                       <div className="flex items-baseline gap-2">
                         <span className="text-xl font-black text-gray-900 dark:text-gray-100 tabular-nums">{pr.weight} kg</span>
                         <span className="text-xs text-gray-500">× {pr.reps} reps</span>
                       </div>
-                      <p className="text-[10px] text-gray-400 mt-1">
-                        {new Date(pr.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })}
-                      </p>
+                      <div className="flex items-center justify-between gap-2 mt-1">
+                        <p className="text-[10px] text-gray-400">
+                          {new Date(pr.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </p>
+                        {pr.workoutId ? (
+                          <Link
+                            href={`/workouts?open=${pr.workoutId}`}
+                            className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline shrink-0"
+                            title={pr.workoutName ?? 'Ver sesión del récord'}
+                          >
+                            Ver sesión →
+                          </Link>
+                        ) : null}
+                      </div>
                     </CardContent>
                   </Card>
                 ))}

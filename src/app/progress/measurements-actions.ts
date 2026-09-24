@@ -122,6 +122,44 @@ export async function deleteBodyMeasurement(id: number) {
   return { success: true };
 }
 
+// Editar una medición existente (informe §5: antes solo borrar+recrear)
+export async function updateBodyMeasurement(id: number, input: LogMeasurementInput) {
+  const { userId } = await auth();
+  if (!userId) throw new Error('No autorizado');
+  if (!Number.isInteger(id) || id <= 0) throw new Error('Medición inválida');
+
+  const values = {
+    weightKg: cleanNum(input.weightKg),
+    heightCm: cleanNum(input.heightCm),
+    bodyFatPct: cleanNum(input.bodyFatPct),
+    muscleMassKg: cleanNum(input.muscleMassKg),
+    waistCm: cleanNum(input.waistCm),
+    chestCm: cleanNum(input.chestCm),
+    armCm: cleanNum(input.armCm),
+    thighCm: cleanNum(input.thighCm),
+    hipCm: cleanNum(input.hipCm),
+  };
+
+  if (Object.values(values).every((v) => v == null)) {
+    throw new Error('Introduce al menos una medición');
+  }
+
+  const [updated] = await db
+    .update(bodyMeasurements)
+    .set({
+      ...(input.measuredAt ? { measuredAt: new Date(input.measuredAt) } : {}),
+      ...values,
+      notes: input.notes !== undefined ? input.notes?.trim() || null : undefined,
+    })
+    .where(and(eq(bodyMeasurements.id, id), eq(bodyMeasurements.userId, userId)))
+    .returning();
+
+  if (!updated) throw new Error('Medición no encontrada');
+
+  revalidatePath('/progress');
+  return { success: true, measurement: toDTO(updated) };
+}
+
 export interface BodySummary {
   totalCount: number;
   latestWeight: number | null;

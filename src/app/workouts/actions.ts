@@ -703,8 +703,9 @@ export async function getProgressData(userId: string) {
   // Reutiliza el dataset memoizado por request (ver getUserAnalyticsDataset).
   const allWorkouts = await getUserAnalyticsDataset(userId);
 
-  // 2. Calcular Récords Personales (PRs)
-  const prs: Record<string, { weight: number; reps: number; date: Date; exerciseName: string }> = {};
+  // 2. Calcular Récords Personales (PRs). Incluye la sesión de origen para
+  // enlazar cada PR con su entrenamiento (informe §5.4).
+  const prs: Record<string, { weight: number; reps: number; date: Date; exerciseName: string; workoutId: number; workoutName: string }> = {};
 
   // 3. Calcular volumen por semana (simplificado para las últimas semanas)
   const weeklyVolume: Record<string, number> = {};
@@ -740,6 +741,8 @@ export async function getProgressData(userId: string) {
                 reps: currentSet.repCount,
                 date: workoutDate,
                 exerciseName: exName,
+                workoutId: workout.id,
+                workoutName: workout.name,
               };
             }
 
