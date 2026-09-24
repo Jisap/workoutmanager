@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { useTransitionNavigate } from '@/components/layout/route-transition';
 import { updateWorkoutSetTimes } from './actions';
 import { notify } from '@/lib/notify';
 import { formatModalitySummary } from '@/lib/modality-utils';
@@ -522,59 +523,57 @@ export function WorkoutDetailModal({
           )}
         </div>
 
-        {/* Footer */}
-        <div className="px-5 py-3 border-t border-gray-100 dark:border-gray-700 bg-gray-50/80 dark:bg-gray-800/60 flex items-center justify-between gap-2 flex-wrap">
-          <div className="flex items-center gap-1.5">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onDelete}
-              className="text-xs text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-xl gap-1.5 px-2.5 cursor-pointer"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              <span>Eliminar</span>
-            </Button>
+        {/* Footer: Repetir primario a ancho completo, resto secundario (punto 3) */}
+        <div className="px-5 py-3 border-t border-gray-100 dark:border-gray-700 bg-gray-50/80 dark:bg-gray-800/60 space-y-2">
+          <Button
+            onClick={onRepeat}
+            className="w-full h-11 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold gap-1.5 rounded-xl shadow-sm cursor-pointer"
+          >
+            <Play className="w-4 h-4 fill-current" />
+            {workout.totalTimeSeconds && workout.totalTimeSeconds > 0
+              ? 'Repetir entrenamiento'
+              : 'Continuar entrenamiento'}
+          </Button>
+
+          <div className="flex items-center gap-1.5 flex-wrap">
             <Button
               variant="outline"
               size="sm"
               onClick={onEdit}
-              className="text-xs text-blue-700 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/30 border-blue-200 dark:border-blue-800 rounded-xl gap-1.5 px-2.5 cursor-pointer font-semibold"
+              className="h-11 px-3 text-xs text-blue-700 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/30 border-blue-200 dark:border-blue-800 rounded-xl gap-1.5 cursor-pointer font-semibold"
             >
               <Pencil className="w-3.5 h-3.5" />
               <span>Editar</span>
             </Button>
-          </div>
-
-          <div className="flex items-center gap-2">
             <Button
               variant="outline"
               size="sm"
               onClick={onConvertToTemplate}
               title={isWorkoutSavedAsTemplate(workout) ? 'Ya guardado como plantilla' : 'Guardar como plantilla'}
-              className="text-xs text-purple-700 hover:text-purple-800 hover:bg-purple-50 dark:hover:bg-purple-900/20 border-purple-200 dark:border-purple-800 rounded-xl gap-1.5 cursor-pointer font-semibold"
+              className="h-11 px-3 text-xs text-purple-700 hover:text-purple-800 hover:bg-purple-50 dark:hover:bg-purple-900/20 border-purple-200 dark:border-purple-800 rounded-xl gap-1.5 cursor-pointer font-semibold"
             >
               <Bookmark
                 className="w-3.5 h-3.5 text-purple-600"
                 fill={isWorkoutSavedAsTemplate(workout) ? 'currentColor' : 'none'}
               />
-              <span>{isWorkoutSavedAsTemplate(workout) ? 'Guardado como Plantilla' : 'Guardar como Plantilla'}</span>
+              <span className="hidden sm:inline">{isWorkoutSavedAsTemplate(workout) ? 'Es plantilla' : 'Plantilla'}</span>
             </Button>
 
             <ShareWorkoutMenu workout={workout} />
 
-            <Button variant="outline" size="sm" onClick={onClose} className="text-xs rounded-xl cursor-pointer">
-              Cerrar
-            </Button>
+            <span className="flex-1" />
 
             <Button
+              variant="ghost"
               size="sm"
-              onClick={onRepeat}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs gap-1.5 rounded-xl shadow-sm cursor-pointer"
+              onClick={onDelete}
+              className="h-11 px-3 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-xl gap-1.5 cursor-pointer"
             >
-              <Play className="w-3.5 h-3.5 fill-current" />
-              {workout.totalTimeSeconds && workout.totalTimeSeconds > 0
-                ? 'Repetir entrenamiento'
-                : 'Iniciar entrenamiento'}
+              <Trash2 className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Eliminar</span>
+            </Button>
+            <Button variant="outline" size="sm" onClick={onClose} className="h-11 px-3 text-xs rounded-xl cursor-pointer">
+              Cerrar
             </Button>
           </div>
         </div>
@@ -597,6 +596,7 @@ export function EditWorkoutModal({
 }) {
   const [name, setName] = useState(workout.name);
   const [notes, setNotes] = useState(workout.notes || '');
+  const navigate = useTransitionNavigate();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -655,6 +655,20 @@ export function EditWorkoutModal({
                 className="w-full px-3 py-2 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-gray-900 dark:text-gray-100 resize-none"
               />
             </div>
+
+            {/* Punto 3: corregir un peso/rep se hace en el logger, no aquí.
+                Se hace descubrible con acceso directo en modo edición. */}
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                navigate(`/workouts/log?mode=edit&workoutId=${workout.id}`);
+              }}
+              className="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl border border-dashed border-gray-300 dark:border-gray-600 text-xs text-gray-600 dark:text-gray-300 hover:border-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors cursor-pointer"
+            >
+              <span className="font-semibold">¿Corregir un peso o repetición? (p. ej. 80 → 82,5 kg)</span>
+              <span className="font-bold shrink-0">Abrir en logger →</span>
+            </button>
           </div>
 
           <div className="px-5 py-3 border-t border-gray-100 dark:border-gray-700 bg-gray-50/80 dark:bg-gray-800/60 flex items-center justify-end gap-2">

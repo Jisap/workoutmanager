@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect, useDeferredValue } from 'react';
+import { useState, useMemo, useEffect, useDeferredValue, useRef } from 'react';
 import { useTransitionNavigate } from '@/components/layout/route-transition';
 import { TransitionLink as Link } from '@/components/layout/transition-link';
 import {
@@ -29,6 +29,8 @@ import {
   Pencil,
   Check,
   Save,
+  Undo2,
+  MoreHorizontal,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -127,6 +129,66 @@ interface WorkoutHistoryClientProps {
 
 // ---------- Helpers ----------
 
+// Menú overflow de acciones por fila/tarjeta (punto 3: 5 botones -> 1 primario
+// + resto en overflow). Local al historial, sin dependencias nuevas.
+function RowActionsMenu({
+  onDetails,
+  onTemplate,
+  templateSaved,
+  onEdit,
+  onDelete,
+}: {
+  onDetails: () => void;
+  onTemplate: () => void;
+  templateSaved: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const close = () => setOpen(false);
+  const itemClass =
+    'flex w-full items-center gap-2 rounded-lg px-3 h-11 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer';
+
+  return (
+    <div className="relative shrink-0">
+      <Button
+        variant="ghost"
+        size="sm"
+        className="h-9 w-9 p-0 text-gray-500 hover:text-gray-900 dark:hover:text-gray-100 rounded-lg cursor-pointer"
+        onClick={() => setOpen((v) => !v)}
+        title="Más acciones"
+        aria-label="Más acciones"
+      >
+        <MoreHorizontal className="w-4 h-4" />
+      </Button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-30 cursor-default" onClick={close} />
+          <div className="absolute right-0 z-40 w-52 p-1.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-xl">
+            <button type="button" className={itemClass} onClick={() => { close(); onDetails(); }}>
+              <Eye className="w-4 h-4 text-gray-400" /> Ver detalles
+            </button>
+            <button type="button" className={itemClass} onClick={() => { close(); onTemplate(); }}>
+              <Bookmark className="w-4 h-4 text-purple-500" fill={templateSaved ? 'currentColor' : 'none'} />
+              {templateSaved ? 'Ya es plantilla' : 'Guardar como plantilla'}
+            </button>
+            <button type="button" className={itemClass} onClick={() => { close(); onEdit(); }}>
+              <Pencil className="w-4 h-4 text-blue-500" /> Editar nombre y notas
+            </button>
+            <button
+              type="button"
+              className={`${itemClass} text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30`}
+              onClick={() => { close(); onDelete(); }}
+            >
+              <Trash2 className="w-4 h-4" /> Eliminar
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function formatMonthKey(dateStr: string): string {
   const [year, month] = dateStr.split('-');
   const d = new Date(Number(year), Number(month) - 1, 1);
@@ -169,6 +231,18 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
   const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
   const [pageSize, setPageSize] = useState<number>(10);
   const [currentPage, setCurrentPage] = useState<number>(1);
+  // Filtros colapsables en móvil (punto 3 del informe: 7 controles apilados)
+  const [showFilters, setShowFilters] = useState(false);
+  // Borrado con deshacer (30s): se quita de la UI al instante y el borrado
+  // real en servidor se retrasa; Deshacer lo restaura sin pérdida de datos.
+  const [lastDeleted, setLastDeleted] = useState<{
+    kind: 'workout' | 'template';
+    item: WorkoutHistoryItem | UserTemplateItem;
+    index: number;
+    expiresAt: number;
+  } | null>(null);
+  const [undoSecondsLeft, setUndoSecondsLeft] = useState(0);
+  const pendingDeleteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Conteo de finalizados y guardados sin finalizar
   const finishedCount = useMemo(
@@ -196,7 +270,6 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
     id: number;
     name: string;
   } | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
 
   // Edit workout modal state
   const [editingWorkout, setEditingWorkout] = useState<{
@@ -237,31 +310,40 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
     setTemplates(initialTemplates);
   }, [initialTemplates]);
 
-  // Restore preferred view modes from localStorage
+  // Restore preferred view modes from localStorage; sin preferencia,
+  // cards por defecto en móvil (punto 3: tabla con scroll horizontal).
   useEffect(() => {
+    const isMobile = window.matchMedia('(max-width: 640px)').matches;
     const saved = localStorage.getItem('wm_history_view_mode');
     if (saved === 'cards' || saved === 'table') {
       setViewMode(saved);
+    } else if (isMobile) {
+      setViewMode('cards');
     }
     const savedTpl = localStorage.getItem('wm_template_view_mode');
     if (savedTpl === 'cards' || savedTpl === 'table') {
       setTemplateViewMode(savedTpl);
     }
+    // Filtros: abiertos en desktop, colapsados en móvil
+    setShowFilters(!isMobile);
   }, []);
 
-  // Consume el query param `open` una vez montado: limpia la URL sin navegar
-  // para que recargar o cerrar el modal no lo reabra.
+  // Deep-link `?open=` persistente (punto 3): se escribe al abrir el detalle
+  // y se limpia al cerrarlo, así sobrevive a recarga y se puede compartir.
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).has('open')) {
-      window.history.replaceState(null, '', window.location.pathname);
+    const params = new URLSearchParams(window.location.search);
+    if (selectedWorkout) {
+      params.set('open', String(selectedWorkout.id));
+      window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
+    } else if (params.has('open')) {
+      params.delete('open');
+      const qs = params.toString();
+      window.history.replaceState(null, '', qs ? `${window.location.pathname}?${qs}` : window.location.pathname);
     }
-  }, []);
+  }, [selectedWorkout?.id]);
 
   const closeDetailModal = () => {
     setSelectedWorkout(null);
-    if (new URLSearchParams(window.location.search).has('open')) {
-      window.history.replaceState(null, '', window.location.pathname);
-    }
   };
 
   const handleViewChange = (mode: 'table' | 'cards') => {
@@ -339,6 +421,21 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
   const grouped = useMemo(() => groupByMonth(paginatedWorkouts), [paginatedWorkouts]);
   const monthKeys = useMemo(() => Array.from(grouped.keys()).sort((a, b) => b.localeCompare(a)), [grouped]);
 
+  // Totales por mes sobre TODO lo filtrado (punto 3): el header antes sumaba
+  // solo la página visible ("Xkg en esta página"), que era engañoso.
+  const monthTotals = useMemo(() => {
+    const map = new Map<string, { count: number; volume: number }>();
+    for (const w of filteredWorkouts) {
+      const d = new Date(w.startTime);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const cur = map.get(key) ?? { count: 0, volume: 0 };
+      cur.count += 1;
+      cur.volume += w.totalVolume;
+      map.set(key, cur);
+    }
+    return map;
+  }, [filteredWorkouts]);
+
   const handleRepeatWorkout = (workoutId: number, isFinished: boolean = true) => {
     setSelectedWorkout(null);
     if (isFinished) {
@@ -383,12 +480,12 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
         setTemplates((prev) => [res.template as UserTemplateItem, ...prev]);
         const savedId = convertingWorkout.id;
         setWorkouts((prev) => prev.map((w) => (w.id === savedId ? { ...w, savedAsTemplate: true } : w)));
-        notify.success('Plantilla guardada', `"${res.template.name}" ya está en tus plantillas`);
+        // Punto 3: mantener contexto — no se cambia a la pestaña de plantillas.
+        notify.success('Plantilla guardada', `"${res.template.name}" está en Mis Plantillas`);
       }
 
       setConvertingWorkout(null);
       if (selectedWorkout) setSelectedWorkout(null);
-      setActiveTab('templates');
     } catch (err) {
       console.error(err);
       notify.errorFrom(err, 'Error al guardar la plantilla');
@@ -397,30 +494,127 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
     }
   };
 
-  // Confirm delete handler
-  const handleConfirmDelete = async () => {
-    if (!deletingItem) return;
-    const deletedName = deletingItem.name;
-    const deletedKind = deletingItem.type === 'template' ? 'Plantilla eliminada' : 'Entrenamiento eliminado';
-    setIsDeleting(true);
+  // Borrado por etapas con deshacer (punto 3): al confirmar se retira de la
+  // UI y el borrado real en servidor se retrasa 30s. Deshacer lo restaura.
+  // Si se confirma otro borrado antes, el anterior se ejecuta al instante.
+  const flushPendingDelete = async () => {
+    if (pendingDeleteTimer.current) {
+      clearTimeout(pendingDeleteTimer.current);
+      pendingDeleteTimer.current = null;
+    }
+    if (!lastDeleted) return;
+    const pending = lastDeleted;
+    setLastDeleted(null);
     try {
-      if (deletingItem.type === 'template') {
-        await deleteWorkoutTemplate(deletingItem.id);
-        setTemplates((prev) => prev.filter((t) => t.id !== deletingItem.id));
+      if (pending.kind === 'template') {
+        await deleteWorkoutTemplate(pending.item.id);
       } else {
-        await deleteWorkout(deletingItem.id);
-        setWorkouts((prev) => prev.filter((w) => w.id !== deletingItem.id));
-        if (selectedWorkout && selectedWorkout.id === deletingItem.id) {
-          setSelectedWorkout(null);
-        }
+        await deleteWorkout(pending.item.id);
       }
-      setDeletingItem(null);
-      notify.success(deletedKind, `"${deletedName}"`);
     } catch (err) {
       console.error(err);
+      // Si falla el servidor, restaurar en UI para no perder el dato
+      if (pending.kind === 'template') {
+        setTemplates((prev) => {
+          const next = [...prev];
+          next.splice(Math.min(pending.index, next.length), 0, pending.item as UserTemplateItem);
+          return next;
+        });
+      } else {
+        setWorkouts((prev) => {
+          const next = [...prev];
+          next.splice(Math.min(pending.index, next.length), 0, pending.item as WorkoutHistoryItem);
+          return next;
+        });
+      }
       notify.errorFrom(err, 'Error al eliminar');
-    } finally {
-      setIsDeleting(false);
+    }
+  };
+
+  const handleUndoDelete = () => {
+    if (pendingDeleteTimer.current) {
+      clearTimeout(pendingDeleteTimer.current);
+      pendingDeleteTimer.current = null;
+    }
+    if (!lastDeleted) return;
+    const pending = lastDeleted;
+    setLastDeleted(null);
+    if (pending.kind === 'template') {
+      setTemplates((prev) => {
+        const next = [...prev];
+        next.splice(Math.min(pending.index, next.length), 0, pending.item as UserTemplateItem);
+        return next;
+      });
+      notify.info('Plantilla restaurada', `"${pending.item.name}"`);
+    } else {
+      setWorkouts((prev) => {
+        const next = [...prev];
+        next.splice(Math.min(pending.index, next.length), 0, pending.item as WorkoutHistoryItem);
+        return next;
+      });
+      notify.info('Entrenamiento restaurado', `"${pending.item.name}"`);
+    }
+  };
+
+  // Cuenta atrás del banner de deshacer
+  useEffect(() => {
+    if (!lastDeleted) {
+      setUndoSecondsLeft(0);
+      return;
+    }
+    const tick = () => {
+      const left = Math.max(0, Math.ceil((lastDeleted.expiresAt - Date.now()) / 1000));
+      setUndoSecondsLeft(left);
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [lastDeleted]);
+
+  // Si se desmonta con un borrado pendiente, ejecutarlo (evita zombis)
+  useEffect(() => {
+    return () => {
+      if (pendingDeleteTimer.current) clearTimeout(pendingDeleteTimer.current);
+    };
+  }, []);
+
+  // Confirm delete handler (por etapas: UI inmediata + servidor diferido)
+  const handleConfirmDelete = async () => {
+    if (!deletingItem) return;
+    await flushPendingDelete();
+    if (deletingItem.type === 'template') {
+      const idx = templates.findIndex((t) => t.id === deletingItem.id);
+      const item = templates[idx];
+      if (!item) {
+        setDeletingItem(null);
+        return;
+      }
+      setTemplates((prev) => prev.filter((t) => t.id !== deletingItem.id));
+      setDeletingItem(null);
+      const expiresAt = Date.now() + 30_000;
+      setLastDeleted({ kind: 'template', item, index: Math.max(0, idx), expiresAt });
+      pendingDeleteTimer.current = setTimeout(() => {
+        pendingDeleteTimer.current = null;
+        flushPendingDelete();
+      }, 30_000);
+    } else {
+      const idx = workouts.findIndex((w) => w.id === deletingItem.id);
+      const item = workouts[idx];
+      if (!item) {
+        setDeletingItem(null);
+        return;
+      }
+      setWorkouts((prev) => prev.filter((w) => w.id !== deletingItem.id));
+      if (selectedWorkout && selectedWorkout.id === deletingItem.id) {
+        setSelectedWorkout(null);
+      }
+      setDeletingItem(null);
+      const expiresAt = Date.now() + 30_000;
+      setLastDeleted({ kind: 'workout', item, index: Math.max(0, idx), expiresAt });
+      pendingDeleteTimer.current = setTimeout(() => {
+        pendingDeleteTimer.current = null;
+        flushPendingDelete();
+      }, 30_000);
     }
   };
 
@@ -546,6 +740,24 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
         </button>
       </div>
 
+      {/* Banner de deshacer borrado (30s, punto 3) */}
+      {lastDeleted && (
+        <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-2xl border border-gray-800 dark:border-gray-200 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 shadow-md">
+          <p className="text-xs font-semibold truncate">
+            {lastDeleted.kind === 'template' ? 'Plantilla eliminada' : 'Entrenamiento eliminado'}:{" "}
+            <span className="font-bold">“{lastDeleted.item.name}”</span>
+          </p>
+          <Button
+            size="sm"
+            onClick={handleUndoDelete}
+            className="h-11 px-4 text-xs font-bold rounded-xl bg-white dark:bg-gray-900 text-gray-900 dark:text-white hover:opacity-90 shrink-0 cursor-pointer gap-1.5"
+          >
+            <Undo2 className="w-4 h-4" />
+            Deshacer ({undoSecondsLeft}s)
+          </Button>
+        </div>
+      )}
+
       {/* ════════════════════════════════════════════════════════════════════════
           PESTAÑA 1: HISTORIAL DE SESIONES REALES
           ════════════════════════════════════════════════════════════════════════ */}
@@ -554,7 +766,7 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
           {/* Top Toolbar */}
           <div className="bg-white dark:bg-gray-900 p-3 sm:p-4 rounded-2xl border border-gray-200/80 dark:border-gray-700 shadow-xs space-y-3">
             <div className="flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-center justify-between">
-              {/* Search */}
+              {/* Search (siempre visible) */}
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500 pointer-events-none" />
                 <input
@@ -562,7 +774,7 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Buscar en historial por nombre o ejercicio…"
-                  className="w-full pl-9 pr-8 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50/50 dark:bg-gray-800 hover:bg-white dark:hover:bg-gray-800 focus:bg-white dark:focus:bg-gray-800 dark:text-gray-100 shadow-2xs focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all"
+                  className="w-full h-11 pl-9 pr-8 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50/50 dark:bg-gray-800 hover:bg-white dark:hover:bg-gray-800 focus:bg-white dark:focus:bg-gray-800 dark:text-gray-100 shadow-2xs focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all"
                 />
                 {search && (
                   <button
@@ -574,7 +786,18 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                 )}
               </div>
 
-              <div className="flex items-center gap-2 flex-wrap">
+              {/* Toggle filtros en móvil (punto 3: 7 controles apilados) */}
+              <button
+                type="button"
+                onClick={() => setShowFilters((v) => !v)}
+                className="sm:hidden inline-flex items-center justify-center gap-1.5 h-11 px-3 rounded-xl border border-gray-200 dark:border-gray-700 text-xs font-bold text-gray-600 dark:text-gray-300 cursor-pointer"
+              >
+                <Filter className="w-3.5 h-3.5" />
+                Filtros
+                <ChevronRight className={`w-3.5 h-3.5 transition-transform ${showFilters ? 'rotate-90' : ''}`} />
+              </button>
+
+              <div className={`items-center gap-2 flex-wrap ${showFilters ? 'flex' : 'hidden sm:flex'}`}>
                 {/* Filter by Type */}
                 <div className="relative shrink-0 flex-1 sm:flex-initial">
                   <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 dark:text-gray-500 pointer-events-none" />
@@ -646,7 +869,7 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
             </div>
 
             {/* Píldoras de filtrado por Estado (Todos / Finalizados / Sin finalizar) */}
-            <div className="flex items-center gap-1.5 pt-1 overflow-x-auto pb-0.5">
+            <div className={`items-center gap-1.5 pt-1 overflow-x-auto pb-0.5 ${showFilters ? 'flex' : 'hidden sm:flex'}`}>
               <button
                 type="button"
                 onClick={() => setFilterStatus('all')}
@@ -773,8 +996,7 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                       return (
                         <tr
                           key={`wkt-${workout.id}`}
-                          className="hover:bg-blue-50/40 dark:hover:bg-blue-900/10 transition-colors group cursor-pointer"
-                          onClick={() => setSelectedWorkout(workout)}
+                          className="hover:bg-blue-50/40 dark:hover:bg-blue-900/10 transition-colors group"
                         >
                           {/* Fecha / Hora */}
                           <td className="py-3 px-4 whitespace-nowrap">
@@ -897,80 +1119,41 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                             </div>
                           </td>
 
-                          {/* Acciones */}
-                          <td
-                            className="py-3 px-4 text-right whitespace-nowrap"
-                            onClick={(e) => e.stopPropagation()}
-                          >
+                          {/* Acciones: Repetir primario + resto en overflow (punto 3) */}
+                          <td className="py-3 px-4 text-right whitespace-nowrap">
                             <div className="flex items-center justify-end gap-1.5">
                               <Button
-                                variant="ghost"
                                 size="sm"
-                                className="h-7 px-2 text-xs text-purple-700 hover:text-purple-800 hover:bg-purple-50 dark:hover:bg-purple-950/30 rounded-lg cursor-pointer"
-                                onClick={() => openConvertToTemplate(workout)}
-                                title={isWorkoutSavedAsTemplate(workout) ? 'Ya guardado como plantilla' : 'Guardar como plantilla'}
+                                className={`h-9 px-3 text-xs rounded-lg font-bold text-white cursor-pointer gap-1 ${
+                                  isFinished
+                                    ? 'bg-emerald-600 hover:bg-emerald-700'
+                                    : 'bg-amber-600 hover:bg-amber-700'
+                                }`}
+                                onClick={() => handleRepeatWorkout(workout.id, isFinished)}
+                                title={isFinished ? 'Repetir entrenamiento' : 'Continuar / Finalizar entrenamiento'}
                               >
-                                <Bookmark
-                                  className="w-3.5 h-3.5 sm:mr-1 text-purple-600"
-                                  fill={isWorkoutSavedAsTemplate(workout) ? 'currentColor' : 'none'}
-                                />
-                                <span className="hidden xl:inline">Plantilla</span>
+                                <Play className="w-3 h-3 fill-current" />
+                                {isFinished ? 'Repetir' : 'Continuar'}
                               </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 px-2 text-xs text-gray-600 dark:text-gray-300 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 rounded-lg cursor-pointer"
-                                onClick={() => setSelectedWorkout(workout)}
-                                title="Ver detalles"
-                              >
-                                <Eye className="w-3.5 h-3.5 sm:mr-1" />
-                                <span className="hidden sm:inline">Detalles</span>
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 px-2 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950/30 rounded-lg cursor-pointer font-medium"
-                                onClick={() =>
+                              <RowActionsMenu
+                                onDetails={() => setSelectedWorkout(workout)}
+                                onTemplate={() => openConvertToTemplate(workout)}
+                                templateSaved={isWorkoutSavedAsTemplate(workout)}
+                                onEdit={() =>
                                   setEditingWorkout({
                                     id: workout.id,
                                     name: workout.name,
                                     notes: workout.notes || '',
                                   })
                                 }
-                                title="Editar nombre y notas"
-                              >
-                                <Pencil className="w-3.5 h-3.5 sm:mr-1" />
-                                <span className="hidden sm:inline">Editar</span>
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className={`h-7 px-2 text-xs rounded-lg font-semibold cursor-pointer ${
-                                  isFinished
-                                    ? 'text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800'
-                                    : 'text-amber-700 hover:text-amber-800 hover:bg-amber-50 dark:hover:bg-amber-950/30 border-amber-200 dark:border-amber-800'
-                                }`}
-                                onClick={() => handleRepeatWorkout(workout.id, isFinished)}
-                                title={isFinished ? 'Repetir entrenamiento' : 'Continuar / Finalizar entrenamiento'}
-                              >
-                                <Play className="w-3 h-3 fill-current sm:mr-1" />
-                                <span className="hidden sm:inline">{isFinished ? 'Repetir' : 'Continuar'}</span>
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 w-7 p-0 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg cursor-pointer"
-                                onClick={() =>
+                                onDelete={() =>
                                   setDeletingItem({
                                     type: 'workout',
                                     id: workout.id,
                                     name: workout.name,
                                   })
                                 }
-                                title="Eliminar entrenamiento"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </Button>
+                              />
                             </div>
                           </td>
                         </tr>
@@ -988,7 +1171,8 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
               {monthKeys.map((monthKey) => {
                 const monthWorkouts = grouped.get(monthKey)!;
                 const monthLabel = formatMonthKey(monthKey);
-                const monthVolume = monthWorkouts.reduce((s, w) => s + w.totalVolume, 0);
+                const totals = monthTotals.get(monthKey);
+                const monthVolume = totals?.volume ?? 0;
 
                 return (
                   <div key={monthKey} className="space-y-3">
@@ -1002,7 +1186,7 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                       </div>
                       {monthVolume > 0 && (
                         <span className="text-xs text-gray-400 dark:text-gray-500 font-medium">
-                          {(monthVolume / 1000).toFixed(1)}k kg en esta página
+                          {(monthVolume / 1000).toFixed(1)}k kg este mes
                         </span>
                       )}
                     </div>
@@ -1129,13 +1313,25 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                               </CardContent>
                             </div>
 
-                            {/* Actions */}
-                            <div className="p-4 pt-0">
-                              <div className="flex items-center gap-1.5 pt-2 border-t border-gray-100 dark:border-gray-800">
+                            {/* Actions: Repetir primario a ancho completo + resto en overflow */}
+                            <div className="p-4 pt-0 space-y-2">
+                              <Button
+                                onClick={() => handleRepeatWorkout(workout.id, isFinished)}
+                                title={isFinished ? 'Repetir entrenamiento' : 'Continuar / Finalizar entrenamiento'}
+                                className={`w-full h-11 text-sm font-bold text-white rounded-xl gap-1.5 cursor-pointer ${
+                                  isFinished
+                                    ? 'bg-emerald-600 hover:bg-emerald-700'
+                                    : 'bg-amber-600 hover:bg-amber-700'
+                                }`}
+                              >
+                                <Play className="w-4 h-4 fill-current" />
+                                {isFinished ? 'Repetir' : 'Continuar'}
+                              </Button>
+                              <div className="flex items-center gap-1.5">
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  className="text-xs gap-1 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400 flex-1 cursor-pointer"
+                                  className="h-11 px-3 text-xs gap-1 text-gray-600 dark:text-gray-400 flex-1 rounded-xl cursor-pointer"
                                   onClick={() => setSelectedWorkout(workout)}
                                 >
                                   <Layers className="w-3.5 h-3.5" />
@@ -1144,7 +1340,7 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  className="text-xs gap-1 hover:bg-purple-50 hover:text-purple-700 hover:border-purple-200 text-purple-700 flex-1 font-semibold cursor-pointer"
+                                  className="h-11 px-3 text-xs gap-1 text-purple-700 flex-1 font-semibold rounded-xl cursor-pointer"
                                   onClick={() => openConvertToTemplate(workout)}
                                   title={isWorkoutSavedAsTemplate(workout) ? 'Ya guardado como plantilla' : 'Guardar como plantilla'}
                                 >
@@ -1154,50 +1350,25 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                                   />
                                   Plantilla
                                 </Button>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className={`text-xs gap-1 font-semibold flex-1 cursor-pointer ${
-                                    isFinished
-                                      ? 'hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 text-gray-700 dark:text-gray-200'
-                                      : 'hover:bg-amber-50 hover:text-amber-700 hover:border-amber-200 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800'
-                                  }`}
-                                  onClick={() => handleRepeatWorkout(workout.id, isFinished)}
-                                  title={isFinished ? 'Repetir entrenamiento' : 'Continuar / Finalizar entrenamiento'}
-                                >
-                                  <Play className="w-3.5 h-3.5 fill-current" />
-                                  {isFinished ? 'Repetir' : 'Continuar'}
-                                </Button>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="text-xs p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 hover:border-blue-200 rounded-xl shrink-0 cursor-pointer"
-                                  onClick={() =>
+                                <RowActionsMenu
+                                  onDetails={() => setSelectedWorkout(workout)}
+                                  onTemplate={() => openConvertToTemplate(workout)}
+                                  templateSaved={isWorkoutSavedAsTemplate(workout)}
+                                  onEdit={() =>
                                     setEditingWorkout({
                                       id: workout.id,
                                       name: workout.name,
                                       notes: workout.notes || '',
                                     })
                                   }
-                                  title="Editar nombre y notas"
-                                >
-                                  <Pencil className="w-3.5 h-3.5" />
-                                </Button>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="text-xs p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 hover:border-red-200 rounded-xl shrink-0 cursor-pointer"
-                                  onClick={() =>
+                                  onDelete={() =>
                                     setDeletingItem({
                                       type: 'workout',
                                       id: workout.id,
                                       name: workout.name,
                                     })
                                   }
-                                  title="Eliminar entrenamiento"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </Button>
+                                />
                               </div>
                             </div>
                           </Card>
@@ -1853,7 +2024,7 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
       {deletingItem && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-150"
-          onClick={(e) => e.target === e.currentTarget && !isDeleting && setDeletingItem(null)}
+          onClick={(e) => e.target === e.currentTarget && setDeletingItem(null)}
         >
           <div className="bg-white dark:bg-gray-900 rounded-2xl max-w-sm w-full p-5 shadow-2xl border border-gray-200 dark:border-gray-700 space-y-4 animate-in zoom-in-95 duration-150">
             <div className="flex items-center gap-3">
@@ -1864,7 +2035,7 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                 <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">
                   {deletingItem.type === 'template' ? 'Eliminar Plantilla' : 'Eliminar Entrenamiento'}
                 </h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Esta acción no se puede deshacer</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Podrás deshacerlo durante 30 segundos</p>
               </div>
             </div>
 
@@ -1878,29 +2049,18 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
               <Button
                 variant="outline"
                 size="sm"
-                disabled={isDeleting}
                 onClick={() => setDeletingItem(null)}
-                className="text-xs rounded-xl cursor-pointer"
+                className="h-11 px-4 text-xs rounded-xl cursor-pointer"
               >
                 Cancelar
               </Button>
               <Button
                 size="sm"
-                disabled={isDeleting}
                 onClick={handleConfirmDelete}
-                className="bg-red-600 hover:bg-red-700 text-white text-xs gap-1.5 rounded-xl shadow-xs cursor-pointer"
+                className="h-11 px-4 bg-red-600 hover:bg-red-700 text-white text-xs gap-1.5 rounded-xl shadow-xs cursor-pointer"
               >
-                {isDeleting ? (
-                  <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    Eliminando...
-                  </>
-                ) : (
-                  <>
-                    <Trash2 className="w-3.5 h-3.5" />
-                    Sí, eliminar
-                  </>
-                )}
+                <Trash2 className="w-3.5 h-3.5" />
+                Sí, eliminar
               </Button>
             </div>
           </div>
