@@ -102,7 +102,7 @@ export default async function Home() {
 
           {/* CTA Button Group */}
           <div className="flex flex-col items-center gap-3.5 pt-2 sm:flex-row">
-            <SignUpButton mode="modal">
+            <SignUpButton mode="modal" fallbackRedirectUrl="/dashboard">
               <Magnet
                 padding={70}
                 magnetStrength={2}
@@ -136,7 +136,7 @@ export default async function Home() {
               </Magnet>
             </SignUpButton>
             
-            <SignInButton mode="modal">
+            <SignInButton mode="modal" fallbackRedirectUrl="/dashboard">
               <Magnet
                 padding={70}
                 magnetStrength={2}
@@ -200,7 +200,7 @@ export default async function Home() {
               </div>
               <h3 className="text-xl font-bold text-zinc-100 mb-2">Precisión Biomecánica</h3>
               <p className="text-sm text-zinc-400 leading-relaxed">
-                Registra variables reales: RPE, intensidad relativa (% de tu 1RM) y cálculo de 1RM dinámico al instante.
+                Registra variables reales: RPE por serie, cálculo de 1RM estimado por ejercicio y control de cargas al instante.
               </p>
             </SpotlightCard>
 
@@ -261,7 +261,7 @@ export default async function Home() {
                   </Badge>
                 </div>
                 <CardDescription className="text-zinc-400 text-sm leading-relaxed">
-                  No te limites a registrar peso y repeticiones. Controla RPE, intensidad relativa, notas técnicas y cálculo de 1RM dinámico en cada levantamiento.
+                  No te limites a registrar peso y repeticiones. Anota el RPE y notas técnicas de cada serie, y sigue tu 1RM estimado por ejercicio en Progreso.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -304,7 +304,7 @@ export default async function Home() {
                   <CardTitle className="text-xl text-zinc-100">Analítica & Carga</CardTitle>
                 </div>
                 <CardDescription className="text-zinc-400 text-sm leading-relaxed">
-                  Gráficas de progresión de tonelaje mensual, volumen por grupo muscular, comparador de ejercicios A vs B y alertas de estancamiento y sobreentrenamiento.
+                  Gráficas de progresión de tonelaje mensual, volumen por grupo muscular, comparador de ejercicios A vs B y aviso de estancamiento.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -638,7 +638,7 @@ export default async function Home() {
             </p>
 
             <div className="mt-8 flex flex-col sm:flex-row justify-center items-center gap-4">
-              <SignUpButton mode="modal">
+              <SignUpButton mode="modal" fallbackRedirectUrl="/dashboard">
                 <Button 
                   size="lg" 
                   className="h-13 w-full sm:w-auto cursor-pointer rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 px-8 text-base font-semibold text-white shadow-[0_0_25px_-5px_rgba(37,99,235,0.6)] transition-all hover:from-blue-500 hover:to-blue-400 hover:shadow-[0_0_35px_-5px_rgba(37,99,235,0.8)] hover:scale-[1.02]"
@@ -648,7 +648,7 @@ export default async function Home() {
                 </Button>
               </SignUpButton>
               
-              <SignInButton mode="modal">
+              <SignInButton mode="modal" fallbackRedirectUrl="/dashboard">
                 <Button
                   size="lg"
                   variant="ghost"

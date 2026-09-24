@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useEffect, useCallback, type MouseEvent, type ReactNode } from 'react';
+import { usePrefersReducedMotion } from '@/lib/use-reduced-motion';
 
 interface ClickSparkProps {
   sparkColor?: string;
@@ -35,6 +36,8 @@ export function ClickSpark({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const sparksRef = useRef<Spark[]>([]);
   const startTimeRef = useRef<number | null>(null);
+  // Sin chispas si el usuario prefiere movimiento reducido (el clic sigue funcionando)
+  const reduceMotion = usePrefersReducedMotion();
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -137,6 +140,7 @@ export function ClickSpark({
   }, [sparkColor, sparkSize, sparkRadius, sparkCount, duration, easeFunc, extraScale]);
 
   const handleClick = (e: MouseEvent<HTMLDivElement>): void => {
+    if (reduceMotion) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();

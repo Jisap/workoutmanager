@@ -7,6 +7,7 @@ import {
   type ReactNode,
   type HTMLAttributes
 } from 'react';
+import { usePrefersReducedMotion } from '@/lib/use-reduced-motion';
 
 interface MagnetProps extends HTMLAttributes<HTMLDivElement> {
   children: ReactNode;
@@ -33,9 +34,12 @@ export function Magnet({
   const [isActive, setIsActive] = useState<boolean>(false);
   const [position, setPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const magnetRef = useRef<HTMLDivElement>(null);
+  // Sin movimiento magnético si el usuario prefiere movimiento reducido
+  const reduceMotion = usePrefersReducedMotion();
+  const enabled = !disabled && !reduceMotion;
 
   useEffect(() => {
-    if (disabled) return;
+    if (!enabled) return;
 
     const handleMouseMove = (e: MouseEvent) => {
       if (!magnetRef.current) return;
@@ -62,7 +66,7 @@ export function Magnet({
     return () => {
       window.removeEventListener('mousemove', handleMouseMove);
     };
-  }, [padding, disabled, magnetStrength]);
+  }, [padding, enabled, magnetStrength]);
 
   const transitionStyle = isActive ? activeTransition : inactiveTransition;
 
