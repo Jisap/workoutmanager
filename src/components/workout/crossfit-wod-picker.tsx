@@ -188,7 +188,7 @@ export function CrossfitWodPicker({ availableExercises, onApplyWod }: CrossfitWo
         <>
           {/* Filtros + buscador */}
           <div className="flex flex-col sm:flex-row gap-2">
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 shrink-0">
+            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar fade-x snap-x snap-proximity -mx-1 px-3 py-1.5 shrink-0 scroll-px-3">
               {CATEGORY_OPTIONS.map((c) => {
                 const Icon = c.icon;
                 const isActive = category === c.id;
@@ -197,7 +197,7 @@ export function CrossfitWodPicker({ availableExercises, onApplyWod }: CrossfitWo
                     key={c.id}
                     type="button"
                     onClick={() => setCategory(c.id)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap border ${
+                    className={`flex items-center gap-1.5 px-3.5 h-9 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap snap-start shrink-0 border ${
                       isActive
                         ? 'bg-orange-500 text-white border-orange-600 shadow-xs'
                         : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-orange-300'

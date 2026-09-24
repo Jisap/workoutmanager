@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useTransitionNavigate } from '@/components/layout/route-transition';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -746,6 +746,21 @@ export function WorkoutLoggerClient({
   // WOD pendiente de confirmación (sustituiría los ejercicios actuales)
   const [pendingWod, setPendingWod] = useState<WodApplyPayload | null>(null);
 
+  // FAB "Finalizar" (móvil): solo cuando la tarjeta final no está en pantalla,
+  // para no duplicar la acción cuando ya la ves abajo.
+  const finalBarRef = useRef<HTMLDivElement | null>(null);
+  const [isFinalBarVisible, setIsFinalBarVisible] = useState(true);
+  useEffect(() => {
+    const el = finalBarRef.current;
+    if (!el || typeof IntersectionObserver === 'undefined') return;
+    const obs = new IntersectionObserver(([entry]) => setIsFinalBarVisible(entry.isIntersecting), {
+      threshold: 0.15,
+    });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
+  const showFab = !isFinalBarVisible && exercises.length > 0;
+
   // Aplicar WOD oficial desde el catálogo: nombre + modalidad + ejercicios precargados.
   // Desde aquí el usuario puede entrenarlo directamente o guardarlo como plantilla
   // con el flujo existente ("Guardar como plantilla"), cubriendo ambos casos.
@@ -1049,67 +1064,44 @@ export function WorkoutLoggerClient({
             </Button>
           )}
 
-          {/* MODO PLANIFICACIÓN: Botones para Plantillas */}
+          {/* MODO PLANIFICACIÓN: Guardar queda arriba compacto; el CTA único va abajo */}
           {mode === 'new-template' ? (
-            <>
-              <Button
-                type="button"
-                onClick={() => {
-                  const cleanName = typeName.replace(/\s*·\s*\d{1,2}\s+[a-záéíóú]+/gi, '').trim();
-                  setDirectTemplateName(cleanName || 'Mi Plantilla');
-                  setIsTemplateDialogOpen(true);
-                }}
-                disabled={isSavingTemplate || exercises.length === 0}
-                className="bg-purple-600 hover:bg-purple-700 text-white font-bold shadow-xs text-xs cursor-pointer gap-1.5"
-              >
-                <Bookmark className="w-4 h-4" />
-                <span>Guardar Plantilla</span>
-              </Button>
-
-              <Button
-                type="button"
-                onClick={() => {
-                  const cleanName = typeName.replace(/\s*·\s*\d{1,2}\s+[a-záéíóú]+/gi, '').trim();
-                  setDirectTemplateName(cleanName || 'Mi Plantilla');
-                  handleSaveDirectTemplate(true);
-                }}
-                disabled={isSavingTemplate || exercises.length === 0}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold cursor-pointer gap-1.5 shadow-xs"
-              >
-                <Play className="w-3.5 h-3.5 fill-current" />
-                <span>Guardar e Iniciar</span>
-              </Button>
-            </>
+            <Button
+              type="button"
+              onClick={() => {
+                const cleanName = typeName.replace(/\s*·\s*\d{1,2}\s+[a-záéíóú]+/gi, '').trim();
+                setDirectTemplateName(cleanName || 'Mi Plantilla');
+                setIsTemplateDialogOpen(true);
+              }}
+              disabled={isSavingTemplate || exercises.length === 0}
+              title="Guardar como plantilla"
+              className="bg-purple-600 hover:bg-purple-700 text-white font-bold shadow-xs text-xs cursor-pointer gap-1.5 h-9 px-2.5 sm:px-3"
+            >
+              <Bookmark className="w-4 h-4" />
+              <span className="hidden sm:inline">Guardar Plantilla</span>
+              <span className="sm:hidden">Guardar</span>
+            </Button>
           ) : (
             <>
-              {/* MODO ENTRENAMIENTO EN VIVO: Guardar Entrenamiento vs Finalizar Sesión */}
+              {/* MODO ENTRENAMIENTO EN VIVO: solo Guardar arriba (compacto); Finalizar vive abajo */}
               <Button
                 type="button"
                 onClick={handleDirectSave}
                 disabled={isSaving || exercises.length === 0}
-                className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold cursor-pointer gap-1.5 shadow-xs"
+                title="Guardar borrador sin finalizar"
+                className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold cursor-pointer gap-1.5 shadow-xs h-9 px-2.5 sm:px-3"
               >
                 {isSaving ? (
                   <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    <span>Guardando...</span>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span className="hidden sm:inline">Guardando...</span>
                   </>
                 ) : (
                   <>
                     <Save className="w-4 h-4" />
-                    <span>Guardar Entrenamiento</span>
+                    <span className="hidden sm:inline">Guardar</span>
                   </>
                 )}
-              </Button>
-
-              <Button
-                type="button"
-                onClick={() => setIsFinishDialogOpen(true)}
-                disabled={isSaving || exercises.length === 0}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold cursor-pointer gap-1.5 shadow-xs"
-              >
-                <Clock className="w-4 h-4" />
-                <span>Finalizar Sesión</span>
               </Button>
             </>
           )}
@@ -1211,7 +1203,7 @@ export function WorkoutLoggerClient({
               </span>
             </div>
 
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
+            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar fade-x snap-x snap-proximity -mx-1 px-3 py-1.5 scroll-px-3">
               {MODALITY_OPTIONS.map((m) => {
                 const Icon = m.icon;
                 const isSelected = modality === m.id;
@@ -1221,7 +1213,7 @@ export function WorkoutLoggerClient({
                     type="button"
                     onClick={() => handleSelectModality(m.id)}
                     title={m.desc}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 border ${
+                    className={`flex items-center gap-1.5 px-3.5 h-10 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap snap-start shrink-0 border ${
                       isSelected
                         ? 'bg-orange-500 text-white border-orange-600 shadow-xs'
                         : 'bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:bg-orange-50 dark:hover:bg-orange-950/20 hover:text-orange-600'
@@ -2472,76 +2464,105 @@ export function WorkoutLoggerClient({
           Añadir Ejercicio
         </Button>
 
-        {/* Barra de acciones al final de la página */}
-        <div className="sticky bottom-20 lg:bottom-6 z-30 bg-gray-50/95 dark:bg-gray-800/90 backdrop-blur rounded-2xl p-4 border border-gray-200 dark:border-gray-700 shadow-lg pb-[calc(1rem+env(safe-area-inset-bottom))] flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="text-xs text-gray-500 dark:text-gray-400 text-center sm:text-left">
-            <span>{exercises.length} ejercicio{exercises.length !== 1 ? 's' : ''} configurado{exercises.length !== 1 ? 's' : ''}</span>
+        {/* Barra final: fija al final del contenido, sin sticky ni flotación */}
+        <div ref={finalBarRef} className="mt-6 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-[0_8px_30px_rgb(0,0,0,0.14)] p-3">
+          <div className="flex items-center justify-between gap-2 px-1 pb-2.5">
+            <p className="text-xs font-semibold text-gray-600 dark:text-gray-300">
+              {exercises.length} ejercicio{exercises.length !== 1 ? 's' : ''}
+            </p>
+            <p className="text-xs font-semibold text-gray-600 dark:text-gray-300 tabular-nums">
+              {exercises.filter((ex) => ex.sets.length > 0 && ex.sets.every((s) => s.isCompleted)).length}/{exercises.length} completados
+            </p>
           </div>
 
-          <div className="flex items-center gap-2 w-full sm:w-auto justify-end flex-wrap">
-            {mode === 'new-template' ? (
-              <>
-                <Button
-                  type="button"
-                  onClick={() => {
-                    const cleanName = typeName.replace(/\s*·\s*\d{1,2}\s+[a-záéíóú]+/gi, '').trim();
-                    setDirectTemplateName(cleanName || 'Mi Plantilla');
-                    setIsTemplateDialogOpen(true);
-                  }}
-                  disabled={isSavingTemplate || exercises.length === 0}
-                  className="flex-1 sm:flex-initial bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold gap-1.5 cursor-pointer"
-                >
-                  <Bookmark className="w-4 h-4" />
-                  Guardar Plantilla
-                </Button>
-                <Button
-                  type="button"
-                  onClick={() => {
-                    const cleanName = typeName.replace(/\s*·\s*\d{1,2}\s+[a-záéíóú]+/gi, '').trim();
-                    setDirectTemplateName(cleanName || 'Mi Plantilla');
-                    handleSaveDirectTemplate(true);
-                  }}
-                  disabled={isSavingTemplate || exercises.length === 0}
-                  className="flex-1 sm:flex-initial bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold gap-1.5 cursor-pointer"
-                >
-                  <Play className="w-3.5 h-3.5 fill-current" />
-                  Guardar e Iniciar
-                </Button>
-              </>
-            ) : (
-              <>
-                <Button
-                  type="button"
-                  onClick={handleDirectSave}
-                  disabled={isSaving || exercises.length === 0}
-                  className="flex-1 sm:flex-initial bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold gap-1.5 cursor-pointer"
-                >
-                  {isSaving ? (
-                    <>
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      <span>Guardando...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Save className="w-4 h-4" />
-                      <span>Guardar Entrenamiento</span>
-                    </>
-                  )}
-                </Button>
-                <Button
-                  type="button"
-                  onClick={() => setIsFinishDialogOpen(true)}
-                  disabled={isSaving || exercises.length === 0}
-                  className="flex-1 sm:flex-initial bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold gap-1.5 cursor-pointer"
-                >
-                  <Clock className="w-4 h-4" />
-                  <span>Finalizar Sesión</span>
-                </Button>
-              </>
-            )}
-          </div>
+          {mode === 'new-template' ? (
+            <div className="grid grid-cols-[1fr_1.4fr] gap-2">
+              <Button
+                type="button"
+                onClick={() => {
+                  const cleanName = typeName.replace(/\s*·\s*\d{1,2}\s+[a-záéíóú]+/gi, '').trim();
+                  setDirectTemplateName(cleanName || 'Mi Plantilla');
+                  setIsTemplateDialogOpen(true);
+                }}
+                disabled={isSavingTemplate || exercises.length === 0}
+                className="h-12 text-sm font-bold border-2 border-purple-200 dark:border-purple-800 bg-white dark:bg-transparent text-purple-700 dark:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-950/40 hover:border-purple-400 dark:hover:border-purple-600 hover:text-purple-800 dark:hover:text-purple-200 active:scale-[0.98] transition-all cursor-pointer gap-1.5"
+              >
+                <Bookmark className="w-4 h-4" />
+                Guardar
+              </Button>
+              <Button
+                type="button"
+                onClick={() => {
+                  const cleanName = typeName.replace(/\s*·\s*\d{1,2}\s+[a-záéíóú]+/gi, '').trim();
+                  setDirectTemplateName(cleanName || 'Mi Plantilla');
+                  handleSaveDirectTemplate(true);
+                }}
+                disabled={isSavingTemplate || exercises.length === 0}
+                className="h-12 text-sm font-bold bg-emerald-600 hover:bg-emerald-500 hover:shadow-lg hover:-translate-y-px active:scale-[0.98] transition-all text-white gap-2 cursor-pointer"
+              >
+                <Play className="w-4 h-4 fill-current" />
+                Guardar e Iniciar
+              </Button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-[1fr_1.4fr] gap-2">
+              <Button
+                type="button"
+                onClick={handleDirectSave}
+                disabled={isSaving || exercises.length === 0}
+                title="Guardar borrador sin finalizar"
+                className="h-12 text-sm font-bold border-2 border-blue-200 dark:border-blue-800 bg-white dark:bg-transparent text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/40 hover:border-blue-400 dark:hover:border-blue-600 hover:text-blue-800 dark:hover:text-blue-200 active:scale-[0.98] transition-all cursor-pointer gap-1.5"
+              >
+                {isSaving ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Save className="w-4 h-4" />
+                )}
+                Guardar
+              </Button>
+              <Button
+                type="button"
+                onClick={() => setIsFinishDialogOpen(true)}
+                disabled={isSaving || exercises.length === 0}
+                className="h-12 text-sm font-bold bg-emerald-600 hover:bg-emerald-500 hover:shadow-lg hover:-translate-y-px active:scale-[0.98] transition-all text-white gap-2 cursor-pointer"
+              >
+                <Clock className="w-4 h-4" />
+                Finalizar Sesión
+              </Button>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* FAB Finalizar (solo móvil, solo cuando la tarjeta final no se ve) */}
+      {showFab &&
+        (mode === 'new-template' ? (
+          <button
+            type="button"
+            onClick={() => {
+              const cleanName = typeName.replace(/\s*·\s*\d{1,2}\s+[a-záéíóú]+/gi, '').trim();
+              setDirectTemplateName(cleanName || 'Mi Plantilla');
+              handleSaveDirectTemplate(true);
+            }}
+            disabled={isSavingTemplate}
+            aria-label="Guardar plantilla e iniciar"
+            title="Guardar e iniciar"
+            className="lg:hidden fixed right-4 bottom-[calc(88px+env(safe-area-inset-bottom))] z-40 w-14 h-14 rounded-full bg-emerald-600 hover:bg-emerald-500 active:scale-95 transition-all shadow-xl text-white flex items-center justify-center cursor-pointer disabled:opacity-50"
+          >
+            <Play className="w-6 h-6 fill-current" />
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setIsFinishDialogOpen(true)}
+            disabled={isSaving}
+            aria-label="Finalizar sesión"
+            title="Finalizar sesión"
+            className="lg:hidden fixed right-4 bottom-[calc(88px+env(safe-area-inset-bottom))] z-40 w-14 h-14 rounded-full bg-emerald-600 hover:bg-emerald-500 active:scale-95 transition-all shadow-xl text-white flex items-center justify-center cursor-pointer disabled:opacity-50"
+          >
+            <Clock className="w-6 h-6" />
+          </button>
+        ))}
 
       {/* Dialog de Finalización */}
       <Dialog open={isFinishDialogOpen} onOpenChange={setIsFinishDialogOpen}>

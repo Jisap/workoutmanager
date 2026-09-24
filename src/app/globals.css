@@ -155,3 +155,26 @@
     @apply font-sans;
   }
 }
+
+@layer utilities {
+  /* Carruseles de chips (WODs, modalidades): scroll táctil sin barra visible.
+     La barra fina pegada abajo era la que "no dejaba respirar" en móvil. */
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+    scrollbar-gutter: stable;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  /* Desvanecido lateral para insinuar que hay más chips sin mostrar scrollbar */
+  .fade-x {
+    mask-image: linear-gradient(
+      to right,
+      transparent,
+      black 12px,
+      black calc(100% - 12px),
+      transparent
+    );
+  }
+}
