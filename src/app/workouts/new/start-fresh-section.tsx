@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useTransitionNavigate } from '@/components/layout/route-transition';
+import { setLastTypeId } from '@/lib/last-type';
 import { Play, PencilRuler, Trophy } from 'lucide-react';
 
 interface SimpleType {
@@ -52,7 +53,10 @@ export function StartFreshSection({ types }: { types: SimpleType[] }) {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
         <button
           type="button"
-          onClick={() => navigate(`/workouts/log?mode=free&typeId=${typeId}`)}
+          onClick={() => {
+            setLastTypeId(typeId);
+            navigate(`/workouts/log?mode=free&typeId=${typeId}`);
+          }}
           className="flex items-center gap-3 p-4 rounded-2xl bg-blue-600 hover:bg-blue-700 active:scale-[0.99] text-white transition-all cursor-pointer min-h-11 text-left"
         >
           <span className="p-2.5 rounded-xl bg-white/20 shrink-0">
@@ -65,7 +69,10 @@ export function StartFreshSection({ types }: { types: SimpleType[] }) {
         </button>
         <button
           type="button"
-          onClick={() => navigate(`/workouts/log?mode=new-template&typeId=${typeId}`)}
+          onClick={() => {
+            setLastTypeId(typeId);
+            navigate(`/workouts/log?mode=new-template&typeId=${typeId}`);
+          }}
           className="flex items-center gap-3 p-4 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50/60 dark:bg-gray-800/50 hover:border-purple-300 hover:bg-purple-50/50 dark:hover:bg-purple-950/20 transition-all cursor-pointer min-h-11 text-left"
         >
           <span className="p-2.5 rounded-xl bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 shrink-0">

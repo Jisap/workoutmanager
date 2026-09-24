@@ -37,6 +37,7 @@ import { Button } from '@/components/ui/button';
 import { deleteWorkout, deleteWorkoutTemplate, saveAsTemplate, updateWorkout, updateWorkoutTemplate } from './actions';
 import { type ModalityConfig } from '@/lib/db/schema';
 import { formatModalitySummary } from '@/lib/modality-utils';
+import { newTemplateHref } from '@/lib/last-type';
 import { notify } from '@/lib/notify';
 import dynamic from 'next/dynamic';
 import { getTypeStyle, isWorkoutSavedAsTemplate, type ExerciseDetailItem } from './history-utils';
@@ -1542,12 +1543,14 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                   </button>
                 </div>
 
-                <Link href="/workouts/log?mode=new-template">
-                  <Button size="sm" className="bg-purple-600 hover:bg-purple-700 text-white text-xs rounded-xl shadow-xs shrink-0">
-                    <Plus className="w-3.5 h-3.5 mr-1.5" />
-                    Crear Plantilla
-                  </Button>
-                </Link>
+                <Button
+                  size="sm"
+                  onClick={() => navigate(newTemplateHref())}
+                  className="bg-purple-600 hover:bg-purple-700 text-white text-xs rounded-xl shadow-xs shrink-0 cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5 mr-1.5" />
+                  Crear Plantilla
+                </Button>
               </div>
             </div>
 
@@ -1582,12 +1585,13 @@ export function WorkoutHistoryClient({ history, templates: initialTemplates = []
                       : 'No se encontraron plantillas con ese nombre.'}
                   </p>
                 </div>
-                <Link href="/workouts/log?mode=new-template">
-                  <Button className="text-xs bg-purple-600 hover:bg-purple-700 text-white">
-                    <Plus className="w-4 h-4 mr-1.5" />
-                    Crear mi primera plantilla
-                  </Button>
-                </Link>
+                <Button
+                  onClick={() => navigate(newTemplateHref())}
+                  className="text-xs bg-purple-600 hover:bg-purple-700 text-white cursor-pointer"
+                >
+                  <Plus className="w-4 h-4 mr-1.5" />
+                  Crear mi primera plantilla
+                </Button>
               </CardContent>
             </Card>
           )}

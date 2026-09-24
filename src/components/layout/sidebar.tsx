@@ -7,6 +7,8 @@ import { usePathname } from 'next/navigation';
 import { Home, Dumbbell, BarChart3, Settings, Plus, LogOut, Bookmark, Loader2, UserCog, type LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { SignOutButton, useUser, useClerk } from '@clerk/nextjs';
+import { useEffect, useState } from 'react';
+import { newTemplateHref as newTemplateHrefFromLastType } from '@/lib/last-type';
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: Home },
@@ -56,6 +58,12 @@ function ManageAccountButton() {
 export function Sidebar() {
   const pathname = usePathname();
   const { user, isLoaded } = useUser();
+  // Último tipo usado para que "Nueva Plantilla" no caiga siempre a id=1 (punto 7)
+  const [newTemplateHref, setNewTemplateHref] = useState('/workouts/log?mode=new-template');
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setNewTemplateHref(newTemplateHrefFromLastType());
+  }, []);
 
   return (
     <>
@@ -115,7 +123,7 @@ export function Sidebar() {
               </Link>
 
               <Link
-                href="/workouts/log?mode=new-template"
+                href={newTemplateHref}
                 className="flex items-center justify-center w-full px-4 py-2 text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200/80 rounded-xl transition-all shadow-2xs dark:bg-purple-900/20 dark:text-purple-400 dark:border-purple-800 dark:hover:bg-purple-900/30"
               >
                 <Bookmark className="w-3.5 h-3.5 mr-1.5 text-purple-600" />
